@@ -18,26 +18,23 @@ except ValueError:
     max_expiries = 12
 max_expiries = max(1, min(max_expiries, 24))
 
-MAX_RETRIES = 6
-RETRY_DELAY = 10  # seconds — options make many calls per chain
+# Pace requests to avoid yfinance rate limits — options chains make many calls
+REQ_DELAY = 0.8  # seconds between each option chain request
 
 
 def yf_retry(fn, *args, **kwargs):
-    """Call fn(*args, **kwargs) with retry + exponential backoff on rate-limit errors."""
-    last_err = None
-    for attempt in range(MAX_RETRIES):
+    """Call fn(*args, **kwargs) with retry on rate-limit errors."""
+    for attempt in range(3):
         try:
             return fn(*args, **kwargs)
         except Exception as e:
             msg = str(e).lower()
             if "rate limit" in msg or "429" in msg or "too many requests" in msg:
-                last_err = e
-                if attempt < MAX_RETRIES - 1:
-                    delay = RETRY_DELAY * (2 ** attempt)
-                    time.sleep(delay)
+                if attempt < 2:
+                    time.sleep(3 * (2 ** attempt))
                     continue
             raise
-    raise last_err
+    return None
 
 
 def safe_int(v):
@@ -89,11 +86,14 @@ try:
     ticker = yf.Ticker(symbol)
     spot = resolve_spot(ticker)
 
+    time.sleep(0.3)
     all_exps = list(yf_retry(lambda: ticker.options) or [])
     expirations = all_exps[:max_expiries]
     quotes = []
 
-    for exp in expirations:
+    for i, exp in enumerate(expirations):
+        if i > 0:
+            time.sleep(REQ_DELAY)
         chain = yf_retry(lambda e=exp: ticker.option_chain(e))
         calls = chain.calls
         puts = chain.puts

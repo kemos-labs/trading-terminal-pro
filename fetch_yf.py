@@ -6,6 +6,27 @@ import yfinance as yf
 symbol = sys.argv[1] if len(sys.argv) > 1 else "SPY"
 mode = sys.argv[2] if len(sys.argv) > 2 else "history"
 
+MAX_RETRIES = 3
+RETRY_DELAY = 5  # seconds
+
+
+def yf_retry(fn, *args, **kwargs):
+    """Call fn(*args, **kwargs) with retry + exponential backoff on rate-limit errors."""
+    last_err = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            msg = str(e).lower()
+            if "rate limit" in msg or "429" in msg or "too many requests" in msg:
+                last_err = e
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_DELAY * (2 ** attempt)
+                    time.sleep(delay)
+                    continue
+            raise
+    raise last_err  # type: ignore[misc]
+
 
 def safe_float(v):
     try:
@@ -28,7 +49,9 @@ def safe_int(v):
 def fetch_history(sym):
     """~1y of daily OHLCV, normalised to the same shape the frontend expects."""
     ticker = yf.Ticker(sym)
-    hist = ticker.history(period="1y", interval="1d", auto_adjust=False)
+    hist = yf_retry(
+        lambda: ticker.history(period="1y", interval="1d", auto_adjust=False)
+    )
     rows = []
     for idx, row in hist.iterrows():
         rows.append({
@@ -47,7 +70,7 @@ def fetch_info(sym):
     ticker = yf.Ticker(sym)
     info = {}
     try:
-        info = ticker.info or {}
+        info = yf_retry(lambda: ticker.info) or {}
     except Exception:
         info = {}
     officers = info.get("companyOfficers") or []

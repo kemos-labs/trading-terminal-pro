@@ -18,6 +18,27 @@ except ValueError:
     max_expiries = 12
 max_expiries = max(1, min(max_expiries, 24))
 
+MAX_RETRIES = 3
+RETRY_DELAY = 5  # seconds
+
+
+def yf_retry(fn, *args, **kwargs):
+    """Call fn(*args, **kwargs) with retry + exponential backoff on rate-limit errors."""
+    last_err = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            msg = str(e).lower()
+            if "rate limit" in msg or "429" in msg or "too many requests" in msg:
+                last_err = e
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_DELAY * (2 ** attempt)
+                    time.sleep(delay)
+                    continue
+            raise
+    raise last_err
+
 
 def safe_int(v):
     try:
@@ -68,12 +89,12 @@ try:
     ticker = yf.Ticker(symbol)
     spot = resolve_spot(ticker)
 
-    all_exps = list(ticker.options or [])
+    all_exps = list(yf_retry(lambda: ticker.options) or [])
     expirations = all_exps[:max_expiries]
     quotes = []
 
     for exp in expirations:
-        chain = ticker.option_chain(exp)
+        chain = yf_retry(lambda e=exp: ticker.option_chain(e))
         calls = chain.calls
         puts = chain.puts
 

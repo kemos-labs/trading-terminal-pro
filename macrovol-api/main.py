@@ -828,13 +828,22 @@ async def get_crypto_spot():
     Free / keyless; rate-limited. Fail-closed (no synthetic prices).
     """
     key = "coingecko_spot:v1"
+    # Separate cache keys for success vs error so we don't hammer CoinGecko on every request
+    error_key = f"{key}:error"
+    # Check success cache (60s TTL)
     hit = ttl_cache.get_cached(key, 60)
     if not ttl_cache.is_miss(hit):
         return hit
+    # Check error cache (30s TTL) — avoid re-hitting CoinGecko during rate-limit windows
+    err_hit = ttl_cache.get_cached(error_key, 30)
+    if not ttl_cache.is_miss(err_hit):
+        return err_hit
     try:
         from services.coingecko import build_crypto_spot
         result = await build_crypto_spot()
-        if not result.get("error"):
+        if result.get("error"):
+            ttl_cache.set_cached(error_key, result)
+        else:
             ttl_cache.set_cached(key, result)
         return result
     except Exception as e:

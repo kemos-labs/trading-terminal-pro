@@ -13,13 +13,13 @@ import yfinance as yf
 
 symbol = sys.argv[1] if len(sys.argv) > 1 else "SPY"
 try:
-    max_expiries = int(sys.argv[2]) if len(sys.argv) > 2 else 12
+    max_expiries = int(sys.argv[2]) if len(sys.argv) > 2 else 8
 except ValueError:
-    max_expiries = 12
-max_expiries = max(1, min(max_expiries, 24))
+    max_expiries = 8
+max_expiries = max(1, min(max_expiries, 12))
 
 # Pace requests to avoid yfinance rate limits — options chains make many calls
-REQ_DELAY = 0.8  # seconds between each option chain request
+REQ_DELAY = 1.5  # seconds between each option chain request
 
 
 def yf_retry(fn, *args, **kwargs):

@@ -408,9 +408,9 @@ export async function fetchYahooSnapshot(
   try {
     const res = await fetch(`/api/options/${encodeURIComponent(symbol)}?max=${maxExpiries}`);
     if (!res.ok) {
-      // Brief negative cache so auto-refresh doesn't stampede a dead proxy,
-      // but long enough that a one-shot timeout doesn't stick for 45s.
-      yfChainCache = { key, value: null, expiry: now + 4_000, fetchedAt: now };
+      // Negative cache so auto-refresh doesn't stampede a dead proxy.
+      // 30s keeps rate-limited Render IP from re-hammering yfinance every loop.
+      yfChainCache = { key, value: null, expiry: now + 30_000, fetchedAt: now };
       return null;
     }
 

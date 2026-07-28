@@ -18,8 +18,8 @@ except ValueError:
     max_expiries = 12
 max_expiries = max(1, min(max_expiries, 24))
 
-MAX_RETRIES = 3
-RETRY_DELAY = 5  # seconds
+MAX_RETRIES = 6
+RETRY_DELAY = 10  # seconds — options make many calls per chain
 
 
 def yf_retry(fn, *args, **kwargs):

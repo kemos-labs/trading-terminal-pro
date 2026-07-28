@@ -834,8 +834,8 @@ async def get_crypto_spot():
     hit = ttl_cache.get_cached(key, 60)
     if not ttl_cache.is_miss(hit):
         return hit
-    # Check error cache (30s TTL) — avoid re-hitting CoinGecko during rate-limit windows
-    err_hit = ttl_cache.get_cached(error_key, 30)
+    # Check error cache (60s TTL) — avoid re-hitting CoinGecko during rate-limit windows
+    err_hit = ttl_cache.get_cached(error_key, 60)
     if not ttl_cache.is_miss(err_hit):
         return err_hit
     try:

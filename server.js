@@ -94,8 +94,8 @@ function isAllowedOrigin(origin) {
   try {
     const u = new URL(origin);
     if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return true;
-    // Exact Railway public host only (module scripts are CORS-mode)
-    const pub = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL || '';
+    // Exact Railway / Render public host only (module scripts are CORS-mode)
+    const pub = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL || process.env.RENDER_EXTERNAL_URL || '';
     if (pub) {
       const host = pub.replace(/^https?:\/\//, '').replace(/\/$/, '');
       if (origin === `https://${host}` || origin === `http://${host}` || origin === host) {
@@ -160,6 +160,7 @@ function rateLimitMaxForUrl(url) {
     u.startsWith('/api/flashalpha') ||
     u.startsWith('/api/desk') ||
     u.startsWith('/api/macrovol') ||
+    u.startsWith('/api/backtest') ||
     u.startsWith('/api/options') ||
     u.startsWith('/api/yf') ||
     u.startsWith('/api/deribit') ||
@@ -1657,6 +1658,47 @@ fastify.route({
   },
 });
 
+// ── Crypto Backtest API proxy ──────────────────────────────
+// Forwards /api/backtest/* → local FastAPI on :8766 (24h-rollout-effect analysis).
+const BACKTEST_API_URL = process.env.BACKTEST_API_URL || 'http://127.0.0.1:8766';
+
+fastify.route({
+  method: ['GET', 'POST', 'OPTIONS'],
+  url: '/api/backtest/*',
+  handler: async (request, reply) => {
+    const raw = request.url || '';
+    const suffix = raw.replace(/^\/api\/backtest/, '') || '/';
+    const target = `${BACKTEST_API_URL}/api/backtest${suffix.startsWith('/') ? suffix : `/${suffix}`}`;
+    try {
+      const res = await fetch(target, {
+        method: request.method === 'OPTIONS' ? 'GET' : request.method,
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(120_000),
+      });
+      const text = await res.text();
+      let body;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = { error: 'Invalid JSON from backtest pipe', raw: text.slice(0, 300) };
+      }
+      if (res.status < 200 || res.status >= 300) {
+        reply.code(res.status);
+        return body;
+      }
+      reply.code(res.status);
+      return body;
+    } catch (err) {
+      reply.code(502);
+      return {
+        error: 'Crypto backtest pipe unavailable',
+        detail: err.message || String(err),
+        hint: `Start backtest API: python3 -m uvicorn main:app --app-dir crypto-backtest-api --host 127.0.0.1 --port 8766`,
+      };
+    }
+  },
+});
+
 // ── FlashAlpha Lab (GEX / levels) ───────────────────────────
 // Free tier: ~5 calls/day TOTAL across all symbols (not per-symbol).
 // Server-side cache ≥6h; never expose the api key to browser.
@@ -1849,7 +1891,7 @@ try {
       decorateReply: false,
       // wildcard true: one catch-all instead of per-file routes that collide with dist
       wildcard: true,
-      maxAge: '1d',
+      maxAge: 0,
     });
   }
 } catch (err) {

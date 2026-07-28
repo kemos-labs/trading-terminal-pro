@@ -4,6 +4,8 @@
 #
 # Free plan notes:
 #  - Spins down after ~15 min idle (cold start can take 1–2 min)
+#  - 🟢 Prevent sleep: set up cron-job.org to GET https://volaterm.onrender.com/api/health
+#    every 5 minutes (free, no account needed).
 #  - Shared free-API board still works when awake (server-side cache + warmer)
 services:
   - type: web

@@ -6,7 +6,7 @@ import { execFile } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { FMP_BASE, FMP_ALLOWED_ENDPOINTS, isFmpEndpointAllowed, buildSpyHistoryAsync, proxyFmp } from './api/_shared.js';
+import { FMP_BASE, isFmpEndpointAllowed, buildSpyHistoryAsync, proxyFmp } from './api/_shared.js';
 import {
   getOrFetch,
   peek,
@@ -29,6 +29,7 @@ import {
   tradingViewSnapshot,
   providerKeysStatus,
 } from './api/deskFeeds.js';
+import { fetchKsaBoard, fetchKsaQuote, riyadhSessionSnapshot, sahmkBudgetStatus } from './api/ksaFeeds.js';
 
 // Load root .env into process.env (no dotenv dependency; keys never shipped to browser).
 function loadEnvFile(filePath) {
@@ -164,6 +165,7 @@ function rateLimitMaxForUrl(url) {
     u.startsWith('/api/options') ||
     u.startsWith('/api/yf') ||
     u.startsWith('/api/deribit') ||
+    u.startsWith('/api/ksa') ||
     u.startsWith('/api/history')
   ) {
     return RL_UPSTREAM;
@@ -659,6 +661,50 @@ fastify.get('/api/deribit/market/:currency', async (request, reply) => {
     return { error: 'Deribit market bundle failed', detail: err.message };
   }
 });
+
+// ── KSA / Tadawul (SAHMK) ──────────────────────────────────────
+// Browser reads the shared Node cache only. Upstream calls are gated by the
+// daily soft budget in api/ksaFeeds.js (charge-on-success, warmer owns board).
+// Without SAHMK_API_KEY the board fails closed with configured:false — never
+// synthetic numbers.
+
+/** Shared KSA board — polled by the browser at KSA_BOARD_POLL_MS (5 min). */
+fastify.get('/api/ksa/board', async (request, reply) => {
+  const forceWarm = request.query.force === '1' || request.query.force === 'true';
+  try {
+    const data = await fetchKsaBoard({ forceWarm });
+    const unusable = data?.unusable === true || data?.configured === false;
+    if (unusable && data?.code === 'BUDGET') {
+      reply.code(429);
+    } else if (unusable && data?.code !== 'NO_KEY') {
+      reply.code(502);
+    }
+    if (data?.configured === false) reply.code(503);
+    return data;
+  } catch (err) {
+    reply.code(502);
+    return { error: 'KSA board failed', detail: err.message || String(err), code: 'UPSTREAM' };
+  }
+});
+
+/** Symbol detail — resolved from the shared board; no per-symbol fan-out. */
+fastify.get('/api/ksa/quote/:symbol', async (request, reply) => {
+  const symbol = String(request.params.symbol || '').trim();
+  if (!/^[0-9]{1,6}$/.test(symbol)) {
+    reply.code(400);
+    return { error: 'Invalid symbol', code: 'INVALID', hint: 'Use numeric Tadawul codes e.g. 2222' };
+  }
+  return fetchKsaQuote(symbol);
+});
+
+/** Riyadh session state — lightweight, no upstream call. */
+fastify.get('/api/ksa/session', async () => ({
+  ...riyadhSessionSnapshot(),
+  source: 'sahmk',
+}));
+
+/** Ops: KSA budget readout (no key material). */
+fastify.get('/api/ksa/budget', async () => sahmkBudgetStatus());
 
 // ── SSE spot stream ────────────────────────────────────────────
 // Pushes FMP quote ticks to the browser so spot updates without a full poll.
@@ -1836,7 +1882,7 @@ fastify.get('/api/opra/status', async () => ({
  * credentials exist server-side. Returns 503 when disabled / stub.
  */
 fastify.get('/api/opra/chain/:symbol', async (request, reply) => {
-  const symbol = String(request.params.symbol || '').toUpperCase().replace(/[^A-Z0-9.\-]/g, '') || 'SPY';
+  const symbol = String(request.params.symbol || '').toUpperCase().replace(/[^A-Z0-9.-]/g, '') || 'SPY';
   if (!OPRA_ENABLED) {
     reply.code(503);
     return {

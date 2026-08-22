@@ -163,6 +163,9 @@ export const TTL = {
 /** FlashAlpha free ≈ 5/day — soft budget for levels only */
 export const FLASHALPHA_FREE_DAILY = 5;
 
+/** SAHMK (Tadawul) free tier = 100/day, ~15m delayed, 10/min burst. */
+export const SAHMK_FREE_DAILY = 100;
+
 export function cacheStats() {
   const keys = [];
   const now = Date.now();

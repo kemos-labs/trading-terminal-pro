@@ -80,9 +80,15 @@ describe('GreeksView (Greeks 1.0 host)', () => {
 
   it('mounts Vol · Greeks shell locked to header symbol (not dual edition)', async () => {
     render(<GreeksView />);
-    await waitFor(() => {
-      expect(screen.getByText(/^SPY$/)).toBeInTheDocument();
-    });
+    // Lazy-loaded Greeks10View can exceed the default 1s timeout under the full
+    // parallel suite (jsdom is slow under load); give it the same budget as the
+    // other lazy tests in this file.
+    await waitFor(
+      () => {
+        expect(screen.getByText(/^SPY$/)).toBeInTheDocument();
+      },
+      { timeout: 8000 },
+    );
     expect(screen.queryByText('Terminal Greeks')).toBeNull();
     expect(screen.queryByText('Open Greeks 1.0 (MacroVol API)')).toBeNull();
     // No desk-local multi-ticker chip row

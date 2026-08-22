@@ -7,6 +7,8 @@ const SHORTCUTS = [
   { key: '3', action: 'Trade desk' },
   { key: '4', action: 'Crypto (BTC·ETH)' },
   { key: '5', action: 'Rates desk' },
+  { key: '6', action: 'Academy' },
+  { key: '7', action: 'KSA · Tadawul board' },
   { key: 'M', action: 'Trade desk' },
   { key: 'V', action: 'Vol desk' },
   { key: 'GRK', action: 'Vol · Greeks 1.0' },

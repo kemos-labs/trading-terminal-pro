@@ -382,7 +382,7 @@ function SurfaceExplainPanel({
 
   return (
     <div
-      className="pointer-events-none absolute top-28 left-3 z-[1] max-w-[min(22rem,40%)] rounded border border-border bg-card/90 p-2.5 text-type-2xs font-mono text-muted-foreground leading-relaxed shadow-sm"
+      className="pointer-events-none absolute bottom-20 right-3 z-[1] max-w-[min(22rem,45%)] rounded border border-border bg-card/90 p-2.5 text-type-2xs font-mono text-muted-foreground leading-relaxed shadow-sm"
       data-testid="surface-explain"
     >
       <div className="mb-1 text-foreground uppercase tracking-wider">What this surface indicates</div>
@@ -417,6 +417,7 @@ export function SurfaceView() {
   const [sliceMode, setSliceMode] = useState<SliceMode>('none');
   const [hover, setHover] = useState<InspectPoint | null>(null);
   const [selected, setSelected] = useState<InspectPoint | null>(null);
+
 
   const info = useSurfaceGeometry();
   const spot = useTerminalStore(s => s.snapshot?.spot ?? 0);

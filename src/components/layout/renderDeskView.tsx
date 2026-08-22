@@ -8,6 +8,7 @@ import { DeskView } from '../views/DeskView';
 import { BtcView } from '../views/BtcView';
 import { RatesView } from '../views/RatesView';
 import { AcademyView } from '../views/AcademyView';
+import { KsaMarketView } from '../views/KsaMarketView';
 import { DeskLoading } from '../common/Skeleton';
 import type { ActiveTab } from '../../lib/options/types';
 
@@ -17,6 +18,7 @@ export const INDEPENDENT_TABS: ReadonlySet<ActiveTab> = new Set([
   'crypto',
   'desk',
   'academy',
+  'ksa',
 ]);
 
 export function renderDeskView(tab: ActiveTab, loading: boolean): ReactNode {
@@ -38,6 +40,8 @@ export function renderDeskView(tab: ActiveTab, loading: boolean): ReactNode {
         return <RatesView />;
       case 'academy':
         return <AcademyView />;
+      case 'ksa':
+        return <KsaMarketView />;
       default:
         return <VolStructureView />;
     }

@@ -4,8 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n web,api,macro \"vite\" \"node server.js\" \"npm run macrovol-api\"",
+    "dev": "concurrently -n web,api,macro,bt \"vite\" \"node server.js\" \"npm run macrovol-api\" \"npm run backtest-api\"",
     "macrovol-api": "python3 -m uvicorn main:app --app-dir macrovol-api --host 127.0.0.1 --port 8765",
+    "backtest-api": "python3 -m uvicorn main:app --app-dir crypto-backtest-api --host 127.0.0.1 --port 8766",
     "build": "tsc -b && vite build",
     "start": "node server.js",
     "start:prod": "bash scripts/start-production.sh",

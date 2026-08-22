@@ -1,7 +1,8 @@
 /**
- * Red function bar — main desks hard-left; active desk + baby tabs mid;
- * compact search (yellow ▶ / black GO) far-right.
+ * Red function bar — main desks hard-left (hover each for tree dropdown);
+ * active desk + baby tabs mid; compact search far-right.
  */
+import { useState } from 'react';
 import { useTerminalStore } from '../../store/terminalStore';
 import { functionMenuSections } from '../../config/relatedFunctions';
 import { findSectionMeta, sectionsForTab, tabLabel } from '../../config/deskNav';
@@ -29,6 +30,7 @@ export function FunctionMenuBar({
   const sectionId = useTerminalStore((s) => s.deskSectionId);
   const setActiveTab = useTerminalStore((s) => s.setActiveTab);
   const setDeskSection = useTerminalStore((s) => s.setDeskSection);
+  const [openTree, setOpenTree] = useState<string | null>(null);
 
   const sections = functionMenuSections(activeTab);
   const activeDeskLabel = tabLabel(activeTab);
@@ -68,36 +70,93 @@ export function FunctionMenuBar({
     });
   };
 
+  const goBaby = (tabId: ActiveTab, sectionId: string) => {
+    setDeskJump(sectionId);
+    setActiveTab(tabId);
+    const meta = findSectionMeta(sectionId, tabId);
+    useTerminalStore.getState().setDeskContext({
+      id: sectionId,
+      label: meta?.label ?? sectionId,
+      apis: meta?.apis,
+    });
+    setDeskSection(sectionId);
+    setOpenTree(null);
+  };
+
+  const handleMouseEnter = (id: string) => {
+    setOpenTree(id);
+  };
+
+  const handleMouseLeave = () => {
+    setOpenTree(null);
+  };
+
   return (
     <div
-      className="term-fn-bar-red flex h-5 shrink-0 items-stretch gap-0 overflow-x-auto scrollbar-none"
+      className="term-fn-bar-red flex h-5 shrink-0 items-stretch gap-0 overflow-x-auto overflow-y-visible scrollbar-none"
       role="menubar"
       aria-label="Main desks and sections"
     >
-      {/* LEFT — hard-core main desks */}
+      {/* LEFT — main desks, each with a hover tree */}
       <div className="flex shrink-0 items-stretch" role="group" aria-label="Main desks">
         {TABS.map((t) => {
           const on = activeTab === t.id;
+          const babies = functionMenuSections(t.id as ActiveTab);
           return (
-            <button
+            <div
               key={t.id}
-              type="button"
-              role="menuitem"
-              aria-current={on ? 'page' : undefined}
-              title={`${t.label} (${t.hotkey})`}
-              onClick={() => goDesk(t.id as ActiveTab)}
-              className={cn(
-                'shrink-0 border-r border-white/15 px-2 py-0 font-semibold uppercase tracking-wide transition-colors',
-                on
-                  ? 'bg-black/45 text-white'
-                  : 'text-white/75 hover:bg-black/25 hover:text-white',
-              )}
+              className="relative"
+              onMouseEnter={() => handleMouseEnter(t.id)}
+              onMouseLeave={handleMouseLeave}
             >
-              {t.label}
-              <span className="ml-0.5 hidden text-white/40 sm:inline" aria-hidden>
-                {t.hotkey}
-              </span>
-            </button>
+              <button
+                type="button"
+                role="menuitem"
+                aria-current={on ? 'page' : undefined}
+                aria-expanded={openTree === t.id}
+                title={`${t.label} (${t.hotkey})`}
+                onClick={() => goDesk(t.id as ActiveTab)}
+                className={cn(
+                  'shrink-0 border-r border-white/15 px-2 py-0 font-semibold uppercase tracking-wide transition-colors',
+                  on
+                    ? 'bg-black/45 text-white'
+                    : 'text-white/75 hover:bg-black/25 hover:text-white',
+                )}
+              >
+                {t.label}
+                <span className="ml-0.5 hidden text-white/40 sm:inline" aria-hidden>
+                  {t.hotkey}
+                </span>
+              </button>
+
+              {/* Dropdown tree — appears on hover */}
+              {openTree === t.id && babies.length > 0 && (
+                <div
+                  className="absolute top-full left-0 z-50 min-w-[140px] border border-white/20 bg-[#0f1118] shadow-xl"
+                  onMouseEnter={() => setOpenTree(t.id)}
+                  onMouseLeave={() => setOpenTree(null)}
+                >
+                  {babies.map((s) => {
+                    const isActive = activeTab === t.id && sectionId === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => goBaby(t.id as ActiveTab, s.id)}
+                        className={cn(
+                          'block w-full text-left px-3 py-1.5 text-xs uppercase tracking-wider transition-colors',
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : 'text-white/70 hover:bg-white/10 hover:text-white',
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>

@@ -1,6 +1,8 @@
 import type { ActiveTab } from '../lib/options/types';
 import { useTerminalStore } from '../store/terminalStore';
-import {
+import { sectionsForTab } from './deskSections';
+
+export {
   type DeskNavItem,
   RATES_SECTIONS,
   RATES_SECTION_TO_MODE,
@@ -16,23 +18,6 @@ import {
   sectionsForTab,
   findSectionMeta,
 } from './deskSections';
-
-export type { DeskNavItem };
-export {
-  RATES_SECTIONS,
-  RATES_SECTION_TO_MODE,
-  VOL_SECTIONS,
-  GREEKS_SECTIONS,
-  POSITIONING_SECTIONS,
-  CRYPTO_SECTIONS,
-  TRADE_SECTIONS,
-  THALEX_LAB_TOOLS,
-  ACADEMY_SECTIONS,
-  TAB_LABELS,
-  tabLabel,
-  sectionsForTab,
-  findSectionMeta,
-};
 
 /** Sections currently mounted in the DOM (ids present). */
 export function presentSectionIds(tab: ActiveTab | string): string[] {

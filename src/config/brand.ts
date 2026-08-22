@@ -4,7 +4,7 @@
  */
 
 export const BRAND = {
-  productName: 'VOLATERM',
+  productName: 'Kemos Research',
   tagline: 'Options · Positioning · Rates',
   founderName: 'levered β LARP e/acc',
   founderRole: 'Founder',

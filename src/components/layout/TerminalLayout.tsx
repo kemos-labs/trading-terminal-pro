@@ -154,6 +154,8 @@ export function TerminalLayout() {
     tab3: () => setActiveTab('desk'),
     tab4: () => setActiveTab('crypto'),
     tab5: () => setActiveTab('rates'),
+    tab6: () => setActiveTab('academy'),
+    tab7: () => setActiveTab('ksa'),
     b: () => setActiveTab('crypto'),
     m: () => setActiveTab('desk'),
     v: () => setActiveTab('vol'),

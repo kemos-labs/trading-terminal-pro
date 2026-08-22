@@ -147,7 +147,8 @@ export type ActiveTab =
   | 'desk'
   | 'crypto'
   | 'rates'
-  | 'academy';
+  | 'academy'
+  | 'ksa';
 
 
 export interface GreeksProfile {

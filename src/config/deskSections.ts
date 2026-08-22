@@ -142,22 +142,17 @@ export const ACADEMY_SECTIONS: DeskNavItem[] = [
  */
 export const CRYPTO_SECTIONS: DeskNavItem[] = [
   { id: 'crypto-sub-lab', label: 'Lab', short: 'Lab', apis: ['Thalex'] },
+  { id: 'crypto-sub-options', label: 'Options', short: 'Opts', apis: ['Binance'] },
+  { id: 'crypto-sub-backtest', label: 'Backtest', short: 'BT', apis: ['Binance'] },
   { id: 'crypto-sub-market', label: 'Market', short: 'Mkt', apis: ['Deribit', 'CoinGecko'] },
-  // Thalex homepage order → embeds https://thalextech.github.io/<slug>/
-  { id: 'desk-ws-sim', label: 'Simulator', short: 'Sim', apis: ['Thalex'] },
-  { id: 'desk-ws-combopnl', label: 'Combo PnL', short: 'CPnL', apis: ['Thalex'] },
-  { id: 'desk-ws-straddle', label: 'Straddle', short: 'Strd', apis: ['Thalex'] },
-  { id: 'desk-ws-combo', label: 'Combo Greeks', short: 'CGk', apis: ['Thalex'] },
-  { id: 'desk-ws-analyze', label: 'Greeks', short: 'Gk', apis: ['Thalex'] },
-  { id: 'desk-ws-optionpnl', label: 'Option PnL', short: 'OPnL', apis: ['Thalex'] },
-  { id: 'desk-ws-breakeven', label: 'Break Even', short: 'BE', apis: ['Thalex'] },
-  { id: 'desk-ws-roll', label: 'Roll PnL', short: 'Roll', apis: ['Thalex'] },
-  { id: 'desk-ws-basis', label: 'Basis', short: 'Bas', apis: ['Thalex'] },
-  { id: 'desk-ws-subjective', label: 'Subjective', short: 'Subj', apis: ['Thalex'] },
-  { id: 'desk-ws-backtest', label: 'Backtest', short: 'Bkt', apis: ['Thalex'] },
-  { id: 'desk-ws-dfollow', label: 'Δ Follower', short: 'DFol', apis: ['Thalex'] },
-  { id: 'desk-ws-hedge', label: 'Hedging', short: 'Hdg', apis: ['Thalex'] },
-  { id: 'desk-ws-grid', label: 'Option Grid', short: 'Grid', apis: ['Thalex'] },
+];
+
+/**
+ * KSA desk — Tadawul board via SAHMK (server-only key, shared Node cache).
+ * Single scroll view; section ids are anchors for [ ] jump only.
+ */
+export const KSA_SECTIONS: DeskNavItem[] = [
+  { id: 'ksa-sub-board', label: 'Board', short: 'BRD', apis: ['SAHMK'] },
 ];
 
 /**
@@ -289,6 +284,7 @@ const TAB_LABELS: Record<string, string> = {
   crypto: 'Crypto',
   rates: 'Rates',
   academy: 'Academy',
+  ksa: 'KSA',
 };
 
 export { TAB_LABELS };
@@ -313,6 +309,8 @@ export function sectionsForTab(tab: ActiveTab | string): DeskNavItem[] {
       return CRYPTO_SECTIONS;
     case 'academy':
       return ACADEMY_SECTIONS;
+    case 'ksa':
+      return KSA_SECTIONS;
     default:
       return [];
   }

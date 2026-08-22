@@ -33,16 +33,17 @@ describe('deskNav', () => {
     expect(secs.find((s) => s.id === 'desk-ws-optionpnl')).toBeUndefined();
   });
 
-  it('crypto is Thalex lab order (Lab first, then Market, then tools)', () => {
+  it('crypto is Lab first, then Options · Backtest · Market (Thalex tools moved to Trade desk)', () => {
     const secs = sectionsForTab('crypto');
-    expect(secs[0]?.id).toBe('crypto-sub-lab');
-    expect(secs[1]?.id).toBe('crypto-sub-market');
-    expect(secs.find((s) => s.id === 'desk-ws-sim')?.label).toMatch(/Simulator/i);
-    expect(secs.find((s) => s.id === 'desk-ws-backtest')?.label).toMatch(/Backtest/i);
-    expect(secs.find((s) => s.id === 'desk-ws-basis')?.label).toMatch(/Basis/i);
-    expect(secs.find((s) => s.id === 'desk-ws-sim')?.apis).toContain('Thalex');
-    // 2 chrome + 14 Thalex tools
-    expect(secs.length).toBe(16);
+    expect(secs.map((s) => s.id)).toEqual([
+      'crypto-sub-lab',
+      'crypto-sub-options',
+      'crypto-sub-backtest',
+      'crypto-sub-market',
+    ]);
+    // Crypto chrome no longer lists Thalex embeds — they live on the Trade desk.
+    expect(secs.find((s) => s.id === 'desk-ws-sim')).toBeUndefined();
+    expect(secs.find((s) => s.id === 'desk-ws-basis')).toBeUndefined();
   });
 
   it('maps crypto tools to thalextech.github.io app slugs', async () => {
@@ -92,12 +93,13 @@ describe('jumpDeskSection', () => {
   });
 
   it('jumps to next rates section via store', async () => {
-    const { jumpDeskSection, useTerminalStore } = await import('./deskNav');
+    const { jumpDeskSection } = await import('./deskNav');
     const store = await import('../store/terminalStore');
-    store.useTerminalStore.setState({ activeTab: 'rates', deskSectionId: 'sec-macro' });
+    const useTerminalStore = store.useTerminalStore;
+    useTerminalStore.setState({ activeTab: 'rates', deskSectionId: 'sec-macro' });
     const next = jumpDeskSection('rates', 1);
     expect(next).toBeTruthy();
-    expect(store.useTerminalStore.getState().deskSectionId).toBe(next);
+    expect(useTerminalStore.getState().deskSectionId).toBe(next);
   });
 
   it('sets store section for vol-sub mode buttons when jumping', async () => {

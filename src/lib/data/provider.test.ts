@@ -10,7 +10,9 @@ const yahoo = await import('../options/yahoo');
 // Realistic ATM-centered strikes for SPY @ 500 so IV solve / intrinsic checks pass.
 const SPOT = 500;
 const STRIKES = [460, 480, 490, 500, 510, 520, 540];
-const EXPIRY = '2026-12-18';
+// Live expiry ~120 days out — never hardcode a date (snapshot builders drop
+// expired slices, so literal dates become time bombs).
+const EXPIRY = new Date(Date.now() + 120 * 24 * 3600 * 1000).toISOString().slice(0, 10);
 
 /** Rough BS-ish mid so quotes clear intrinsic + liquidity filters. */
 function roughMid(type: 'call' | 'put', strike: number): number {

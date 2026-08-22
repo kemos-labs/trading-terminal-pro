@@ -142,3 +142,56 @@ supplies exchange `mark_iv` directly (still BS-style for greeks).
 - Changing ATM IV and GEX will change dashboard numbers vs prior demos — intentional.
 - Greeks unit scaling changes displayed magnitudes; docs/glossary should match.
 - FMP free tier: keep negative caching and longer closed-session intervals.
+
+---
+
+# VOLATERM — 2026-07 KSA desk wiring + build/test stabilization
+
+Review date: this patch · Scope: full review + fixes to reach a green build and a complete KSA desk.
+
+## Findings (code & logical review)
+
+1. **`SAHMK_FREE_DAILY` was never defined.** `api/ksaFeeds.js` imported it from
+   `api/upstreamCache.js`, which never exported it. `softCap()` returned `NaN`, so
+   `canAffordBoardPack()` **always returned `false`** and the KSA board warmer was
+   permanently dead (and strict ESM threw on import). **Fixed** by exporting
+   `SAHMK_FREE_DAILY = 100` from `api/upstreamCache.js`.
+2. **KSA API routes were orphaned.** Docs (`docs/engineering/KSA_DATA_PROVIDERS.md`)
+   declared `/api/ksa/board`, `/quote/:symbol`, `/session`, but `server.js` registered
+   none and `api/ksaFeeds.js` was never imported. The browser client (`ksaClient.ts`) hit
+   404s and `KsaMarketView` was never mounted. **Fixed:** registered the routes
+   (+ `/budget` ops) in `server.js`, rate-limit class, imported the module, and mounted
+   `KsaMarketView` as a new **KSA** desk (tab **7**).
+3. **Hotkey `6` (Academy) was a dead key.** `useKeyboardShortcuts` dispatched `tab6`
+   but `TerminalLayout` never mapped it — the tab bar advertised `1`–`6` yet 6 did
+   nothing. **Fixed:** mapped `tab6` → Academy, `tab7` → KSA.
+4. **Production build was broken** (`tsc -b`) by type errors in the in-progress crypto
+   Options/Backtest views. **Fixed** all `TS6133`/`TS2532`/`TS18048`/`TS2869`/`TS2339`
+   errors (unused imports/params, `noUncheckedIndexedAccess` guards, missing
+   `optimal_capital_knee` on the equity-curve type, missing `displayMode` arg to
+   `useSurfaceGeo`).
+5. **Test suite was red** — 3 files failing:
+   - `api/ksaFeeds.test.js` (the `SAHMK_FREE_DAILY` bug above + it used `node:test`
+     which vitest could not discover → converted to vitest).
+   - `src/config/deskNav.test.ts` (stale after the crypto-sections refactor moved Thalex
+     tools off the Crypto desk → updated to the current Lab/Options/Backtest/Market list).
+   - `src/components/views/GreeksView.test.tsx` (flake under parallel load — lazy import
+     exceeded the default 1s wait → bumped to the same 8s budget as its sibling tests).
+
+## Outcome
+
+- `npm test` → **489/489 passing**
+- `npm run build` (`tsc -b && vite build`) → **green**
+- `npm run lint` (oxlint) → warnings only
+- KSA desk served **live Tadawul data** in verification (TASI 10827, NOMU, session open,
+  budget 6/100). Fails closed (HTTP 503 `configured:false` / 429 `BUDGET`) without the key.
+
+## How to verify
+
+```bash
+npm test && npm run build
+PORT=3001 node server.js
+curl -s localhost:3001/api/ksa/session      # Riyadh session
+curl -s localhost:3001/api/ksa/board        # TASI/Nomu/movers/sectors
+curl -s localhost:3001/api/ksa/quote/2222   # free-tier: from shared board only
+```

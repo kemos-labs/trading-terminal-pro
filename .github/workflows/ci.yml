@@ -15,6 +15,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Secrets scanner self-test
+        run: bash scripts/check-secrets.sh --self-test
+      - name: Secrets scan (full tree)
+        run: bash scripts/check-secrets.sh --all
       - name: Type-check
         run: npm run type-check
       - name: Lint

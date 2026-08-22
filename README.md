@@ -16,6 +16,7 @@ VOLATERM is a multi-desk terminal for reading **equity options volatility**, **d
 | **Crypto** | BTC/ETH options tape (Deribit) |
 | **Rates** | Curves, SOFR path, macro strip |
 | **Academy** | Essays, glossary, news (education — not a trading desk) |
+| **KSA** | Tadawul board — TASI/Nomu, movers, breadth (SAHMK) |
 
 Full stack on Railway: React SPA + Node API + Yahoo/yfinance chains + MacroVol rates.
 
@@ -54,6 +55,7 @@ Do not expect live chains/rates from a Vercel-only deploy without a separate Nod
 | **4** | **Crypto** | Dual BTC/ETH Deribit tape; optional 2× thin charts |
 | **5** | **Rates** | FRED/NYFed macro strip, STIR path, SERFF, UST curve |
 | **6** | **Academy** | Desk essays / glossary / news (Substack-style reader) |
+| **7** | **KSA** | Tadawul board — TASI/Nomu, movers, sectors, breadth (SAHMK, ~15m delayed) |
 
 **Analytics & risk**
 - Portfolio Greeks, scenario analysis, breakeven, expected move, max pain
@@ -106,7 +108,7 @@ Product & frontend architecture design: **[`DESIGN.md`](DESIGN.md)**.
 
 | Key | Action |
 |-----|--------|
-| `1`–`6` | Switch desks |
+| `1`–`7` | Switch desks |
 | `Tab` | Next desk |
 | `[` `]` | Previous / next desk section |
 | `D` | Toggle dense / readable density |

@@ -7,8 +7,19 @@ globalThis.fetch = mockFetch;
 // Import after the fetch mock is installed.
 const fmp = await import('./fmp');
 
+const EXP = futureExpiry();
+
 function res(body: unknown, ok = true) {
   return { ok, text: () => Promise.resolve(JSON.stringify(body)) };
+}
+
+/**
+ * A live expiry ~90 days out. Never hardcode a literal date here: expired
+ * slices are filtered by the snapshot builder (T <= 0), which turns the test
+ * into a time bomb (see 2026-08-10 regression).
+ */
+function futureExpiry(daysAhead = 90): string {
+  return new Date(Date.now() + daysAhead * 24 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
 function chain() {
@@ -21,11 +32,11 @@ function chain() {
     openInterest: 10,
     volume: 5,
     impliedVolatility: iv,
-    expirationDate: '2026-08-10',
+    expirationDate: EXP,
   });
   return [
     {
-      expirationDate: '2026-08-10',
+      expirationDate: EXP,
       data: [mk('call', 95, 0.2), mk('call', 100, 0.21), mk('call', 105, 0.24), mk('put', 95, 0.22), mk('put', 100, 0.23)],
     },
   ];
@@ -68,7 +79,7 @@ describe('fetchFmpSnapshot', () => {
 
   it('throws when the chain has too few contracts', async () => {
     mockFetch
-      .mockResolvedValueOnce(res([{ expirationDate: '2026-08-10', data: [chain()[0]!.data[0]!] }]))
+      .mockResolvedValueOnce(res([{ expirationDate: EXP, data: [chain()[0]!.data[0]!] }]))
       .mockResolvedValueOnce(res([{ symbol: 'SPY', price: 100 }]));
     await expect(fmp.fetchFmpSnapshot('SPY')).rejects.toThrow(/too few option contracts/);
   });

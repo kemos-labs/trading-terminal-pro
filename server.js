@@ -6,7 +6,7 @@ import { execFile } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { FMP_BASE, isFmpEndpointAllowed, buildSpyHistoryAsync, proxyFmp } from './api/_shared.js';
+import { FMP_BASE, isFmpEndpointAllowed, buildSpyHistoryAsync, proxyFmp, fetchFmpQuoteShared } from './api/_shared.js';
 import {
   getOrFetch,
   peek,
@@ -742,6 +742,8 @@ fastify.get('/api/stream/quote/:symbol', async (request, reply) => {
   let consecutiveFailures = 0;
   // If no good tick for this long, emit stale + end stream so client SSE chip drops.
   const STALE_MS = 90_000;
+  /** Cached data older than this is a replay, not a live tick. */
+  const STALE_DATA_MS = 90_000;
   const MAX_FAILURES = 5;
 
   let timer = null;
@@ -760,28 +762,58 @@ fastify.get('/api/stream/quote/:symbol', async (request, reply) => {
   const writeTick = async () => {
     if (closed) return;
     try {
-      const { status, body } = await proxyFmp(`quote?symbol=${encodeURIComponent(symbol)}`, FMP_API_KEY, FMP_BASE);
-      if (status === 200 && Array.isArray(body) && body[0] && body[0].price > 0) {
-        const q = body[0];
-        lastGoodTickAt = Date.now();
-        consecutiveFailures = 0;
+      // Shared, budget-gated quote: same cache entry as /api/fmp/stable/* —
+      // N stream clients share one upstream call per TTL (the previous direct
+      // proxyFmp call burned ~60 unbudgeted calls/hour per open tab).
+      const { quote, ageMs, stale, error } = await fetchFmpQuoteShared(symbol, FMP_API_KEY, FMP_BASE);
+      if (error === 'no_api_key') {
+        reply.raw.write(`data: ${JSON.stringify({ error: 'no_api_key', timestamp: Date.now() })}\n\n`);
+        reply.raw.write(`data: ${JSON.stringify({ error: 'stream_stale', timestamp: Date.now() })}\n\n`);
+        cleanup();
+        return;
+      }
+      if (quote && quote.price > 0) {
         const payload = {
-          symbol: q.symbol || symbol,
-          price: q.price,
-          change: q.change,
-          changePercentage: q.changePercentage,
+          symbol: quote.symbol || symbol,
+          price: quote.price,
+          change: quote.change,
+          changePercentage: quote.changePercentage,
+          /** Cache age of this tick — lets the UI show honest freshness. */
+          ageMs,
+          stale: !!stale || ageMs > STALE_DATA_MS,
           timestamp: Date.now(),
           source: 'fmp',
         };
+        // A tick only counts as "good" when its data is actually fresh; a
+        // stale-cache replay must not keep a dead stream alive forever.
+        if (!stale && ageMs <= STALE_DATA_MS) {
+          lastGoodTickAt = Date.now();
+          consecutiveFailures = 0;
+        }
         reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+        if (stale || ageMs > STALE_DATA_MS) {
+          consecutiveFailures += 1;
+          if (consecutiveFailures >= MAX_FAILURES) {
+            reply.raw.write(`data: ${JSON.stringify({ error: 'stream_stale', timestamp: Date.now() })}\n\n`);
+            cleanup();
+          }
+        }
+      } else if (error === 'budget_exhausted') {
+        // Budget gone: emit one honest error, then end so the client falls
+        // back to polling / shows the stale chip. Never spin on retries.
+        consecutiveFailures += 1;
+        reply.raw.write(`data: ${JSON.stringify({ error: 'fmp_budget_exhausted', timestamp: Date.now() })}\n\n`);
+        if (consecutiveFailures >= 2) {
+          reply.raw.write(`data: ${JSON.stringify({ error: 'stream_stale', timestamp: Date.now() })}\n\n`);
+          cleanup();
+        }
       } else {
         consecutiveFailures += 1;
-        const errCode = !FMP_API_KEY ? 'no_api_key' : 'tick_failed';
+        const errCode = error || 'tick_failed';
         reply.raw.write(`data: ${JSON.stringify({ error: errCode, timestamp: Date.now(), consecutiveFailures })}\n\n`);
         if (
           consecutiveFailures >= MAX_FAILURES
           || (lastGoodTickAt > 0 && Date.now() - lastGoodTickAt > STALE_MS)
-          || (!FMP_API_KEY && consecutiveFailures >= 2)
         ) {
           reply.raw.write(`data: ${JSON.stringify({ error: 'stream_stale', timestamp: Date.now() })}\n\n`);
           cleanup();

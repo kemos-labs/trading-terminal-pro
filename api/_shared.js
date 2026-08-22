@@ -6,6 +6,15 @@
  * Keeping it in one place prevents the two deployments from drifting.
  */
 
+import {
+  getOrFetch,
+  peek,
+  TTL,
+  budgetAllows,
+  recordBudget,
+  FMP_FREE_DAILY,
+} from './upstreamCache.js';
+
 export const FMP_BASE = 'https://financialmodelingprep.com/stable';
 
 // Endpoints the FMP proxy is allowed to forward. Guarded on both deployments.
@@ -61,6 +70,50 @@ export async function proxyFmp(endpoint, apiKey, base = FMP_BASE) {
     return { status: 200, body: json };
   } catch (err) {
     return { status: 502, body: { error: 'FMP proxy error', detail: err.message } };
+  }
+}
+
+/**
+ * Shared, budget-gated FMP quote for any route/stream that needs spot ticks.
+ *
+ * Uses the SAME cache entry as the /api/fmp/stable/* proxy (`fmp:<url>`), so
+ * the SSE stream, the REST proxy and the warmer all share one upstream call
+ * per TTL window per symbol — N clients never mean N× upstream calls.
+ *
+ * Budget: records one FMP call per cold fill; when the daily free-tier budget
+ * is exhausted, serves the last good value via allowStaleOnError instead of
+ * silently burning quota (the SSE stream previously bypassed accounting).
+ *
+ * @returns {Promise<{ quote: object|null, ageMs: number, stale: boolean, error: string|null }>}
+ */
+export async function fetchFmpQuoteShared(symbol, apiKey, base = FMP_BASE) {
+  const endpoint = `quote?symbol=${encodeURIComponent(symbol)}`;
+  const key = `fmp:${endpoint}`;
+  if (!apiKey) {
+    return { quote: null, ageMs: 0, stale: false, error: 'no_api_key' };
+  }
+  try {
+    const { data, ageMs, stale } = await getOrFetch(
+      key,
+      TTL.FMP_QUOTE_MS,
+      async () => {
+        if (!budgetAllows('fmp', FMP_FREE_DAILY)) {
+          const err = new Error('FMP daily budget exhausted');
+          err.code = 'budget_exhausted';
+          throw err;
+        }
+        const { status, body } = await proxyFmp(endpoint, apiKey, base);
+        if (status !== 200 || !Array.isArray(body) || !body[0]) {
+          throw new Error(body?.error || `FMP ${status}`);
+        }
+        recordBudget('fmp', 1);
+        return body[0];
+      },
+      { allowStaleOnError: true },
+    );
+    return { quote: data ?? null, ageMs, stale, error: null };
+  } catch (err) {
+    return { quote: null, ageMs: 0, stale: false, error: err?.code || err.message || 'fmp_failed' };
   }
 }
 

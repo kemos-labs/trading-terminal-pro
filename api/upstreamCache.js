@@ -10,6 +10,37 @@ const store = new Map();
 /** @type {Map<string, Promise<unknown>>} */
 const inflight = new Map();
 
+/**
+ * Cache size cap — the store is keyed by symbol × endpoint and grows without
+ * bound otherwise (a symbol-search storm grows it forever). Map iteration
+ * order is insertion order, so delete+set on access gives LRU semantics.
+ * Override with MAX_CACHE_ENTRIES env var; 0 disables eviction.
+ */
+export const MAX_CACHE_ENTRIES = Math.max(0, parseInt(process.env.MAX_CACHE_ENTRIES || '5000', 10) || 5000);
+/** Observability: total evictions since boot (surfaced via cacheStats). */
+let evictions = 0;
+
+function setEntry(key, entry) {
+  store.delete(key);
+  store.set(key, entry);
+  if (MAX_CACHE_ENTRIES > 0) {
+    while (store.size > MAX_CACHE_ENTRIES) {
+      const oldest = store.keys().next().value;
+      store.delete(oldest);
+      evictions += 1;
+    }
+  }
+}
+
+/** Return the live entry for key, refreshing its LRU recency. */
+function touch(key) {
+  const hit = store.get(key);
+  if (!hit) return null;
+  store.delete(key);
+  store.set(key, hit);
+  return hit;
+}
+
 /** Per-day call counters for hard-budgeted providers. */
 const dayBudget = new Map();
 /** Per-calendar-month counters (TradingView RapidAPI 150/mo). */
@@ -78,7 +109,7 @@ export function monthBudgetAllows(provider, maxPerMonth, headroom = 0.85) {
  */
 export async function getOrFetch(key, ttlMs, loader, opts = {}) {
   const now = Date.now();
-  const hit = store.get(key);
+  const hit = touch(key);
   if (!opts.force && hit && now - hit.timestamp < ttlMs) {
     return { data: hit.data, fromCache: true, ageMs: now - hit.timestamp, stale: false };
   }
@@ -90,7 +121,7 @@ export async function getOrFetch(key, ttlMs, loader, opts = {}) {
         const data = await loader();
         const okToCache = typeof opts.cacheIf === 'function' ? !!opts.cacheIf(data) : true;
         if (okToCache) {
-          store.set(key, { data, timestamp: Date.now() });
+          setEntry(key, { data, timestamp: Date.now() });
         }
         return { data, stale: false, hitTs: null };
       } catch (err) {
@@ -121,11 +152,11 @@ export async function getOrFetch(key, ttlMs, loader, opts = {}) {
 }
 
 export function peek(key) {
-  return store.get(key) || null;
+  return touch(key);
 }
 
 export function setCache(key, data) {
-  store.set(key, { data, timestamp: Date.now() });
+  setEntry(key, { data, timestamp: Date.now() });
 }
 
 /** Free-tier caps (documented; use with headroom 0.85). */
@@ -173,7 +204,9 @@ export function cacheStats() {
     keys.push({ key: k, ageMs: now - v.timestamp });
   }
   return {
-    entries: keys.length,
+    entries: store.size,
+    maxEntries: MAX_CACHE_ENTRIES,
+    evictions,
     keys,
     budgets: {
       fmp: { used: getBudgetUsed('fmp'), capDaily: FMP_FREE_DAILY },

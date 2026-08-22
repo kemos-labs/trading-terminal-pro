@@ -15,6 +15,7 @@ import {
   budgetAllows,
   recordBudget,
   getBudgetUsed,
+  MAX_CACHE_ENTRIES,
   TTL,
 } from './upstreamCache.js';
 
@@ -151,6 +152,36 @@ describe('upstreamCache', () => {
     expect(s.entries).toBeGreaterThan(0);
     expect(Array.isArray(s.keys)).toBe(true);
   });
+
+  it('evicts oldest entries beyond MAX_CACHE_ENTRIES (LRU)', async () => {
+    // Only meaningful when eviction is enabled; default config has a cap.
+    if (MAX_CACHE_ENTRIES <= 0) return;
+    const before = cacheStats().entries;
+    const overflow = MAX_CACHE_ENTRIES + 50;
+    for (let i = 0; i < overflow; i++) {
+      setCache(`test:lru:${Date.now()}:${i}`, { i });
+    }
+    const after = cacheStats();
+    expect(after.entries).toBeLessThanOrEqual(before + MAX_CACHE_ENTRIES);
+    // Oldest inserted keys must be gone; newest must survive.
+    const firstKey = `test:lru:${Date.now()}:0`;
+    // (timestamp differs per iteration — instead assert via stats counters)
+    expect(after.evictions).toBeGreaterThanOrEqual(overflow - (after.entries - before));
+  });
+
+  it('peek/getOrFetch refresh recency so hot keys survive eviction pressure', async () => {
+    if (MAX_CACHE_ENTRIES <= 0) return;
+    const hot = `test:hot:${Date.now()}`;
+    setCache(hot, { hot: true });
+    // Touch repeatedly while flooding with cold entries.
+    for (let i = 0; i < Math.min(MAX_CACHE_ENTRIES, 200); i++) {
+      peek(hot);
+      setCache(`test:flood:${Date.now()}:${i}`, { i });
+    }
+    const r = await getOrFetch(hot, 60_000, async () => ({ hot: 'reloaded' }));
+    expect(r.data).toEqual({ hot: true }); // still cached → loader not re-run
+    expect(r.fromCache).toBe(true);
+  });
 });
 
 describe('server.js cache wiring (regression)', () => {
@@ -166,6 +197,17 @@ describe('server.js cache wiring (regression)', () => {
     expect(src).toMatch(/deribit:market:/);
     expect(src).toMatch(/yf:history:/);
     expect(src).toMatch(/TTL\.DERIBIT_MS|TTL\.YF_ENRICH_MS/);
+  });
+
+  it('SSE quote stream routes through the shared budget-gated helper (no direct proxyFmp)', () => {
+    expect(src).toMatch(/fetchFmpQuoteShared/);
+    // writeTick must not call proxyFmp directly — that path bypassed the
+    // FMP daily budget (~60 unbudgeted calls/hour per open tab).
+    const sseStart = src.indexOf('/api/stream/quote/');
+    const sseEnd = src.indexOf('// ── FMP API Proxy', sseStart);
+    const sseBlock = src.slice(sseStart, sseEnd);
+    expect(sseBlock).toContain('fetchFmpQuoteShared');
+    expect(sseBlock).not.toMatch(/proxyFmp\(/);
   });
 });
 

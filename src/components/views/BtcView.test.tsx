@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, cleanup } from '@testing-library/react';
 import React from 'react';
 import { BtcView } from './BtcView';
 import { useTerminalStore } from '../../store/terminalStore';

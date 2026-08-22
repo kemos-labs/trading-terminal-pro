@@ -32,6 +32,8 @@ import {
 import { classifyDomainFreshness } from '../../lib/data/freshness';
 import { PerpBasisBoard } from './PerpBasisBoard';
 import { DeskView } from './DeskView';
+import { BacktestCryptoView } from './BacktestCryptoView';
+import { CryptoOptionsView } from './CryptoOptionsView';
 import { THALEX_LAB_TOOLS } from '../../config/deskSections';
 
 function Stat({
@@ -257,6 +259,8 @@ export function BtcView() {
   const { tape: dual, books, gecko } = useCryptoDualBooks({ dualCharts: cryptoDualCharts });
   const showThalexTool = Boolean(deskSectionId?.startsWith('desk-ws-'));
   const showLabHome = !deskSectionId || deskSectionId === 'crypto-sub-lab';
+  const showOptions = deskSectionId === 'crypto-sub-options';
+  const showBacktest = deskSectionId === 'crypto-sub-backtest';
 
   // Auto-switch to a crypto underlier when entering this tab
   useEffect(() => {
@@ -358,6 +362,16 @@ export function BtcView() {
     setProxy(ccy);
     setSymbol(ccy);
   };
+
+  // Crypto options analytics desk
+  if (showOptions) {
+    return <CryptoOptionsView />;
+  }
+
+  // Crypto backtesting sandbox
+  if (showBacktest) {
+    return <BacktestCryptoView />;
+  }
 
   // Thalex lab tools — crypto chrome (not Trade blotter)
   if (showThalexTool) {

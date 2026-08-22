@@ -1,0 +1,6 @@
+data/
+results/
+private/
+__pycache__/
+*.pyc
+*.part

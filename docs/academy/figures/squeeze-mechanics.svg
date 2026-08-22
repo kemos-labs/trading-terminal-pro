@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img">
+  <rect width="960" height="420" fill="#0c0f14"/>
+  <text x="32" y="40" fill="#9a9284" font-family="ui-sans-serif" font-size="14" letter-spacing="2">SQUEEZE PATH (MECHANICS)</text>
+  <rect x="40" y="80" width="200" height="90" rx="8" fill="#151b24" stroke="#9a9284"/>
+  <text x="56" y="115" fill="#f3efe6" font-family="ui-sans-serif" font-size="15">Crowded short</text>
+  <text x="56" y="142" fill="#9a9284" font-family="ui-sans-serif" font-size="13">+ thin float</text>
+  <path d="M250 125 H300" stroke="#c4a574" stroke-width="2"/>
+  <rect x="300" y="80" width="200" height="90" rx="8" fill="#151b24" stroke="#c4a574"/>
+  <text x="316" y="115" fill="#f3efe6" font-family="ui-sans-serif" font-size="15">Call buying</text>
+  <text x="316" y="142" fill="#9a9284" font-family="ui-sans-serif" font-size="13">dealer short gamma</text>
+  <path d="M510 125 H560" stroke="#c4a574" stroke-width="2"/>
+  <rect x="560" y="80" width="200" height="90" rx="8" fill="#151b24" stroke="#3d8bfd"/>
+  <text x="576" y="115" fill="#f3efe6" font-family="ui-sans-serif" font-size="15">Hedge buy spot</text>
+  <text x="576" y="142" fill="#9a9284" font-family="ui-sans-serif" font-size="13">path reinforces</text>
+  <path d="M770 125 H800" stroke="#c4a574" stroke-width="2"/>
+  <rect x="800" y="80" width="120" height="90" rx="8" fill="#1a1210" stroke="#e85d4c"/>
+  <text x="820" y="125" fill="#f3efe6" font-family="ui-sans-serif" font-size="15">Spike</text>
+  <text x="40" y="230" fill="#c4a574" font-family="ui-sans-serif" font-size="15">What is not magic</text>
+  <text x="40" y="265" fill="#f3efe6" font-family="ui-sans-serif" font-size="14">• Short covering is inventory forced buying — not “value discovery”</text>
+  <text x="40" y="295" fill="#f3efe6" font-family="ui-sans-serif" font-size="14">• Options gamma can amplify once dealers are short calls into a rising spot</text>
+  <text x="40" y="325" fill="#f3efe6" font-family="ui-sans-serif" font-size="14">• Borrow fees, recall risk, and liquidity holes set the ceiling of violence</text>
+  <text x="40" y="370" fill="#9a9284" font-family="ui-sans-serif" font-size="13">Educational template — not a trade idea on any name</text>
+</svg>

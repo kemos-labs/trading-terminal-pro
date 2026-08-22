@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" role="img" aria-label="Reserve currency flow">
+  <rect width="960" height="480" fill="#0b1220"/>
+  <text x="40" y="44" fill="#e8edf5" font-family="Georgia, serif" font-size="26" font-weight="700">Reserve status → external deficit (simplified)</text>
+  <text x="40" y="78" fill="#9aa8bc" font-family="system-ui" font-size="16">World wants safe \$ assets → must supply them → net capital inflows → current account can run deficit</text>
+  <rect x="40" y="120" width="200" height="100" rx="10" fill="#1e293b" stroke="#c4a574" stroke-width="2"/>
+  <text x="140" y="165" text-anchor="middle" fill="#e6c35c" font-family="system-ui" font-size="16" font-weight="700">Foreign demand</text>
+  <text x="140" y="195" text-anchor="middle" fill="#9aa8bc" font-family="system-ui" font-size="14">Treasuries, \$ cash</text>
+  <path d="M250 170 L310 170" stroke="#c4a574" stroke-width="3" marker-end="url(#a)"/>
+  <rect x="320" y="120" width="200" height="100" rx="10" fill="#1e293b" stroke="#60a5fa" stroke-width="2"/>
+  <text x="420" y="165" text-anchor="middle" fill="#93c5fd" font-family="system-ui" font-size="16" font-weight="700">Capital inflow</text>
+  <text x="420" y="195" text-anchor="middle" fill="#9aa8bc" font-family="system-ui" font-size="14">to the US</text>
+  <path d="M530 170 L590 170" stroke="#c4a574" stroke-width="3"/>
+  <rect x="600" y="120" width="300" height="100" rx="10" fill="#1e293b" stroke="#4ade80" stroke-width="2"/>
+  <text x="750" y="165" text-anchor="middle" fill="#86efac" font-family="system-ui" font-size="16" font-weight="700">Financing capacity</text>
+  <text x="750" y="195" text-anchor="middle" fill="#9aa8bc" font-family="system-ui" font-size="14">imports / investment &gt; exports</text>
+  <rect x="40" y="280" width="860" height="140" rx="10" fill="#141a22" stroke="#334155" stroke-width="1"/>
+  <text x="60" y="320" fill="#e8edf5" font-family="system-ui" font-size="18" font-weight="700">Identity (not a conspiracy)</text>
+  <text x="60" y="360" fill="#9aa8bc" font-family="system-ui" font-size="16">Current account + capital account ≈ 0 (ignoring residuals). Surplus of foreign saving into \$ assets pairs with a US current-account deficit.</text>
+  <text x="60" y="395" fill="#9aa8bc" font-family="system-ui" font-size="16">Privilege: cheap, deep funding. Constraint: net liability position can grow — and policy choices still matter.</text>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img">
+  <rect width="960" height="420" fill="#0b1220"/>
+  <text x="40" y="44" fill="#e8edf5" font-family="Georgia, serif" font-size="26" font-weight="700">Carry + quiet vol regime</text>
+  <rect x="40" y="100" width="280" height="120" rx="10" fill="#1e293b" stroke="#4ade80" stroke-width="2"/>
+  <text x="180" y="150" text-anchor="middle" fill="#86efac" font-size="18" font-weight="700">Earn carry</text>
+  <text x="180" y="185" text-anchor="middle" fill="#9aa8bc" font-size="14">short vol · credit · FX</text>
+  <rect x="340" y="100" width="280" height="120" rx="10" fill="#1e293b" stroke="#c4a574" stroke-width="2"/>
+  <text x="480" y="150" text-anchor="middle" fill="#e6c35c" font-size="18" font-weight="700">Soft realized</text>
+  <text x="480" y="185" text-anchor="middle" fill="#9aa8bc" font-size="14">path looks safe</text>
+  <rect x="640" y="100" width="280" height="120" rx="10" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+  <text x="780" y="150" text-anchor="middle" fill="#fca5a5" font-size="18" font-weight="700">Hidden stack</text>
+  <text x="780" y="185" text-anchor="middle" fill="#9aa8bc" font-size="14">leverage · same factor</text>
+  <text x="40" y="280" fill="#9aa8bc" font-size="16">Break: funding shock, vol spike, or correlation →1 across “diversified” carry books</text>
+  <text x="40" y="320" fill="#9aa8bc" font-size="16">Desk habit: measure VRP + funding spreads, not just the equity close</text>
+</svg>

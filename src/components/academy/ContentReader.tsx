@@ -83,7 +83,7 @@ export function ContentReader({
       <div className="academy-post-sticky">
         <div className="academy-col academy-post-sticky-inner">
           <button type="button" onClick={onClose} className="academy-back">
-            ← VOLATERM Academy
+            ← Kemos Research Academy
           </button>
           <span className="academy-read-meta">
             {mins != null ? `${mins} min read` : loading ? '…' : ''}
@@ -106,7 +106,7 @@ export function ContentReader({
               <img src="/docs/academy/figures/covers/pub-mark.svg" alt="" />
             </div>
             <div className="academy-byline-text">
-              <div className="academy-byline-name">VOLATERM Desk</div>
+              <div className="academy-byline-name">Kemos Research Desk</div>
               <div className="academy-byline-sub">
                 {mins != null ? `${mins} min read` : 'Essay'}
               </div>

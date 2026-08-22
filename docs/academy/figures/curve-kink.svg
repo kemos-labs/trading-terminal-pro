@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-label="Kinked yield curve">
+  <rect width="960" height="420" fill="#0b1220"/>
+  <text x="40" y="44" fill="#e8edf5" font-family="Georgia, serif" font-size="26" font-weight="700">A kink is a local rich/cheap signal</text>
+  <text x="40" y="78" fill="#9aa8bc" font-family="system-ui" font-size="16">Smooth curve in grey; special sector (e.g. on-the-run / bill bill) as a kink</text>
+  <path d="M80 320 C 200 300, 300 250, 420 240 S 650 220, 880 180" fill="none" stroke="#475569" stroke-width="3" stroke-dasharray="6 6"/>
+  <path d="M80 320 C 200 300, 300 250, 400 250 L 480 200 L 560 245 C 650 220, 780 190, 880 180" fill="none" stroke="#c4a574" stroke-width="4"/>
+  <circle cx="480" cy="200" r="8" fill="#f87171"/>
+  <text x="500" y="195" fill="#fca5a5" font-family="system-ui" font-size="16" font-weight="700">kink / specialness</text>
+  <text x="80" y="380" fill="#9aa8bc" font-family="system-ui" font-size="15">Ask: collateral scarcity · CTD · supply calendar · liquidity premium — not only “Fed pivot”</text>
+</svg>

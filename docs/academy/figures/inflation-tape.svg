@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img">
+  <rect width="960" height="400" fill="#0c0f14"/>
+  <text x="32" y="40" fill="#9a9284" font-family="ui-sans-serif" font-size="14" letter-spacing="2">INFLATION PRINT → DESK TRANSMISSION</text>
+  <rect x="40" y="90" width="160" height="70" rx="8" fill="#151b24" stroke="#c4a574"/>
+  <text x="58" y="130" fill="#f3efe6" font-family="ui-sans-serif" font-size="16">CPI / PCE</text>
+  <path d="M210 125 H260" stroke="#c4a574" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="260" y="70" width="180" height="110" rx="8" fill="#151b24" stroke="#3d8bfd"/>
+  <text x="278" y="110" fill="#f3efe6" font-family="ui-sans-serif" font-size="15">Rates path</text>
+  <text x="278" y="138" fill="#9a9284" font-family="ui-sans-serif" font-size="13">2s10s · real yields</text>
+  <text x="278" y="160" fill="#9a9284" font-family="ui-sans-serif" font-size="13">Fed funds expectations</text>
+  <path d="M450 125 H500" stroke="#c4a574" stroke-width="2"/>
+  <rect x="500" y="70" width="180" height="110" rx="8" fill="#151b24" stroke="#9a9284"/>
+  <text x="518" y="110" fill="#f3efe6" font-family="ui-sans-serif" font-size="15">Dollar / risk</text>
+  <text x="518" y="138" fill="#9a9284" font-family="ui-sans-serif" font-size="13">DXY · equities beta</text>
+  <text x="518" y="160" fill="#9a9284" font-family="ui-sans-serif" font-size="13">credit spreads</text>
+  <path d="M690 125 H740" stroke="#c4a574" stroke-width="2"/>
+  <rect x="740" y="70" width="180" height="110" rx="8" fill="#151b24" stroke="#c4a574"/>
+  <text x="758" y="110" fill="#f3efe6" font-family="ui-sans-serif" font-size="15">Vol surface</text>
+  <text x="758" y="138" fill="#9a9284" font-family="ui-sans-serif" font-size="13">event crush vs</text>
+  <text x="758" y="160" fill="#9a9284" font-family="ui-sans-serif" font-size="13">path repricing</text>
+  <text x="40" y="250" fill="#f3efe6" font-family="ui-sans-serif" font-size="15">Hot print: higher real yields / stronger USD bias / equity multiple pressure</text>
+  <text x="40" y="285" fill="#f3efe6" font-family="ui-sans-serif" font-size="15">Cool print: opposite bias — still measure, do not script</text>
+  <text x="40" y="340" fill="#9a9284" font-family="ui-sans-serif" font-size="13">Use Rates + Vol desks for the live numbers; Academy is the transmission map</text>
+</svg>

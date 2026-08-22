@@ -1,7 +1,7 @@
 {
   "version": 3,
   "generated": "2026-07-15",
-  "title": "VOLATERM Academy",
+  "title": "Kemos Research Academy",
   "description": "Institutional plumbing for the terminally online. Options and rates \u2014 desk essays, not tip lists. Positioning lives on the desk as terminal work, not Academy lessons.",
   "categories": [
     {
@@ -9,6 +9,58 @@
       "label": "Start Here",
       "description": "Your map into the Academy. Pick a track or open the core lessons below \u2014 this is not an empty folder.",
       "files": [
+        {
+          "path": "docs/academy/trading-reading-plan.md",
+          "title": "Trading Reading Plan",
+          "source": "A week-by-week path. No gurus. No secret systems. Just mechanics and sources that work.",
+          "level": "start here",
+          "tags": [
+            "trading",
+            "curriculum",
+            "start-here",
+            "reading-plan"
+          ],
+          "sections": [
+            {
+              "heading": "How to Use This",
+              "tags": [
+                "method"
+              ]
+            },
+            {
+              "heading": "Week 1 — Mental Guardrails",
+              "tags": [
+                "psychology"
+              ]
+            },
+            {
+              "heading": "Week 2 — Market Structure",
+              "tags": [
+                "market-structure"
+              ]
+            },
+            {
+              "heading": "Week 3 — Reading Price Action",
+              "tags": [
+                "price-action"
+              ]
+            },
+            {
+              "heading": "Week 4 — Risk & Sizing",
+              "tags": [
+                "risk-management"
+              ]
+            },
+            {
+              "heading": "Week 5+ — Live Practice",
+              "tags": [
+                "practice"
+              ]
+            }
+          ],
+          "figure": "/docs/academy/figures/covers/reading-plan.svg",
+          "cover": "/docs/academy/figures/covers/reading-plan.svg"
+        },
         {
           "path": "docs/academy/00-curriculum-overview.md",
           "title": "How this Academy works",

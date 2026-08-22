@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img">
+  <rect width="960" height="400" fill="#0c0f14"/>
+  <text x="32" y="40" fill="#9a9284" font-family="ui-sans-serif" font-size="14" letter-spacing="2">SURFACE SHAPE = EMBEDDED BET</text>
+  <polyline points="60,300 160,280 260,250 360,200 460,180 560,190 660,160 760,140 860,120"
+    fill="none" stroke="#3d8bfd" stroke-width="2.5"/>
+  <polyline points="60,280 160,270 260,265 360,255 460,240 560,220 660,210 760,205 860,200"
+    fill="none" stroke="#c4a574" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="60" y="100" fill="#3d8bfd" font-family="ui-sans-serif" font-size="14">Skew / wing bid</text>
+  <text x="60" y="125" fill="#c4a574" font-family="ui-sans-serif" font-size="14">Term structure (dashed)</text>
+  <text x="40" y="350" fill="#f3efe6" font-family="ui-sans-serif" font-size="14">Steep put skew = crash insurance demand · inverted term = near-term stress priced</text>
+  <text x="40" y="380" fill="#9a9284" font-family="ui-sans-serif" font-size="13">“Big trade under the surface” = who is forced to rehedge when that shape moves</text>
+</svg>

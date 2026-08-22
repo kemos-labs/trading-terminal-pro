@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img">
+  <rect width="960" height="420" fill="#0b1220"/>
+  <text x="40" y="44" fill="#e8edf5" font-family="Georgia, serif" font-size="26" font-weight="700">Diversification: calm vs funding stress</text>
+  <text x="40" y="100" fill="#9aa8bc" font-size="16">Calm: partial correlations (sketch)</text>
+  <rect x="40" y="120" width="70" height="70" fill="#1e3a2f" stroke="#4ade80"/>
+  <rect x="120" y="120" width="70" height="70" fill="#1e293b" stroke="#334155"/>
+  <rect x="200" y="120" width="70" height="70" fill="#1e293b" stroke="#334155"/>
+  <rect x="40" y="200" width="70" height="70" fill="#1e293b" stroke="#334155"/>
+  <rect x="120" y="200" width="70" height="70" fill="#1e3a2f" stroke="#4ade80"/>
+  <rect x="200" y="200" width="70" height="70" fill="#1e293b" stroke="#334155"/>
+  <text x="400" y="100" fill="#9aa8bc" font-size="16">Stress: correlations jump</text>
+  <rect x="400" y="120" width="70" height="70" fill="#3f1d1d" stroke="#f87171"/>
+  <rect x="480" y="120" width="70" height="70" fill="#3f1d1d" stroke="#f87171"/>
+  <rect x="560" y="120" width="70" height="70" fill="#3f1d1d" stroke="#f87171"/>
+  <rect x="400" y="200" width="70" height="70" fill="#3f1d1d" stroke="#f87171"/>
+  <rect x="480" y="200" width="70" height="70" fill="#3f1d1d" stroke="#f87171"/>
+  <rect x="560" y="200" width="70" height="70" fill="#3f1d1d" stroke="#f87171"/>
+  <text x="40" y="340" fill="#9aa8bc" font-size="16">When cash is scarce, “uncorrelated” risk premia often share the same leverage and the same exit door.</text>
+</svg>

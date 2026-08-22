@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-label="Spot up vol quiet">
+  <rect width="960" height="420" fill="#0b1220"/>
+  <text x="40" y="44" fill="#e8edf5" font-family="Georgia, serif" font-size="26" font-weight="700">Regime sketch: grind-up, soft vol</text>
+  <text x="40" y="120" fill="#9aa8bc" font-family="system-ui" font-size="16">Spot (left) trends higher while realized &amp; short-dated IV stay muted</text>
+  <path d="M80 300 L200 280 L320 250 L440 220 L560 200 L680 170 L800 150" fill="none" stroke="#4ade80" stroke-width="3"/>
+  <text x="800" y="140" fill="#86efac" font-family="system-ui" font-size="14">spot ↑</text>
+  <path d="M80 200 L200 205 L320 198 L440 210 L560 195 L680 200 L800 190" fill="none" stroke="#60a5fa" stroke-width="3"/>
+  <text x="800" y="185" fill="#93c5fd" font-family="system-ui" font-size="14">IV / VIX soft</text>
+  <path d="M80 340 L200 335 L320 338 L440 330 L560 332 L680 328 L800 325" fill="none" stroke="#c4a574" stroke-width="2" stroke-dasharray="4 4"/>
+  <text x="80" y="370" fill="#c4a574" font-family="system-ui" font-size="14">put skew can flatten if crash demand fades — until it does not</text>
+</svg>

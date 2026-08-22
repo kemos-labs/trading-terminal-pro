@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0c0f14"/>
+      <stop offset="100%" stop-color="#151b24"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="80%" cy="20%" r="55%">
+      <stop offset="0%" stop-color="#c4a574" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#c4a574" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#g)"/>
+  <rect width="1200" height="800" fill="url(#glow)"/>
+  <rect x="0" y="0" width="8" height="800" fill="#c4a574"/>
+  <text x="48" y="72" fill="#9a9284" font-family="ui-sans-serif" font-size="22" letter-spacing="4">MARKETS</text>
+  <text x="48" y="160" fill="#f3efe6" font-family="Georgia,serif" font-size="44" font-weight="700">Quiet VIX through</text>
+  <text x="48" y="220" fill="#f3efe6" font-family="Georgia,serif" font-size="44" font-weight="700">data and the Fed</text>
+  <text x="48" y="320" fill="#9a9284" font-family="ui-sans-serif" font-size="22">IV can sleep while the calendar is loud</text>
+</svg>

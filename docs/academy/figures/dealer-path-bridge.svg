@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" role="img" aria-label="Dealer greeks path to spot">
+  <rect width="960" height="480" fill="#0b1220"/>
+  <text x="40" y="44" fill="#e8edf5" font-family="Georgia, serif" font-size="26" font-weight="700">Options → dealer hedges → path of the underlying</text>
+  <rect x="40" y="100" width="200" height="80" rx="8" fill="#1e293b" stroke="#c4a574" stroke-width="2"/>
+  <text x="140" y="148" text-anchor="middle" fill="#e6c35c" font-family="system-ui" font-size="16" font-weight="700">Customer flow</text>
+  <text x="280" y="140" fill="#9aa8bc" font-size="28">→</text>
+  <rect x="320" y="100" width="200" height="80" rx="8" fill="#1e293b" stroke="#60a5fa" stroke-width="2"/>
+  <text x="420" y="148" text-anchor="middle" fill="#93c5fd" font-family="system-ui" font-size="16" font-weight="700">Dealer inventory</text>
+  <text x="560" y="140" fill="#9aa8bc" font-size="28">→</text>
+  <rect x="600" y="100" width="300" height="80" rx="8" fill="#1e293b" stroke="#4ade80" stroke-width="2"/>
+  <text x="750" y="148" text-anchor="middle" fill="#86efac" font-family="system-ui" font-size="16" font-weight="700">Hedge in futures / cash</text>
+  <rect x="40" y="220" width="280" height="100" rx="8" fill="#141a22" stroke="#334155"/>
+  <text x="180" y="265" text-anchor="middle" fill="#f3efe6" font-family="system-ui" font-size="17" font-weight="700">Gamma</text>
+  <text x="180" y="295" text-anchor="middle" fill="#9aa8bc" font-family="system-ui" font-size="14">rehedge as spot moves</text>
+  <rect x="340" y="220" width="280" height="100" rx="8" fill="#141a22" stroke="#334155"/>
+  <text x="480" y="265" text-anchor="middle" fill="#f3efe6" font-family="system-ui" font-size="17" font-weight="700">Vanna</text>
+  <text x="480" y="295" text-anchor="middle" fill="#9aa8bc" font-family="system-ui" font-size="14">spot × vol coupling</text>
+  <rect x="640" y="220" width="280" height="100" rx="8" fill="#141a22" stroke="#334155"/>
+  <text x="780" y="265" text-anchor="middle" fill="#f3efe6" font-family="system-ui" font-size="17" font-weight="700">Charm</text>
+  <text x="780" y="295" text-anchor="middle" fill="#9aa8bc" font-family="system-ui" font-size="14">time changes delta</text>
+  <rect x="40" y="360" width="880" height="80" rx="10" fill="#1e293b" stroke="#c4a574" stroke-width="2"/>
+  <text x="60" y="410" fill="#e6c35c" font-family="system-ui" font-size="17" font-weight="700">Build &amp; read GEX / walls on the Positioning desk — Academy explains why; POS is the tool.</text>
+</svg>

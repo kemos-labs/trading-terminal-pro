@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img">
+  <rect width="960" height="400" fill="#0c0f14"/>
+  <text x="32" y="40" fill="#9a9284" font-family="ui-sans-serif" font-size="14" letter-spacing="2">OPTIONS → UNDERLYING (G / V / C)</text>
+  <rect x="40" y="90" width="220" height="100" rx="8" fill="#151b24" stroke="#c4a574"/>
+  <text x="56" y="130" fill="#f3efe6" font-family="ui-sans-serif" font-size="16">Gamma</text>
+  <text x="56" y="158" fill="#9a9284" font-family="ui-sans-serif" font-size="13">Δ hedge vs spot moves</text>
+  <rect x="300" y="90" width="220" height="100" rx="8" fill="#151b24" stroke="#3d8bfd"/>
+  <text x="316" y="130" fill="#f3efe6" font-family="ui-sans-serif" font-size="16">Vanna</text>
+  <text x="316" y="158" fill="#9a9284" font-family="ui-sans-serif" font-size="13">Δ vs IV changes</text>
+  <rect x="560" y="90" width="220" height="100" rx="8" fill="#151b24" stroke="#9a9284"/>
+  <text x="576" y="130" fill="#f3efe6" font-family="ui-sans-serif" font-size="16">Charm</text>
+  <text x="576" y="158" fill="#9a9284" font-family="ui-sans-serif" font-size="13">Δ vs time (session)</text>
+  <path d="M150 200 V250 H700 V200" stroke="#c4a574" stroke-width="1.5" fill="none"/>
+  <rect x="280" y="250" width="360" height="70" rx="8" fill="#1a1210" stroke="#c4a574"/>
+  <text x="310" y="290" fill="#f3efe6" font-family="ui-sans-serif" font-size="16">Dealer Δ rebalance → spot path bias</text>
+  <text x="40" y="370" fill="#9a9284" font-family="ui-sans-serif" font-size="13">Measure on POS desk · language here · no GEX recipe in Academy</text>
+</svg>

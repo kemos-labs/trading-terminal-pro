@@ -120,7 +120,7 @@ export function AcademyView() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/docs/index.json')
+    fetch('/docs/index.json?v=2')
       .then((r) => {
         if (!r.ok) throw new Error(String(r.status));
         return r.json();
@@ -258,13 +258,13 @@ export function AcademyView() {
               <img src={pubCover} alt="" />
             </div>
             <div className="academy-masthead-text">
-              <h1 className="academy-pub-title">{index.title || 'VOLATERM Academy'}</h1>
+              <h1 className="academy-pub-title">{index.title || 'Kemos Research Academy'}</h1>
               <p className="academy-pub-tagline">
                 {index.description ||
                   'Options and rates desk essays. Positioning is built on the POS desk — not here.'}
               </p>
               <p className="academy-pub-meta">
-                {archivePosts.length} essays · By VOLATERM Desk
+                {archivePosts.length} essays · By Kemos Research Desk
               </p>
             </div>
           </div>

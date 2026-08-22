@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img">
+  <rect width="960" height="420" fill="#0c0f14"/>
+  <text x="32" y="40" fill="#9a9284" font-family="ui-sans-serif" font-size="14" letter-spacing="2">VIX QUIET THROUGH DATA / FOMC</text>
+  <rect x="40" y="80" width="200" height="80" rx="8" fill="#151b24" stroke="#c4a574"/>
+  <text x="56" y="115" fill="#f3efe6" font-family="ui-sans-serif" font-size="16">CPI / jobs print</text>
+  <text x="56" y="140" fill="#9a9284" font-family="ui-sans-serif" font-size="13">event vol peak</text>
+  <path d="M250 120 H320" stroke="#c4a574" stroke-width="2"/>
+  <rect x="320" y="80" width="200" height="80" rx="8" fill="#151b24" stroke="#3d8bfd"/>
+  <text x="336" y="115" fill="#f3efe6" font-family="ui-sans-serif" font-size="16">IV crush / soft VIX</text>
+  <text x="336" y="140" fill="#9a9284" font-family="ui-sans-serif" font-size="13">if realized stays calm</text>
+  <path d="M530 120 H600" stroke="#c4a574" stroke-width="2"/>
+  <rect x="600" y="80" width="300" height="80" rx="8" fill="#151b24" stroke="#9a9284"/>
+  <text x="616" y="115" fill="#f3efe6" font-family="ui-sans-serif" font-size="16">FOMC week still “quiet”</text>
+  <text x="616" y="140" fill="#9a9284" font-family="ui-sans-serif" font-size="13">unless path risk reprices</text>
+  <text x="40" y="220" fill="#c4a574" font-family="ui-sans-serif" font-size="15">Checklist</text>
+  <text x="40" y="255" fill="#f3efe6" font-family="ui-sans-serif" font-size="14">1. Separate front event peak vs continuous IV</text>
+  <text x="40" y="285" fill="#f3efe6" font-family="ui-sans-serif" font-size="14">2. Compare IV to trailing realized (VRP)</text>
+  <text x="40" y="315" fill="#f3efe6" font-family="ui-sans-serif" font-size="14">3. Ask what funding / growth channel is still open</text>
+  <text x="40" y="360" fill="#9a9284" font-family="ui-sans-serif" font-size="13">Soft headline VIX ≠ free short-vol forever</text>
+</svg>

@@ -40,11 +40,11 @@ if [ "$MODE" = "--self-test" ]; then
   # 1) Leaks that MUST be detected
   cat > "$TMP/fake-leak.js" <<'EOF'
 const cfg = {
-  sahmk: '***REMOVED***',
+  sahmk: 'shmk_live_000000000000000000000000deadbeef',
   openai: 'sk-abcdefghijklmnopqrstuvwxyz012345',
   google: 'AIzaSyA1234567890abcdefghijklmnopqrstuv',
-  fred: 'FRED_API_KEY = "***REMOVED***"',
-  finnhub: "FINNHUB_API_KEY='***REMOVED***'",
+  fred: 'FRED_API_KEY = "00000000000000000000000000000001"',
+  finnhub: "FINNHUB_API_KEY='testkey0123456789testkey0123456789'",
 };
 EOF
   LEAK_HITS=$(grep -cE "$(_patterns_join)" "$TMP/fake-leak.js" || true)

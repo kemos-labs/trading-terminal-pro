@@ -198,10 +198,15 @@ export const FLASHALPHA_FREE_DAILY = 5;
 export const SAHMK_FREE_DAILY = 100;
 
 export function cacheStats() {
+  // Raw cache keys reveal which symbols every visitor is querying, live.
+  // Ops-only: gate behind EXPOSE_KEY_STATUS (same flag as provider key booleans).
+  const expose = process.env.EXPOSE_KEY_STATUS === '1';
   const keys = [];
-  const now = Date.now();
-  for (const [k, v] of store.entries()) {
-    keys.push({ key: k, ageMs: now - v.timestamp });
+  if (expose) {
+    const now = Date.now();
+    for (const [k, v] of store.entries()) {
+      keys.push({ key: k, ageMs: now - v.timestamp });
+    }
   }
   return {
     entries: store.size,

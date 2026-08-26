@@ -33,6 +33,12 @@ export const FMP_ALLOWED_ENDPOINTS = new Set([
 ]);
 
 export function isFmpEndpointAllowed(endpoint) {
+  // Dot-segment traversal bypass: fetch() normalizes `.`/`..`/`%2e%2e` upstream,
+  // so a raw prefix check like "quote/" would let `/quote/../stable/<anything>`
+  // reach ANY paid FMP endpoint. Reject dot segments before matching.
+  const lower = String(endpoint).toLowerCase();
+  if (lower.includes('%2e')) return false;
+  if (lower.split('/').some((seg) => seg === '.' || seg === '..')) return false;
   return [...FMP_ALLOWED_ENDPOINTS].some(
     (e) => endpoint === e || endpoint.startsWith(`${e}?`) || endpoint.startsWith(`${e}/`),
   );
@@ -67,6 +73,12 @@ export async function proxyFmp(endpoint, apiKey, base = FMP_BASE) {
     }
     const json = await res.json();
     fmpCache.set(endpoint, { t: Date.now(), b: json });
+    // Bound memory: attacker-chosen query strings would otherwise grow this
+    // Map without limit (entries expire logically but were never deleted).
+    if (fmpCache.size > 500) {
+      const cutoff = Date.now() - FMP_CACHE_TTL;
+      for (const [k, v] of fmpCache) if (v.t < cutoff) fmpCache.delete(k);
+    }
     return { status: 200, body: json };
   } catch (err) {
     return { status: 502, body: { error: 'FMP proxy error', detail: err.message } };

@@ -1,7 +1,9 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useTerminalStore } from '../../store/terminalStore';
+import { useAccountStore } from '../../store/accountStore';
 import { fmtPrice, fmtClock, fmtTime, fmtPct } from '../../lib/format';
 import { SymbolDialog } from './SymbolDialog';
+import { BillingDialog } from './BillingDialog';
 import { FreshnessChip } from '../common/Freshness';
 import {
   kindFromProvenance,
@@ -49,6 +51,8 @@ export function TerminalHeader({ onOpenShortcuts }: TerminalHeaderProps) {
     toggleUiDensity,
   } = useTerminalStore();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const setBillingOpen = useAccountStore((s) => s.setBillingOpen);
+  const user = useAccountStore((s) => s.user);
   const [clock, setClock] = useState(Date.now());
 
   useEffect(() => {
@@ -187,6 +191,14 @@ export function TerminalHeader({ onOpenShortcuts }: TerminalHeaderProps) {
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
           <button
             type="button"
+            onClick={() => setBillingOpen(true)}
+            className="rounded px-1 py-0 text-type-2xs uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground"
+            title={user ? `Signed in as ${user.email} — plans & billing` : 'Plans & billing'}
+          >
+            acct
+          </button>
+          <button
+            type="button"
             onClick={toggleUiDensity}
             className="rounded px-1 py-0 text-type-2xs uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground"
             title="Toggle dense / readable UI (D)"
@@ -236,6 +248,7 @@ export function TerminalHeader({ onOpenShortcuts }: TerminalHeaderProps) {
         </div>
       </header>
       {dialogOpen && <SymbolDialog onSelect={handleSymbolSelect} onClose={() => setDialogOpen(false)} />}
+      <BillingDialog />
     </>
   );
 }

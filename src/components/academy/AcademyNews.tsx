@@ -26,6 +26,21 @@ function fmtEpoch(ts: number | null | undefined): string {
   }
 }
 
+/**
+ * Safe external href: news/filing URLs come from third-party feeds. React does
+ * NOT sanitize hrefs, so a compromised feed could hand us `javascript:…` which
+ * executes on click. Only http(s) URLs may render as anchors.
+ */
+function safeExternalHref(url: string | undefined | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AcademyNews({
   symbol,
   className,
@@ -101,8 +116,8 @@ export function AcademyNews({
             <span>
               SEC {f.form} · {f.filing_date}
             </span>
-            {f.url ? (
-              <a href={f.url} target="_blank" rel="noreferrer">
+            {safeExternalHref(f.url) ? (
+              <a href={safeExternalHref(f.url)!} target="_blank" rel="noreferrer">
                 open
               </a>
             ) : null}
@@ -130,9 +145,9 @@ export function AcademyNews({
                   {it.source || 'News'}
                   {it.datetime ? ` · ${fmtEpoch(it.datetime)}` : ''}
                 </p>
-                {it.url ? (
+                {safeExternalHref(it.url) ? (
                   <a
-                    href={it.url}
+                    href={safeExternalHref(it.url)!}
                     target="_blank"
                     rel="noreferrer"
                     className="academy-news-headline"
@@ -164,8 +179,8 @@ export function AcademyNews({
                     {f.description}
                   </span>
                 ) : null}
-                {f.url ? (
-                  <a href={f.url} target="_blank" rel="noreferrer" className="academy-filing-link">
+                {safeExternalHref(f.url) ? (
+                  <a href={safeExternalHref(f.url)!} target="_blank" rel="noreferrer" className="academy-filing-link">
                     View filing →
                   </a>
                 ) : null}

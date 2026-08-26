@@ -29,7 +29,8 @@ import {
   isQuoteStripEnabled,
   setDisplayStripEnabled,
 } from '../../lib/market/shellPrefs';
-import { renderDeskView } from './renderDeskView';
+import { DeskViewGate } from './renderDeskView';
+import { useAccountStore } from '../../store/accountStore';
 
 /**
  * Space-efficient shell:
@@ -69,6 +70,11 @@ export function TerminalLayout() {
       setDisplayStripEnabled(next);
       return next;
     });
+  }, []);
+
+  // Account + billing gate bootstrap (session cookie → /api/auth/me).
+  useEffect(() => {
+    void useAccountStore.getState().refresh();
   }, []);
 
   // Seed default baby section when a desk has none, or when switching into Academy
@@ -207,9 +213,11 @@ export function TerminalLayout() {
         uiDensity === 'readable' ? 'density-readable' : 'density-dense',
       )}
     >
-      <TerminalHeader onOpenShortcuts={() => setShortcutsOpen((o) => !o)} />
-      {/* Optional multi-symbol tape — off by default (WL under Home · Feeds / toolbar). */}
-      {quoteStripOn && (
+      {activeTab !== 'crypto' && (
+        <TerminalHeader onOpenShortcuts={() => setShortcutsOpen((o) => !o)} />
+      )}
+      {/* Optional watchlist strip — only when not inside the dedicated Crypto shell. */}
+      {activeTab !== 'crypto' && quoteStripOn && (
         <div
           id="shell-quote-strip"
           className="shrink-0 border-b border-border bg-card/80 px-1"
@@ -219,14 +227,16 @@ export function TerminalLayout() {
       )}
       {!quoteStripOn && <div id="shell-quote-strip" className="sr-only" aria-hidden />}
 
-      <FunctionMenuBar
-        focusToken={cmdFocusToken}
-        onHelp={() => setShortcutsOpen(true)}
-        onWatchlistFocus={() => {
-          document.getElementById('shell-quote-strip')?.scrollIntoView({ block: 'nearest' });
-        }}
-        onOpenDisplay={toggleDisplayStrip}
-      />
+      {activeTab !== 'crypto' && (
+        <FunctionMenuBar
+          focusToken={cmdFocusToken}
+          onHelp={() => setShortcutsOpen(true)}
+          onWatchlistFocus={() => {
+            document.getElementById('shell-quote-strip')?.scrollIntoView({ block: 'nearest' });
+          }}
+          onOpenDisplay={toggleDisplayStrip}
+        />
+      )}
       {/* Vol honesty strip only on option desks — not Rates/Crypto/Academy (VIX ≠ rates). */}
       {(activeTab === 'vol' || activeTab === 'positioning' || activeTab === 'desk') && (
         <div className="shrink-0 border-b border-border/60">
@@ -244,7 +254,7 @@ export function TerminalLayout() {
         aria-label={activeTab === 'academy' ? 'Academy publication' : 'Function area'}
         id={`panel-${activeTab}`}
       >
-        {renderDeskView(activeTab, loading)}
+        <DeskViewGate tab={activeTab} loading={loading} />
       </main>
 
       {displayStripOn && <SidePanel />}

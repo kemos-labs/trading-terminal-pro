@@ -1,0 +1,102 @@
+/**
+ * Auth routes — register / login / logout / me / password reset.
+ * Mounted from server.js. `GET /api/auth/me` also returns billing gate info
+ * so the SPA can decide desk access in one round-trip.
+ *
+ * Rate limiting: the global limiter (600/min in server.js) is far too loose
+ * for credential endpoints, so each route here carries its own tight config
+ * (10/min/IP). @fastify/rate-limit honors per-route `config.rateLimit`.
+ */
+import {
+  COOKIE_CLEAR,
+  confirmPasswordReset,
+  createResetToken,
+  createUser,
+  getSessionEmail,
+  issueSession,
+  revokeSession,
+  sessionSetCookieHeader,
+  verifyCredentials,
+} from './authStore.js';
+import { billingEnabled, gateInfoForRequest } from './stripeBilling.js';
+
+const SESSION_MAX_AGE = 30 * 24 * 3600;
+// Tight per-IP caps for credential + reset endpoints (global limiter still applies beneath).
+const AUTH_RL = { max: 10, timeWindow: '1 minute' };
+
+export async function registerStripeAuth(fastify) {
+  const setAuth = (reply, email) => {
+    reply.header('set-cookie', sessionSetCookieHeader(issueSession(email), SESSION_MAX_AGE));
+  };
+
+  fastify.post('/api/auth/register', { config: { rateLimit: AUTH_RL } }, async (request, reply) => {
+    const { email, password } = request.body || {};
+    try {
+      const em = createUser(email, password);
+      setAuth(reply, em);
+      return { user: { email: em } };
+    } catch (err) {
+      reply.code(400);
+      return { error: err.message };
+    }
+  });
+
+  fastify.post('/api/auth/login', { config: { rateLimit: AUTH_RL } }, async (request, reply) => {
+    const { email, password } = request.body || {};
+    const em = verifyCredentials(email, password);
+    if (!em) {
+      reply.code(401);
+      return { error: 'Invalid email or password.' };
+    }
+    setAuth(reply, em);
+    return { user: { email: em } };
+  });
+
+  fastify.post('/api/auth/logout', async (request, reply) => {
+    const raw = request.headers.cookie || '';
+    for (const part of raw.split(';')) {
+      const [name, ...rest] = part.trim().split('=');
+      if (name === 'vt_session') revokeSession(rest.join('='));
+    }
+    reply.header('set-cookie', COOKIE_CLEAR);
+    return { ok: true };
+  });
+
+  fastify.get('/api/auth/me', async (request) => {
+    const email = getSessionEmail(request);
+    return {
+      user: email ? { email } : null,
+      gate: gateInfoForRequest(request),
+      billingConfigured: billingEnabled(),
+    };
+  });
+
+  // ── Password reset ────────────────────────────────────────────────────────
+  // No mailer is wired: the token is logged server-side and an operator hands
+  // it over (scripts/auth-reset.mjs is the direct admin path). The response is
+  // generic so the endpoint cannot be used to enumerate accounts.
+
+  fastify.post('/api/auth/reset-request', { config: { rateLimit: AUTH_RL } }, async (request, reply) => {
+    const { email } = request.body || {};
+    const token = createResetToken(email);
+    if (token) {
+      request.log.warn({ email }, 'password reset requested — token below (operator handoff, no mailer configured)');
+      request.log.warn({ token }, 'password reset token');
+    }
+    // Always the same answer, whether or not the account exists.
+    reply.header('set-cookie', COOKIE_CLEAR); // defensive: never chain a reset onto a session
+    return { ok: true, message: 'If that account exists, a reset code was issued to the operator console.' };
+  });
+
+  fastify.post('/api/auth/reset-confirm', { config: { rateLimit: AUTH_RL } }, async (request, reply) => {
+    const { token, password } = request.body || {};
+    try {
+      const em = confirmPasswordReset(token, password);
+      setAuth(reply, em); // fresh session on the new credential; old ones were revoked
+      return { ok: true, user: { email: em } };
+    } catch (err) {
+      reply.code(400);
+      return { error: err.message };
+    }
+  });
+}

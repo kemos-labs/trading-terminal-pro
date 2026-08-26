@@ -6,6 +6,54 @@ Overall the code is **better than average**, but there are two concrete issues w
 
 ---
 
+## Bounty-hunt pass (2026-08) — post billing/auth build
+
+Adversarial re-review (3 parallel static audits + live exploitation against a local
+configured instance). Everything below was **found AND fixed** unless marked residual.
+
+### Fixed — High
+| Finding | Where | Fix |
+|---|---|---|
+| FMP allowlist bypass via dot-segments: `/api/fmp/stable/quote/../../stable/<any paid endpoint>` reached any FMP route under our key | `api/_shared.js` `isFmpEndpointAllowed` | reject `%2e`/`.`/`..` segments before prefix matching |
+| Unauthenticated Customer Portal takeover by email: portal URL minted for any Stripe customer | `api/stripeBilling.js` portal-session | session required; email forced to caller's session; body identity ignored |
+| Checkout could bind payments to arbitrary `customerId` | checkout-session | customerId honored only if it belongs to the session email |
+| Rate-limit buckets collapsed behind edge proxy → 11 req/min globally locked out ALL auth; cross-class poisoning (cheap routes exhausting scarce quotas) | `server.js` Fastify init + rate-limit registration | `TRUST_PROXY=1` opt-in + per-URL-class keyGenerator |
+| Webhook replay resurrected canceled entitlements (stale redelivery flips canceled→active) | webhook handler | stale-event guard: events older than record `updatedAt` skipped + audited |
+
+### Fixed — Medium
+- **invoice.paid merge-wipe**: `{status: undefined}` spread erased a fresh subscriber's active status (402 right after paying) and doubled as a remote revocation primitive. Patch now conditional.
+- **Bare invoices minted entitlements**: `invoice.paid` created an ACTIVE record for unknown customers. Now refreshes known customers only.
+- **One-time purchases never unlocked desks**: status `'paid'` wasn't recognized. Now grants access.
+- **Price-catalog enforcement on webhooks**: entitlements now require a catalog priceId — stray Dashboard products can't unlock desks.
+- **PII disclosure**: `/api/billing/status?email=` returned full records (customerId, priceId…) unauthenticated. Anonymous callers get `{active}` only; owner gets records.
+- **Internal docs served publicly**: `/docs/engineering/BILLING_HANDOFF.md` etc. were reachable. Now only `/docs/index.json` + `/docs/academy/*`.
+- **Key-presence regressions**: `/api/desk/pack` fell back to exposing all vendor-key booleans; `/api/cache/status` listed live cache keys (users' symbols). Both gated behind `EXPOSE_KEY_STATUS=1`.
+- **Finnhub budget never enforced** + free-form `from/to` minting unlimited cache keys/upstream calls: date format validated, soft budget enforced.
+- **Backtest relay SSRF config**: `BACKTEST_API_URL` now forced localhost like MacroVol.
+- **Macrovol debug-block traversal**: `/rates/../../debug/fred` bypassed the literal-prefix check; dot segments rejected.
+- **`.data/` baked into Docker builds**: added to `.dockerignore` (session-secret footgun).
+- **Sensitive files 0644→0600**: users/sessions/reset-tokens/entitlements writes carry mode 600.
+
+### Fixed — Low (continued, follow-up pass)
+MacroVol yfinance endpoints validate ticker charset + period enum (`/api/greeks/*`, `/api/surface/*` — blocks cache-key/upstream hammering); MacroVol Python cache size-capped at 2000 entries with eviction; backtest figures endpoint has `resolve().parent` containment; Python services CORS configurable via `MACROVOL_CORS_ORIGIN` / `BACKTEST_CORS_ORIGIN` (wildcard only when unset); macrovol dev `__main__` binds loopback by default; `/api/backtest/*` POSTs capped at 20/min; AcademyNews anchors only render http(s) URLs from third-party feeds.
+
+Login timing oracle equalized with dummy scrypt; register response unchanged (product choice); Secure cookie flag set on Render/Railway even without NODE_ENV; gated KSA responses send `Cache-Control: private, no-store` + `Vary: Cookie`; `/api/ksa/session` gated like its siblings.
+
+### Verified clean (negative results)
+Paywall guards on all data-bearing KSA routes · HMAC sessions sound (timing-safe, server-side state, revocation works) · reset tokens 192-bit/single-use/1h · webhook signature + raw-body encapsulation correct · no command injection anywhere (execFile array args) · no path traversal in static/file endpoints (SPA fallback verified live) · no XSS sinks in frontend · no secrets in 608 tracked files or git history · FRED allowlist holds · Deribit/OKX inputs allowlisted · XFF spoofing does NOT bypass limits.
+
+### Residual / accepted risks
+1. Sessions & entitlements are file-backed single-instance — horizontal scaling needs a shared store.
+2. Registration has no email verification: pre-registering someone else's email links their future subscription to that account (documented in BILLING_HANDOFF).
+3. Password-reset delivery is operator-handoff until a mailer is wired.
+4. `logger:false` means request.log output (e.g., reset tokens) goes nowhere — wire a logger before relying on it.
+5. Webhook handling uses stale-event guards; full reconciliation against live Stripe state on every event would be the belt-and-braces upgrade.
+6. Verbose upstream error detail still echoed on some market-data routes (vendor status text) — map to generic codes if that ever matters.
+
+---
+
+## Original review
+
 ## Critical / High
 
 ### 1. Unauthenticated debug endpoints reachable through the public proxy — **FIXED**

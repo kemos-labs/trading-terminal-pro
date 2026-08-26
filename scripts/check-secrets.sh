@@ -13,6 +13,7 @@ MODE="${1:-staged}"
 # ── Detection patterns ────────────────────────────────────────────────────────
 # High-signal vendor token formats (always safe to match):
 #   shmk_live_<hex20+>, sk-<20+>, AIza<30+>, AQ.<20+>, PEM blocks
+#   Stripe: sk_/rk_ + live/test prefix, whsec_ webhook signing secrets
 # Provider keys: match LITERAL assignments only — quoted string after `=`.
 # Reading from the environment (`process.env.X_API_KEY`, `os.getenv(...)`)
 # is legitimate and must never be flagged.
@@ -20,11 +21,21 @@ _patterns() {
   cat <<'PATTERNS'
 shmk_live_[a-f0-9]{20,}
 sk-[a-zA-Z0-9]{20,}
+(sk|rk)_(live|test)_[a-zA-Z0-9]{16,}
+pk_(live|test)_[a-zA-Z0-9]{16,}
+whsec_[a-zA-Z0-9]{16,}
 AIza[0-9A-Za-z_-]{30,}
 AQ\.[A-Za-z0-9_-]{20,}
+AKIA[0-9A-Z]{16}
+xox[abprs]-[A-Za-z0-9-]{10,}
+ghp_[A-Za-z0-9]{30,}
+github_pat_[A-Za-z0-9_]{30,}
+glpat-[A-Za-z0-9_-]{15,}
+postgres(\+postgresql)?://[^@\s]+:[^@\s]+@
 -----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----
 [A-Z][A-Z0-9_]*API_KEY\s*=\s*['"][A-Za-z0-9_\-\.]{12,}['"]
 [A-Z][A-Z0-9_]*API_KEY\s*=\s*[A-Za-z0-9_\-]{24,}\s*$
+[A-Z][A-Z0-9_]*(SECRET|TOKEN|PASSWORD)\s*=\s*['"][^'"]{8,}['"]
 PATTERNS
 }
 _patterns_join() { _patterns | paste -sd'|' -; }
@@ -42,14 +53,16 @@ if [ "$MODE" = "--self-test" ]; then
 const cfg = {
   sahmk: 'shmk_live_000000000000000000000000deadbeef',
   openai: 'sk-abcdefghijklmnopqrstuvwxyz012345',
+  stripe: 'rk_live_a1b2c3d4e5f6g7h8i9j0',
+  whsec: 'whsec_aaaabbbbccccddddeeeeffffgggg',
   google: 'AIzaSyA1234567890abcdefghijklmnopqrstuv',
   fred: 'FRED_API_KEY = "00000000000000000000000000000001"',
   finnhub: "FINNHUB_API_KEY='testkey0123456789testkey0123456789'",
 };
 EOF
   LEAK_HITS=$(grep -cE "$(_patterns_join)" "$TMP/fake-leak.js" || true)
-  if [ "${LEAK_HITS:-0}" -lt 5 ]; then
-    echo "❌ self-test FAILED: only $LEAK_HITS/5 planted leaks detected" >&2
+  if [ "${LEAK_HITS:-0}" -lt 7 ]; then
+    echo "❌ self-test FAILED: only $LEAK_HITS/7 planted leaks detected" >&2
     exit 1
   fi
 

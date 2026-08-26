@@ -30,6 +30,8 @@ import {
   providerKeysStatus,
 } from './api/deskFeeds.js';
 import { fetchKsaBoard, fetchKsaQuote, riyadhSessionSnapshot, sahmkBudgetStatus } from './api/ksaFeeds.js';
+import { registerStripeBilling, gateInfoForRequest } from './api/stripeBilling.js';
+import { registerStripeAuth } from './api/authRoutes.js';
 
 // Load root .env into process.env (no dotenv dependency; keys never shipped to browser).
 function loadEnvFile(filePath) {
@@ -126,7 +128,13 @@ function resolveMacrovolBase() {
 }
 const MACROVOL_API_URL = resolveMacrovolBase();
 
-const fastify = Fastify({ logger: false });
+// Behind Render/Railway the TCP peer is the edge proxy: without trustProxy,
+// request.ip collapses every visitor into ONE rate-limit bucket (11 bad
+// logins/min would lock out all authentication site-wide). Opt in explicitly
+// — trusting XFF on a directly-exposed dev box would let clients spoof it.
+// Set TRUST_PROXY=1 in production (single proxy hop).
+const TRUST_PROXY = ['1', 'true'].includes(String(process.env.TRUST_PROXY || '').toLowerCase());
+const fastify = Fastify({ logger: false, trustProxy: TRUST_PROXY });
 
 await fastify.register(cors, {
   origin: (origin, cb) => {
@@ -150,6 +158,28 @@ fastify.addHook('onSend', async (_request, reply, payload) => {
 const RL_GLOBAL = 600;
 const RL_UPSTREAM = 120; // FMP, Finnhub, Massive, macrovol, options, yf
 const RL_SCARCE = 30; // Alpha Vantage, TradingView free quotas
+
+function rateLimitClassForUrl(url) {
+  const u = url || '';
+  if (u.startsWith('/api/alphavantage') || u.startsWith('/api/tradingview')) return 'scarce';
+  if (
+    u.startsWith('/api/fmp') ||
+    u.startsWith('/api/finnhub') ||
+    u.startsWith('/api/massive') ||
+    u.startsWith('/api/flashalpha') ||
+    u.startsWith('/api/desk') ||
+    u.startsWith('/api/macrovol') ||
+    u.startsWith('/api/backtest') ||
+    u.startsWith('/api/options') ||
+    u.startsWith('/api/yf') ||
+    u.startsWith('/api/deribit') ||
+    u.startsWith('/api/ksa') ||
+    u.startsWith('/api/history')
+  ) {
+    return 'upstream';
+  }
+  return 'global';
+}
 
 function rateLimitMaxForUrl(url) {
   const u = url || '';
@@ -176,6 +206,9 @@ function rateLimitMaxForUrl(url) {
 await fastify.register(rateLimit, {
   max: (request) => rateLimitMaxForUrl(request.url),
   timeWindow: '1 minute',
+  // Key per (URL class, client IP): without the class prefix, a single shared
+  // counter lets cheap /api/health traffic exhaust the scarce-upstream budget.
+  keyGenerator: (request) => `${rateLimitClassForUrl(request.url)}:${request.ip}`,
   // Never throttle static SPA assets — browsers load many chunks in parallel.
   allowList: (request) => {
     const u = request.url || '';
@@ -187,12 +220,16 @@ await fastify.register(rateLimit, {
       (!u.startsWith('/api/') && !u.includes('.'))
     );
   },
-  errorResponseBuilder: (request, context) => ({
-    code: 429,
-    error: 'Too Many Requests',
-    message: `Rate limit exceeded, try again in ${context.ttl} seconds`,
-    retryAfter: context.ttl,
-  }),
+  // Must return an Error (plugin THROWS it) with statusCode set — returning a
+  // plain object makes Fastify answer 500 instead of 429. Block context exposes
+  // ttl in MILLISECONDS only (no ttlInSeconds), so convert here.
+  errorResponseBuilder: (_request, context) => {
+    const seconds = Math.max(1, Math.ceil((context.ttl || 0) / 1000));
+    const err = new Error(`Rate limit exceeded, try again in ${seconds} seconds`);
+    err.statusCode = context.statusCode || 429;
+    err.error = 'Too Many Requests';
+    return err;
+  },
 });
 
 // Input validation helper — equities + short crypto aliases + yfinance forms (BTC-USD)
@@ -205,6 +242,29 @@ function validateSymbol(symbol) {
     return null;
   }
   return sanitized;
+}
+
+// ── Desk paywall gate ─────────────────────────────────────────
+// When billing is configured, gated desks (BILLING_GATED_DESKS, default "ksa")
+// 402 for callers without an active subscription. Unconfigured ⇒ fully open.
+function requireDeskAccess(request, reply) {
+  // Gated desk responses depend on the session cookie — mark them uncacheable
+  // so a misconfigured fronting CDN can never serve one user's entitled data
+  // to another.
+  reply.header('cache-control', 'private, no-store');
+  reply.header('vary', 'Cookie');
+  const gate = gateInfoForRequest(request);
+  if (gate.enabled && !gate.entitled) {
+    reply.code(402);
+    reply.header('cache-control', 'no-store');
+    return {
+      error: 'subscription_required',
+      code: 'SUBSCRIPTION_REQUIRED',
+      message: 'This desk requires an active VOLATERM subscription.',
+      gatedDesks: gate.gatedDesks,
+    };
+  }
+  return null;
 }
 
 // Public liveness only — do not disclose which API keys are configured.
@@ -662,6 +722,193 @@ fastify.get('/api/deribit/market/:currency', async (request, reply) => {
   }
 });
 
+/** Recent public options trades for the Crypto Flow desk. */
+fastify.get('/api/deribit/trades/:currency', async (request, reply) => {
+  const currency = String(request.params.currency || 'BTC').toUpperCase();
+  if (currency !== 'BTC' && currency !== 'ETH') {
+    reply.code(400);
+    return { error: 'currency must be BTC or ETH' };
+  }
+  const requestedHours = Number(request.query.hours ?? 24);
+  const hours = [1, 4, 24].includes(requestedHours) ? requestedHours : 24;
+  const requestedCount = Number(request.query.count ?? 500);
+  const count = Math.min(1000, Math.max(50, Number.isFinite(requestedCount) ? Math.floor(requestedCount) : 500));
+  const cacheKey = `deribit:trades:${currency}:${hours}:${count}`;
+  try {
+    const { data } = await getOrFetch(
+      cacheKey,
+      5_000,
+      async () => {
+        const start = Date.now() - hours * 3_600_000;
+        const result = await deribitFetch(
+          `get_last_trades_by_currency_and_time?currency=${currency}&kind=option&start_timestamp=${start}&count=${count}&sorting=desc`,
+        );
+        const trades = Array.isArray(result?.trades) ? result.trades : [];
+        return { currency, hours, trades, count: trades.length, hasMore: Boolean(result?.has_more), fetchedAt: Date.now(), source: 'deribit' };
+      },
+      { allowStaleOnError: true },
+    );
+    return data;
+  } catch (err) {
+    reply.code(502);
+    return { error: 'Deribit trades failed', detail: err.message };
+  }
+});
+
+/** DVOL + Deribit realized-volatility index history for the Vol & Skew desk. */
+fastify.get('/api/deribit/volhistory/:currency', async (request, reply) => {
+  const currency = String(request.params.currency || 'BTC').toUpperCase();
+  if (currency !== 'BTC' && currency !== 'ETH') {
+    reply.code(400);
+    return { error: 'currency must be BTC or ETH' };
+  }
+  const requestedDays = Number(request.query.days ?? 90);
+  const days = [7, 30, 90, 180, 365].includes(requestedDays) ? requestedDays : 90;
+  const cacheKey = `deribit:volhistory:${currency}:${days}`;
+  try {
+    const { data } = await getOrFetch(
+      cacheKey,
+      60_000,
+      async () => {
+        const end = Date.now();
+        const start = end - days * 86_400_000;
+        // DVOL candles (implied) + historical volatility index (30d realized, annualized %)
+        const [dvolRes, rvRes] = await Promise.all([
+          deribitFetch(
+            `get_volatility_index_data?currency=${currency}&start_timestamp=${start}&end_timestamp=${end}&resolution=86400`,
+          ),
+          deribitFetch(
+            `get_historical_volatility?currency=${currency}&start_timestamp=${start}&end_timestamp=${end}`,
+          ),
+        ]);
+        const dvolRaw = Array.isArray(dvolRes?.data) ? dvolRes.data : [];
+        const rvRaw = Array.isArray(rvRes?.data) ? rvRes.data : [];
+        const dvol = dvolRaw
+          .map((row) => ({ t: Number(row?.[0]), close: Number(row?.[4]) }))
+          .filter((p) => Number.isFinite(p.t) && Number.isFinite(p.close));
+        const realized = rvRaw
+          .map((row) => ({ t: Number(row?.[0]), vol: Number(row?.[1]) }))
+          .filter((p) => Number.isFinite(p.t) && Number.isFinite(p.vol));
+        return { currency, days, dvol, realized, fetchedAt: Date.now(), source: 'deribit' };
+      },
+      { allowStaleOnError: true },
+    );
+    return data;
+  } catch (err) {
+    reply.code(502);
+    return { error: 'Deribit volatility history failed', detail: err.message };
+  }
+});
+
+// ── Multi-venue options aggregation (public endpoints, no keys) ─
+const OKX_BASE = 'https://www.okx.com';
+const BYBIT_BASE = 'https://api.bybit.com';
+
+/** Sum OKX option tickers for one underlying family. */
+async function okxOptionsSummary(ccy) {
+  try {
+    const res = await fetch(`${OKX_BASE}/api/v5/market/tickers?instType=OPTION&instFamily=${ccy}-USD`, {
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const list = Array.isArray(json?.data) ? json.data : [];
+    if (!list.length) return null;
+    let volCcy = 0, volUsd = 0, openIntCcy = 0, instruments = 0;
+    for (const t of list) {
+      instruments += 1;
+      volCcy += Number(t.volCcy24h) || 0; // base-ccy notional
+      volUsd += Number(t.volUsd24h) || 0;
+      openIntCcy += Number(t.openInt) || 0; // contracts (1 contract = 0.01 ccy on OKX)
+    }
+    // OKX OI lives on a separate public endpoint (per-instrument rows)
+    try {
+      const oiRes = await fetch(`${OKX_BASE}/api/v5/public/open-interest?instType=OPTION&instFamily=${ccy}-USD`, {
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (oiRes.ok) {
+        const oiJson = await oiRes.json();
+        const oiRows = Array.isArray(oiJson?.data) ? oiJson.data : [];
+        let oiCcySum = 0;
+        for (const r of oiRows) oiCcySum += Number(r.oiCcy) || 0;
+        if (oiCcySum > 0) openIntCcy = oiCcySum;
+      }
+    } catch { /* tickers fallback already applied */ }
+    return { venue: 'OKX', instruments, volCcy24h: volCcy, volUsd24h: volUsd, openIntContracts: openIntCcy, fetchedAt: Date.now() };
+  } catch {
+    return null;
+  }
+}
+
+/** Sum Bybit option tickers for one base coin. */
+async function bybitOptionsSummary(ccy) {
+  try {
+    const res = await fetch(`${BYBIT_BASE}/v5/market/tickers?category=option&baseCoin=${ccy}`, {
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const list = Array.isArray(json?.result?.list) ? json.result.list : [];
+    if (!list.length) return null;
+    let volCcy = 0, volUsd = 0, openIntCcy = 0, instruments = 0;
+    for (const t of list) {
+      instruments += 1;
+      volCcy += Number(t.volume24h) || 0; // base-ccy contracts (1 = 1 ccy on Bybit)
+      openIntCcy += Number(t.openInterest) || 0; // base-ccy notional per Bybit option tickers
+    }
+    return { venue: 'Bybit', instruments, volCcy24h: volCcy, openIntCcy, fetchedAt: Date.now() };
+  } catch {
+    return null;
+  }
+}
+
+/** Deribit totals from the book summary (base-ccy volume + USD OI). */
+async function deribitOptionsSummary(ccy) {
+  try {
+    const result = await deribitFetch(`get_book_summary_by_currency?currency=${ccy}&kind=option`);
+    const list = Array.isArray(result) ? result : [];
+    if (!list.length) return null;
+    let volCcy = 0, volUsd = 0, openIntCcy = 0, instruments = 0;
+    for (const s of list) {
+      instruments += 1;
+      volCcy += Number(s.volume) || 0;
+      volUsd += Number(s.volume_usd) || 0;
+      openIntCcy += Number(s.open_interest) || 0; // contracts (Deribit summary field)
+    }
+    return { venue: 'Deribit', instruments, volCcy24h: volCcy, volUsd24h: volUsd, openIntContracts: openIntCcy, fetchedAt: Date.now() };
+  } catch {
+    return null;
+  }
+}
+
+fastify.get('/api/venues/options/:currency', async (request, reply) => {
+  const currency = String(request.params.currency || 'BTC').toUpperCase();
+  if (currency !== 'BTC' && currency !== 'ETH') {
+    reply.code(400);
+    return { error: 'currency must be BTC or ETH' };
+  }
+  const cacheKey = `venues:options:${currency}`;
+  try {
+    const { data } = await getOrFetch(
+      cacheKey,
+      30_000,
+      async () => {
+        const venues = (await Promise.all([
+          deribitOptionsSummary(currency),
+          okxOptionsSummary(currency),
+          bybitOptionsSummary(currency),
+        ])).filter(Boolean);
+        return { currency, venues, fetchedAt: Date.now() };
+      },
+      { allowStaleOnError: true },
+    );
+    return data;
+  } catch (err) {
+    reply.code(502);
+    return { error: 'Venue aggregation failed', detail: err.message };
+  }
+});
+
 // ── KSA / Tadawul (SAHMK) ──────────────────────────────────────
 // Browser reads the shared Node cache only. Upstream calls are gated by the
 // daily soft budget in api/ksaFeeds.js (charge-on-success, warmer owns board).
@@ -670,6 +917,8 @@ fastify.get('/api/deribit/market/:currency', async (request, reply) => {
 
 /** Shared KSA board — polled by the browser at KSA_BOARD_POLL_MS (5 min). */
 fastify.get('/api/ksa/board', async (request, reply) => {
+  const blocked = requireDeskAccess(request, reply);
+  if (blocked) return blocked;
   const forceWarm = request.query.force === '1' || request.query.force === 'true';
   try {
     const data = await fetchKsaBoard({ forceWarm });
@@ -689,6 +938,8 @@ fastify.get('/api/ksa/board', async (request, reply) => {
 
 /** Symbol detail — resolved from the shared board; no per-symbol fan-out. */
 fastify.get('/api/ksa/quote/:symbol', async (request, reply) => {
+  const blocked = requireDeskAccess(request, reply);
+  if (blocked) return blocked;
   const symbol = String(request.params.symbol || '').trim();
   if (!/^[0-9]{1,6}$/.test(symbol)) {
     reply.code(400);
@@ -697,14 +948,23 @@ fastify.get('/api/ksa/quote/:symbol', async (request, reply) => {
   return fetchKsaQuote(symbol);
 });
 
-/** Riyadh session state — lightweight, no upstream call. */
-fastify.get('/api/ksa/session', async () => ({
-  ...riyadhSessionSnapshot(),
-  source: 'sahmk',
-}));
+/** Riyadh session state — lightweight, no upstream call. Gated like the rest
+ *  of the desk so the paywall pattern stays airtight as endpoints evolve. */
+fastify.get('/api/ksa/session', async (request, reply) => {
+  const blocked = requireDeskAccess(request, reply);
+  if (blocked) return blocked;
+  return {
+    ...riyadhSessionSnapshot(),
+    source: 'sahmk',
+  };
+});
 
 /** Ops: KSA budget readout (no key material). */
-fastify.get('/api/ksa/budget', async () => sahmkBudgetStatus());
+fastify.get('/api/ksa/budget', async (request, reply) => {
+  const blocked = requireDeskAccess(request, reply);
+  if (blocked) return blocked;
+  return sahmkBudgetStatus();
+});
 
 // ── SSE spot stream ────────────────────────────────────────────
 // Pushes FMP quote ticks to the browser so spot updates without a full poll.
@@ -1193,8 +1453,17 @@ fastify.get('/api/finnhub/quote', async (request, reply) => {
  * Shared 6h cache: one upstream pull for all website visitors.
  */
 fastify.get('/api/finnhub/economic-calendar', async (request, reply) => {
-  const fromQ = String(request.query.from || '').slice(0, 10);
-  const toQ = String(request.query.to || '').slice(0, 10);
+  // Strict date format: these flow into the upstream URL AND the cache key —
+  // free-form strings would mint unlimited cache entries (each a real call).
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const fromRaw = String(request.query.from || '');
+  const toRaw = String(request.query.to || '');
+  if ((fromRaw && !DATE_RE.test(fromRaw)) || (toRaw && !DATE_RE.test(toRaw))) {
+    reply.code(400);
+    return { error: 'from/to must be YYYY-MM-DD' };
+  }
+  const fromQ = fromRaw;
+  const toQ = toRaw;
   const today = finnhubDate();
   const from = fromQ || today;
   const toDefault = (() => {
@@ -1203,6 +1472,12 @@ fastify.get('/api/finnhub/economic-calendar', async (request, reply) => {
     return finnhubDate(d);
   })();
   const to = toQ || toDefault;
+  // FINNHUB_SOFT_DAILY was previously displayed but never enforced — every
+  // cache-miss here is a real Finnhub call on the shared key.
+  if (!budgetAllows('finnhub', FINNHUB_SOFT_DAILY, 0.9)) {
+    reply.code(429);
+    return { error: 'Finnhub daily soft budget exhausted', code: 'BUDGET' };
+  }
   const cacheKey = `finnhub:eco:${from}:${to}`;
   try {
     const { data, fromCache, ageMs } = await getOrFetch(
@@ -1609,7 +1884,7 @@ fastify.get('/api/desk/pack', async (request, reply) => {
       },
       tradingview: tv,
       budgets: cache?.budgets || null,
-      keys: cache?.keys || providerKeysStatus(),
+      keys: process.env.EXPOSE_KEY_STATUS === '1' ? (cache?.keys || providerKeysStatus()) : null,
       as_of: new Date().toISOString(),
       note: 'Shared desk pack · free APIs · server-owned refresh · browsers only read cache.',
     };
@@ -1652,6 +1927,12 @@ function isMacroLightPath(suffix) {
 /** Block debug/admin MacroVol paths at the public edge (never forward). */
 function isMacroDebugPath(suffix) {
   const path = (suffix.split('?')[0] || '').replace(/\/$/, '') || '/';
+  // fetch() normalizes dot segments upstream, so `/rates/../../debug/fred`
+  // would slip past a literal `/debug` prefix check. Any dot segment is
+  // illegitimate in this API surface — reject it outright.
+  const lower = path.toLowerCase();
+  if (lower.includes('%2e')) return true;
+  if (lower.split('/').some((seg) => seg === '.' || seg === '..')) return true;
   return path === '/debug' || path.startsWith('/debug/');
 }
 
@@ -1738,11 +2019,29 @@ fastify.route({
 
 // ── Crypto Backtest API proxy ──────────────────────────────
 // Forwards /api/backtest/* → local FastAPI on :8766 (24h-rollout-effect analysis).
-const BACKTEST_API_URL = process.env.BACKTEST_API_URL || 'http://127.0.0.1:8766';
+// Localhost only — never an open SSRF relay (mirrors resolveMacrovolBase).
+function resolveBacktestBase() {
+  const raw = (process.env.BACKTEST_API_URL || 'http://127.0.0.1:8766').replace(/\/$/, '');
+  try {
+    const u = new URL(raw);
+    if (u.hostname === '127.0.0.1' || u.hostname === 'localhost') return raw;
+    console.warn(
+      `WARN: BACKTEST_API_URL host "${u.hostname}" is not local — forcing http://127.0.0.1:8766`,
+    );
+  } catch {
+    console.warn('WARN: BACKTEST_API_URL invalid — forcing http://127.0.0.1:8766');
+  }
+  return 'http://127.0.0.1:8766';
+}
+const BACKTEST_API_URL = resolveBacktestBase();
 
 fastify.route({
   method: ['GET', 'POST', 'OPTIONS'],
   url: '/api/backtest/*',
+  // Each POST fans out into pandas backtests + Binance fetches on the Python
+  // side — far heavier than a normal proxy hop, so cap it tighter than the
+  // generic upstream class (which still applies beneath this).
+  config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
   handler: async (request, reply) => {
     const raw = request.url || '';
     const suffix = raw.replace(/^\/api\/backtest/, '') || '/';
@@ -1943,6 +2242,14 @@ fastify.get('/api/opra/chain/:symbol', async (request, reply) => {
   };
 });
 
+// ── Stripe Billing (Payments / Billing / Invoicing-ready) ─────
+// Server-only. Warns when STRIPE_SECRET_KEY is absent; endpoints fail closed.
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.warn('WARN: STRIPE_SECRET_KEY not set — billing endpoints will return 503.');
+}
+await registerStripeBilling(fastify);
+await registerStripeAuth(fastify);
+
 // ── Static Files ──────────────────────────────────────────────
 // Serve Vite build. Do not SPA-fallback /assets/* (broken JS → blank white page).
 try {
@@ -1960,16 +2267,33 @@ try {
 // Serve /docs/* from repo docs/ (Academy). Do not also put docs under public/
 // — Vite would copy them into dist/ and @fastify/static would double-register
 // routes (HEAD /docs/index.json → crash).
+// SECURITY: only Academy content is public. Engineering/vendor docs
+// (docs/engineering, docs/superpowers, …) describe internal architecture,
+// billing state and vendor strategy — they must never serve.
 try {
   const docsRoot = join(__dirname, 'docs');
   if (existsSync(docsRoot)) {
-    await fastify.register(fastifyStatic, {
-      root: docsRoot,
-      prefix: '/docs/',
-      decorateReply: false,
-      // wildcard true: one catch-all instead of per-file routes that collide with dist
-      wildcard: true,
-      maxAge: 0,
+    await fastify.register(async function docsScope(instance) {
+      instance.addHook('onRequest', async (request, reply) => {
+        const path = (request.url || '').split('?')[0];
+        const allowed =
+          path === '/docs' ||
+          path === '/docs/' ||
+          path === '/docs/index.json' ||
+          path.startsWith('/docs/academy/');
+        if (!allowed) {
+          reply.code(404).send({ error: 'Not found' });
+          return reply;
+        }
+      });
+      await instance.register(fastifyStatic, {
+        root: docsRoot,
+        prefix: '/docs/',
+        decorateReply: false,
+        // wildcard true: one catch-all instead of per-file routes that collide with dist
+        wildcard: true,
+        maxAge: 0,
+      });
     });
   }
 } catch (err) {

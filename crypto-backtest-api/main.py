@@ -44,9 +44,14 @@ _ROLLOUT_FIGURES = _ROLLOUT_DIR / "figures"
 
 app = FastAPI(title="Crypto Backtest API")
 
+# CORS: explicit origins via BACKTEST_CORS_ORIGIN (comma-separated), wildcard
+# only when unset. Data is public market data, but a pinned origin list keeps
+# third-party pages from scripting this API from a visitor's browser.
+_cors_origins = [o.strip() for o in os.environ.get("BACKTEST_CORS_ORIGIN", "").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins or ["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -607,8 +612,12 @@ async def list_figures():
 
 @app.get("/api/backtest/figures/{name}")
 async def get_figure(name: str):
-    fig = _ROLLOUT_FIGURES / name
-    if fig.exists() and fig.suffix == ".png":
+    fig = (_ROLLOUT_FIGURES / name).resolve()
+    # Defense-in-depth containment: current ASGI routing already blocks `..%2f`
+    # (slash decodes before the {name} route matches), but don't rely on that.
+    if fig.parent != _ROLLOUT_FIGURES.resolve() or fig.suffix != ".png":
+        raise HTTPException(status_code=404, detail=f"Figure {name} not found")
+    if fig.exists():
         return FileResponse(str(fig), media_type="image/png")
     raise HTTPException(status_code=404, detail=f"Figure {name} not found")
 

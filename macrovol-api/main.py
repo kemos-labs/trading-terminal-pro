@@ -29,9 +29,13 @@ app = FastAPI(title="MacroVol API")
 
 print(f"FRED_API_KEY loaded: {'YES' if os.getenv('FRED_API_KEY') else 'NO'}")
 
+# CORS: explicit origins via MACROVOL_CORS_ORIGIN (comma-separated), wildcard
+# only when unset. The Node proxy is the only intended production consumer.
+_macrovol_cors = [o.strip() for o in os.environ.get("MACROVOL_CORS_ORIGIN", "").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_macrovol_cors or ["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -133,6 +137,19 @@ async def _term_curve_points() -> list:
     except Exception:
         return []
 
+# ── Input validation for yfinance-backed endpoints ──────────────────────────
+# Tickers/periods flow into cache keys AND upstream yfinance calls: unbounded
+# attacker-chosen values would mint unbounded cache entries (memory) and hammer
+# Yahoo from the shared egress IP. Validate charset + period enum up front.
+_TICKER_RE = re.compile(r"^[A-Za-z0-9.\-=^]{1,16}$")
+_ALLOWED_PERIODS = {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"}
+
+
+def _check_ticker(ticker: str) -> None:
+    if not _TICKER_RE.match(ticker or ""):
+        raise HTTPException(status_code=400, detail="Invalid ticker.")
+
+
 @app.get("/api/surface/{ticker}")
 async def get_surface(
     ticker: str,
@@ -140,6 +157,7 @@ async def get_surface(
     q: float = Query(0.0),
     strike_range: float = Query(0.3),
 ):
+    _check_ticker(ticker)
     from fastapi.responses import JSONResponse
     r_eff = r if r is not None else await _default_r()
     # When r not overridden, price each expiry with piecewise Treasury r(T)
@@ -176,6 +194,7 @@ async def get_surface_preview(
     r: float | None = Query(None),
     q: float = Query(0.0),
 ):
+    _check_ticker(ticker)
     from fastapi.responses import JSONResponse
     r_eff = r if r is not None else await _default_r()
     curve_pts = None if r is not None else await _term_curve_points()
@@ -1693,6 +1712,7 @@ async def get_greeks(
     r: float | None = Query(None, description="Risk-free decimal; default = live SOFR"),
     q: float | None = Query(None, description="Dividend yield decimal; default = yfinance estimate"),
 ):
+    _check_ticker(ticker)
     from fastapi.responses import JSONResponse
     r_eff = r if r is not None else await _default_r()
     curve_pts = None if r is not None else await _term_curve_points()
@@ -1762,6 +1782,9 @@ async def get_greeks(
 
 @app.get("/api/greeks/{ticker}/history")
 async def get_greeks_history(ticker: str, period: str = "1mo"):
+    _check_ticker(ticker)
+    if period not in _ALLOWED_PERIODS:
+        raise HTTPException(status_code=400, detail="Invalid period.")
     key = f"greeks_history:{ticker}:{period}"
     hit = ttl_cache.get_cached(key, GREEKS_CACHE_TTL)
     if not ttl_cache.is_miss(hit):
@@ -1805,5 +1828,11 @@ async def get_greeks_history(ticker: str, period: str = "1mo"):
         }
 
 if __name__ == "__main__":
+    import os
+
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    # Loopback by default — production paths (start-production.sh, Node proxy)
+    # never hit this block, and a bare `python main.py` on a shared box must
+    # not publish the API (wildcard CORS included) on every interface.
+    host = os.environ.get("MACROVOL_BIND_HOST", "127.0.0.1")
+    uvicorn.run("main:app", host=host, port=8000, reload=True)

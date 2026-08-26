@@ -16,3 +16,4 @@ venv/
 .vercel/
 coverage/
 shot-*.png
+.data/

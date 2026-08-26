@@ -3,11 +3,20 @@
 yfinance is slow and will rate-limit/ban under any real traffic, so we memoize
 responses per key for a few minutes. Failures (exceptions / empty results) are
 NOT cached — same philosophy as fred_client.py.
+
+Keys embed user-supplied tickers/periods, so the cache is size-capped with
+oldest-entry eviction: unauthenticated loops of unique keys must not be able
+to grow process memory without bound.
 """
 import time
 from typing import Any, Callable, Dict, Tuple
 
 _cache: Dict[str, Tuple[float, Any]] = {}
+
+# Hard ceiling on distinct cached entries. Beyond this, expired entries are
+# purged first, then the oldest entries are dropped (FIFO — good enough for
+# a memoization cache; recency is approximated by re-inserting on hit).
+MAX_ENTRIES = 2000
 
 
 def get_cached(key: str, ttl: float) -> Any:
@@ -22,6 +31,15 @@ def get_cached(key: str, ttl: float) -> Any:
 
 
 def set_cached(key: str, value: Any) -> None:
+    if len(_cache) >= MAX_ENTRIES and key not in _cache:
+        now = time.time()
+        # Purge expired first…
+        for k in [k for k, (ts, _) in _cache.items() if now - ts > 600]:
+            del _cache[k]
+        # …then drop oldest inserts until there is room.
+        while len(_cache) >= MAX_ENTRIES:
+            oldest = min(_cache.items(), key=lambda kv: kv[1][0])[0]
+            del _cache[oldest]
     _cache[key] = (time.time(), value)
 
 

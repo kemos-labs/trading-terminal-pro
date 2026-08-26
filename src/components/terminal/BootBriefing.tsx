@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   macrovolApi,
   type RatesSummary,
@@ -10,6 +10,9 @@ import {
 } from '../../lib/macrovol/api';
 import { cn } from '../../lib/utils';
 import { BRAND } from '../../config/brand';
+import { BOOT_EDUCATION } from '../../config/bootEducation';
+
+const EDU_ROTATE_MS = 8_000;
 
 /** Free, shared upstream feeds that back the live strip. Honest vendor names only. */
 type BriefApiId = 'fred-rates' | 'fred-macro' | 'fred-stress' | 'fx' | 'auctions' | 'crypto-spot';
@@ -62,6 +65,7 @@ export function BootBriefing({ heavyReady, onEnter }: BootBriefingProps) {
     'crypto-spot': 'pending',
   });
   const entered = useRef(false);
+  const [eduIdx, setEduIdx] = useState(0);
 
   const enter = useCallback(() => {
     if (entered.current) return;
@@ -111,6 +115,24 @@ export function BootBriefing({ heavyReady, onEnter }: BootBriefingProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, [enter]);
 
+  // Rotate education cards while the user looks around.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setEduIdx((i) => (i + 1) % BOOT_EDUCATION.length);
+    }, EDU_ROTATE_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const edu = BOOT_EDUCATION[eduIdx] ?? BOOT_EDUCATION[0]!;
+  const topicLabel = useMemo(() => {
+    switch (edu.topic) {
+      case 'greeks': return 'GREEKS';
+      case 'positioning': return 'POSITIONING';
+      case 'rates': return 'RATES / SOFR';
+      default: return 'MARKET';
+    }
+  }, [edu.topic]);
+
   const okCount = BRIEF_APIS.filter((a) => apiStatus[a.id] === 'ok').length;
   // Honest progress: light feeds are most of the work; chain readiness tops it up.
   const progress = Math.min(100, Math.round((okCount / BRIEF_APIS.length) * 80 + (heavyReady ? 20 : 0)));
@@ -142,8 +164,18 @@ export function BootBriefing({ heavyReady, onEnter }: BootBriefingProps) {
       role="dialog"
       aria-label="Kemos Research — landing"
     >
-      {/* Quiet depth: top glow + faint grid */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_45%_at_50%_-5%,#12203a_0%,transparent_60%)]" />
+      {/* Background: the boot picture, heavily dimmed so text stays readable */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <img
+          src={BRAND.bootMemeSrc}
+          alt=""
+          className="h-full w-full object-cover opacity-[0.22]"
+          decoding="async"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#050505]/60 via-[#050505]/80 to-[#050505]" />
+      </div>
+      {/* Quiet depth: top glow + faint grid on top of the picture */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_45%_at_50%_-5%,#12203a66_0%,transparent_60%)]" />
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.05]"
         style={{
@@ -165,19 +197,25 @@ export function BootBriefing({ heavyReady, onEnter }: BootBriefingProps) {
           {BRIEF_APIS.map((a) => (
             <span
               key={a.id}
-              className={cn(
-                'h-1.5 w-1.5 rounded-full transition-colors',
-                apiStatus[a.id] === 'ok' && 'bg-up',
-                apiStatus[a.id] === 'fail' && 'bg-down/70',
-                apiStatus[a.id] === 'pending' && 'animate-pulse bg-muted-foreground/50',
-              )}
-            />
+              title={`${a.label}: ${apiStatus[a.id]}`}
+              className="flex items-center gap-1"
+            >
+              <span
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full transition-colors',
+                  apiStatus[a.id] === 'ok' && 'bg-up',
+                  apiStatus[a.id] === 'fail' && 'bg-down/70',
+                  apiStatus[a.id] === 'pending' && 'animate-pulse bg-muted-foreground/50',
+                )}
+              />
+              <span className="hidden md:inline">{a.label}</span>
+            </span>
           ))}
         </span>
       </header>
 
       {/* Hero */}
-      <main className="relative z-10 flex flex-1 flex-col items-center justify-center gap-8 px-6 text-center">
+      <main className="relative z-10 flex flex-1 flex-col items-center justify-center gap-6 overflow-y-auto px-6 py-8 text-center">
         <div className="flex flex-col items-center gap-3">
           <span className="rounded-full border border-primary/30 bg-primary/5 px-3 py-1 font-mono text-type-2xs uppercase tracking-[0.28em] text-primary/90">
             {BRAND.tagline}
@@ -225,6 +263,37 @@ export function BootBriefing({ heavyReady, onEnter }: BootBriefingProps) {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Education card — restored feature, landing-styled */}
+        <div
+          className="w-full max-w-4xl rounded border border-border/50 bg-card/70 px-4 py-3 text-left backdrop-blur-sm"
+          aria-live="polite"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-mono text-type-2xs uppercase tracking-wider text-primary/80">
+              While you wait · {topicLabel}
+            </span>
+            <div className="flex gap-1.5">
+              {BOOT_EDUCATION.map((c, i) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  aria-label={`Show tip ${i + 1}`}
+                  onClick={() => setEduIdx(i)}
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full transition-colors',
+                    i === eduIdx ? 'bg-primary' : 'bg-muted-foreground/40 hover:bg-muted-foreground/70',
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+          <h2 className="mt-1 font-mono text-type-xs font-semibold">{edu.title}</h2>
+          <p className="mt-1 text-type-xs leading-relaxed text-muted-foreground">{edu.body}</p>
+          <div className="mt-1.5 font-mono text-[10px] text-muted-foreground/70">
+            source: {edu.source} · educational only
+          </div>
         </div>
 
         <a

@@ -74,6 +74,9 @@ describe('BootBriefing (landing)', () => {
       expect(screen.getByText(/3\.58%/)).toBeTruthy();
     });
 
+    // Education card feature still present
+    expect(screen.getByText(/while you wait/i)).toBeTruthy();
+
     fireEvent.click(screen.getByRole('button', { name: /enter terminal/i }));
     expect(onEnter).toHaveBeenCalled();
   });

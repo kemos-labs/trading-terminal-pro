@@ -52,7 +52,7 @@ vi.mock('../../lib/macrovol/api', () => ({
   },
 }));
 
-describe('BootBriefing', () => {
+describe('BootBriefing (landing)', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
@@ -60,30 +60,42 @@ describe('BootBriefing', () => {
     vi.useRealTimers();
   });
 
-  it('shows rates/macro basics and allows enter', async () => {
+  it('renders the landing: brand, live strip values, and Enter', async () => {
     const onEnter = vi.fn();
     render(<BootBriefing heavyReady={false} onEnter={onEnter} />);
 
+    // Brand + hero present
+    expect(screen.getByText('Kemos Research')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /enter terminal/i })).toBeTruthy();
+
+    // Live strip shows real fetched numbers (SOFR from mocked FRED rates)
     await waitFor(() => {
       expect(screen.getByText('SOFR')).toBeTruthy();
       expect(screen.getByText(/3\.58%/)).toBeTruthy();
     });
 
-    // Founder credit + education strip on first paint
-    expect(screen.getByRole('img', { name: /vol surface/i })).toBeTruthy();
-    expect(screen.getByText(/while you wait/i)).toBeTruthy();
-
     fireEvent.click(screen.getByRole('button', { name: /enter terminal/i }));
     expect(onEnter).toHaveBeenCalled();
   });
 
-  it('auto-enters when heavyReady after brief delay', async () => {
+  it('⏎ enters the terminal', async () => {
+    const onEnter = vi.fn();
+    render(<BootBriefing heavyReady={false} onEnter={onEnter} />);
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(onEnter).toHaveBeenCalled();
+  });
+
+  it('auto-enters shortly after heavyReady (never holds the user hostage)', async () => {
     const onEnter = vi.fn();
     render(<BootBriefing heavyReady onEnter={onEnter} />);
-    await waitFor(() => expect(screen.getByText('SOFR')).toBeTruthy());
-    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.advanceTimersByTimeAsync(1_500);
     await waitFor(() => expect(onEnter).toHaveBeenCalled());
   });
-});
 
-// covers deploy smoke path used with boot briefing
+  it('does NOT auto-enter while chains are still loading', async () => {
+    const onEnter = vi.fn();
+    render(<BootBriefing heavyReady={false} onEnter={onEnter} />);
+    await vi.advanceTimersByTimeAsync(35_000);
+    expect(onEnter).not.toHaveBeenCalled();
+  });
+});

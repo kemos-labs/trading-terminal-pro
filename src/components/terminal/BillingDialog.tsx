@@ -137,18 +137,21 @@ export function BillingDialog() {
     }, okMsg);
   }, [authMode, email, password, resetToken, refreshAccount, run]);
 
-  const subscribe = useCallback((tier: BillingTier, interval: keyof typeof INTERVAL_LABEL) => {
-    const priceId = tier[interval];
-    if (!priceId) return;
-    void run(async () => {
-      const session = await createCheckoutSession({
-        priceId,
-        email: email.trim() || undefined,
-        mode: interval === 'onetime' ? 'payment' : 'subscription',
+  const subscribe = useCallback(
+    (tier: BillingTier, interval: 'monthly' | 'annual' | 'onetime') => {
+      const priceId = tier[interval];
+      if (!priceId) return;
+      void run(async () => {
+        const session = await createCheckoutSession({
+          priceId,
+          email: email.trim() || undefined,
+          mode: interval === 'onetime' ? 'payment' : 'subscription',
+        });
+        window.location.href = session.url;
       });
-      window.location.href = session.url;
-    });
-  }, [email, run]);
+    },
+    [email, run],
+  );
 
   const openPortal = useCallback(() => {
     void run(async () => {

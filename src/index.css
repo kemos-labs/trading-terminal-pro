@@ -60,31 +60,31 @@
   --radius: 0.125rem;
 
   /*
-   * Terminal shell palette (Bloomberg-inspired chrome, not a brand clone).
-   * Ground: deep navy-black. Brand/amber: non-semantic chrome (codes, titles).
-   * Up/down stay green/red for market semantics only.
+   * Bloomberg-terminal palette (authentic, not a clone):
+   * true-black ground, warm dark-gray panels, #ffb000 amber chrome,
+   * green/red reserved strictly for market semantics.
    */
-  --background: oklch(0.10 0.018 255);
-  --foreground: oklch(0.93 0.008 95);
-  --card: oklch(0.13 0.02 255);
-  --card-foreground: oklch(0.93 0.008 95);
-  --popover: oklch(0.14 0.022 255);
-  --popover-foreground: oklch(0.94 0.008 95);
+  --background: oklch(0.07 0.004 80);
+  --foreground: oklch(0.94 0.004 95);
+  --card: oklch(0.115 0.006 80);
+  --card-foreground: oklch(0.94 0.004 95);
+  --popover: oklch(0.13 0.006 80);
+  --popover-foreground: oklch(0.95 0.004 95);
 
-  /* Brand = amber chrome (selection, function codes). Not data up/down. */
-  --amber: oklch(0.82 0.14 75);
+  /* Brand = classic BBG amber (#ffb000). Non-semantic: codes, titles, focus. */
+  --amber: oklch(0.83 0.16 78);
   --brand: var(--amber);
   --primary: var(--brand);
-  --primary-foreground: oklch(0.12 0.02 255);
+  --primary-foreground: oklch(0.08 0.004 80);
 
-  --secondary: oklch(0.17 0.022 255);
-  --secondary-foreground: oklch(0.92 0.008 95);
-  --muted: oklch(0.16 0.02 255);
-  --muted-foreground: oklch(0.62 0.03 250);
-  --border: oklch(0.24 0.025 255);
-  --input: oklch(0.18 0.022 255);
+  --secondary: oklch(0.165 0.006 80);
+  --secondary-foreground: oklch(0.93 0.004 95);
+  --muted: oklch(0.15 0.005 80);
+  --muted-foreground: oklch(0.66 0.01 95);
+  --border: oklch(0.26 0.008 80);
+  --input: oklch(0.17 0.006 80);
   --ring: var(--brand);
-  --grid: oklch(0.22 0.02 255);
+  --grid: oklch(0.21 0.006 80);
 
   /* Data semantics — green up / red down (CVD-friendly later; classic now) */
   --up: oklch(0.72 0.17 150);
@@ -99,7 +99,7 @@
   --info: oklch(0.72 0.12 230);
   --cyan: var(--info);
   --accent: var(--info);
-  --accent-foreground: oklch(0.12 0.02 255);
+  --accent-foreground: oklch(0.08 0.004 80);
 
   /* Rates desk accent */
   --rate: oklch(0.72 0.12 300);
@@ -117,6 +117,37 @@
   --type-xl: 19px;
   --type-2xl: 26px;
   --type-line: 1.2;
+}
+
+/* Crypto desk — reference-informed analytical product shell.
+ * Teal is scoped to crypto navigation/data interaction; global VOLATERM chrome stays amber/red. */
+.crypto-reference-shell {
+  --primary: oklch(0.78 0.14 185);
+  --brand: var(--primary);
+  --ring: var(--primary);
+  --card: #090c0d;
+  --popover: #0b0f10;
+  --secondary: #151a1c;
+  --muted: #111618;
+  --border: #20282b;
+  --grid: #182124;
+  background:
+    radial-gradient(circle at 72% -20%, color-mix(in oklab, var(--primary) 7%, transparent), transparent 38%),
+    #030506;
+}
+.crypto-reference-shell .term-panel {
+  border-radius: 5px;
+  border-color: #20282b;
+  background: #090c0d;
+}
+.crypto-reference-shell .term-fn-bar {
+  min-height: 1.75rem;
+  padding-inline: 0.65rem;
+  border-color: #20282b;
+  background: #0b0f10;
+}
+.crypto-reference-shell button {
+  touch-action: manipulation;
 }
 
 @layer base {
@@ -161,7 +192,7 @@
   border-radius: var(--radius);
 }
 
-/* Thin function/title bar — BBG-like panel header */
+/* Thin function/title bar — BBG-like panel header (flat dark, amber titles) */
 @utility term-fn-bar {
   display: flex;
   align-items: center;
@@ -169,7 +200,7 @@
   min-height: 1.25rem;
   padding: 0.1rem 0.4rem;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in oklab, var(--card) 88%, var(--brand) 4%);
+  background: oklch(0.14 0.005 80);
   font-family: var(--font-mono);
   font-size: var(--type-2xs);
   letter-spacing: 0.04em;
@@ -1510,4 +1541,14 @@ a.academy-news-headline:hover { color: var(--info); }
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
+}
+
+/* BBG chrome details: amber text selection, amber caret */
+::selection {
+  background: var(--brand);
+  color: #000;
+}
+input,
+textarea {
+  caret-color: var(--brand);
 }

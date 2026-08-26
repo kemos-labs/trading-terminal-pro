@@ -17,6 +17,19 @@ function ageLabel(ms: number): string {
   return `${Math.round(ms / 60_000)}m`;
 }
 
+/** BBG-style desk clocks — session awareness for global desks. */
+function zoneClock(tz: string, at: number): string {
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: tz,
+    }).format(at);
+  } catch {
+    return '--:--';
+  }
+}
+
 interface TerminalHeaderProps {
   /** Open keyboard shortcuts overlay (same as ?). */
   onOpenShortcuts?: () => void;
@@ -214,6 +227,17 @@ export function TerminalHeader({ onOpenShortcuts }: TerminalHeaderProps) {
           </span>
           <span className="hidden tabular-nums text-muted-foreground lg:inline">
             {fmtTime(lastUpdate)}
+          </span>
+          {/* World clocks — NY / LDN / TYO */}
+          <span
+            className="hidden tabular-nums text-muted-foreground 2xl:inline"
+            title="Desk clocks: New York · London · Tokyo"
+          >
+            NY {zoneClock('America/New_York', clock)}
+            <span className="text-muted-foreground/50"> · </span>
+            LDN {zoneClock('Europe/London', clock)}
+            <span className="text-muted-foreground/50"> · </span>
+            TYO {zoneClock('Asia/Tokyo', clock)}
           </span>
           <span className="hidden tabular-nums text-muted-foreground sm:inline">{fmtClock(clock)}</span>
           <span

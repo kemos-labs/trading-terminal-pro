@@ -32,7 +32,8 @@ export function FunctionMenuBar({
   const setDeskSection = useTerminalStore((s) => s.setDeskSection);
   const [openTree, setOpenTree] = useState<string | null>(null);
 
-  const sections = functionMenuSections(activeTab);
+  // Crypto owns a grouped reference-style side rail; avoid duplicate baby tabs here.
+  const sections = activeTab === 'crypto' ? [] : functionMenuSections(activeTab);
   const activeDeskLabel = tabLabel(activeTab);
 
   const goDesk = (id: ActiveTab) => {
@@ -93,7 +94,12 @@ export function FunctionMenuBar({
 
   return (
     <div
-      className="term-fn-bar-red flex h-5 shrink-0 items-stretch gap-0 overflow-x-auto overflow-y-visible scrollbar-none"
+      className={cn(
+        'flex h-5 shrink-0 items-stretch gap-0 overflow-x-auto overflow-y-visible scrollbar-none',
+        activeTab === 'crypto'
+          ? 'border-b border-[#20282b] bg-[#050708] font-mono text-type-2xs text-white'
+          : 'term-fn-bar-red',
+      )}
       role="menubar"
       aria-label="Main desks and sections"
     >
@@ -119,12 +125,12 @@ export function FunctionMenuBar({
                 className={cn(
                   'shrink-0 border-r border-white/15 px-2 py-0 font-semibold uppercase tracking-wide transition-colors',
                   on
-                    ? 'bg-black/45 text-white'
+                    ? 'bg-[#ffb000] text-black'
                     : 'text-white/75 hover:bg-black/25 hover:text-white',
                 )}
               >
                 {t.label}
-                <span className="ml-0.5 hidden text-white/40 sm:inline" aria-hidden>
+                <span className={cn('ml-0.5 hidden sm:inline', on ? 'text-black/60' : 'text-white/40')} aria-hidden>
                   {t.hotkey}
                 </span>
               </button>
@@ -164,7 +170,10 @@ export function FunctionMenuBar({
       {/* MID — active desk + its baby tabs */}
       <div className="flex min-w-0 flex-1 items-stretch border-l border-white/25">
         <span
-          className="flex shrink-0 items-center bg-black/30 px-2 font-bold uppercase tracking-wider text-amber-200/95"
+          className={cn(
+            'flex shrink-0 items-center bg-black/30 px-2 font-bold uppercase tracking-wider',
+            activeTab === 'crypto' ? 'text-[#25d7c5]' : 'text-amber-200/95',
+          )}
           title={`Active desk: ${activeDeskLabel}`}
         >
           {activeDeskLabel}

@@ -139,4 +139,28 @@ describe('TerminalHeader', () => {
     // Top-bar RFR from former StatusBar (fmtPct)
     expect(container.textContent).toMatch(/RFR:3\.98%/);
   });
+
+  it('shows BBG-style world clocks (NY · LDN · TYO)', () => {
+    useTerminalStore.setState({
+      symbol: 'SPY',
+      source: 'live',
+      loading: false,
+      fmpQuote: null,
+      liveRFR: null,
+      snapshot: null,
+      chainAvailable: false,
+      chainUsed: 'none',
+      spotSource: 'none',
+      lastSpotUpdate: 0,
+      lastChainUpdate: 0,
+      provenance: { ...EMPTY_PROVENANCE },
+    });
+    const { container } = render(<TerminalHeader />);
+    const clocks = container.querySelector('span[title*="Desk clocks"]');
+    expect(clocks).toBeTruthy();
+    // Each zone renders a HH:MM time in its timezone
+    expect(clocks!.textContent).toMatch(/NY \d{2}:\d{2}/);
+    expect(clocks!.textContent).toMatch(/LDN \d{2}:\d{2}/);
+    expect(clocks!.textContent).toMatch(/TYO \d{2}:\d{2}/);
+  });
 });

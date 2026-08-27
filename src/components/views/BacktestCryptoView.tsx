@@ -202,7 +202,6 @@ export function BacktestCryptoView() {
   const [resultError, setResultError] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [triggerDist, setTriggerDist] = useState<Record<string, number> | null>(null);
-  const [rawSignalCount, setRawSignalCount] = useState<number | null>(null);
 
   // Scan state
   const [scanResult, setScanResult] = useState<ScanResponse | null>(null);
@@ -278,7 +277,6 @@ export function BacktestCryptoView() {
       } else {
         setSuggestion(data.suggestion ?? 'No signals. Try a lower trigger or use both sides.');
         setTriggerDist(data.trigger_distribution_pct ?? null);
-        setRawSignalCount(data.raw_signals ?? null);
       }
     } catch (err: unknown) {
       setResultError(err instanceof Error ? err.message : 'Backtest failed');
@@ -474,9 +472,6 @@ export function BacktestCryptoView() {
                     <span key={k}>{k}: {v}%</span>
                   ))}
                 </div>
-              )}
-              {rawSignalCount != null && (
-                <div className="text-type-2xs text-amber-300">Raw signals before filter: {rawSignalCount}</div>
               )}
             </div>
           )}

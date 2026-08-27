@@ -19,10 +19,10 @@ import {
 } from 'recharts';
 import { Panel } from '../terminal/Panel';
 import { SectionErrorBoundary } from '../common/SectionErrorBoundary';
-import { DeskChromeLabel } from '../terminal/DeskChrome';
 import { cn } from '../../lib/utils';
+import { CryptoPageHeader } from './crypto/CryptoPageHeader';
 import { CryptoSurface3D } from './crypto/CryptoSurface3D';
-import type { WingMode as _WingMode, SurfaceField } from './crypto/CryptoSurface3D';
+import type { SurfaceField } from './crypto/CryptoSurface3D';
 import { CryptoGreeksSurface } from './crypto/CryptoGreeksSurface';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -262,34 +262,34 @@ export function CryptoOptionsView() {
   const expiries = chain?.expiries ?? [];
 
   return (
-    <div className="flex h-full flex-col overflow-hidden p-1">
-      {/* Header */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-1 pb-1">
-        <DeskChromeLabel className="mr-0">OPTIONS</DeskChromeLabel>
-        <span className="font-mono text-type-2xs text-muted-foreground">
-          Binance Options · {exchangeInfo?.n_symbols ?? '?'} symbols · {exchangeInfo ? Object.keys(exchangeInfo.underlyings).length : '?'} underlyings
-        </span>
-        <div className="ml-auto flex gap-0.5">
-          {UNDERLYINGS.map(u => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => setUnderlying(u.id)}
-              className={cn(
-                'rounded border px-1.5 py-0.5 font-mono text-type-2xs transition-colors',
-                underlying === u.id
-                  ? 'border-foreground/50 bg-secondary text-foreground'
-                  : 'border-border text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {u.label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#030506]">
+      <CryptoPageHeader
+        title="Chain &"
+        highlight="Surfaces"
+        description={`Binance Options · ${exchangeInfo?.n_symbols ?? '?'} symbols · ${exchangeInfo ? Object.keys(exchangeInfo.underlyings).length : '?'} underlyings · chain, IV surface, smile, and Greeks per underlying · served by the local backtest API`}
+        actions={
+          <div className="flex items-center gap-1">
+            {UNDERLYINGS.map(u => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => setUnderlying(u.id)}
+                className={cn(
+                  'min-h-7 border px-2 font-mono text-[10px] transition-colors',
+                  underlying === u.id
+                    ? 'border-[#25d7c5] bg-[#25d7c5]/10 text-[#7ee9db]'
+                    : 'border-[#2c3337] text-[#8b999f] hover:text-white',
+                )}
+              >
+                {u.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {/* Sub-view tabs + controls */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-1 py-0.5">
+      <div className="flex shrink-0 items-center gap-2 border-b border-[#20282b] bg-[#0a0d0e] px-3 py-1.5">
         {/* Left: tabs */}
         <div className="flex gap-1">
           {(['chain', 'surface', 'smile', 'greeks'] as const).map(v => (

@@ -22,9 +22,10 @@ describe('CryptoOptionsView (smoke)', () => {
     mockFetch.mockClear().mockRejectedValue(new Error('offline'));
   });
 
-  it('renders desk chrome and fails closed when the API is unreachable', async () => {
+  it('renders the shell header and fails closed when the API is unreachable', async () => {
     render(<CryptoOptionsView />);
-    expect(screen.getByText('OPTIONS')).toBeTruthy();
+    expect(screen.getByText(/chain &/i)).toBeTruthy();
+    expect(screen.getByText(/surfaces/i)).toBeTruthy();
     // Chain fetch rejects → error state, not a fake board.
     expect(
       await screen.findByText(/offline|failed to load options data/i, {}, { timeout: 4000 }),

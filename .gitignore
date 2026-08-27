@@ -24,3 +24,13 @@ cfg.json
 
 # Rust port experiment (build artifacts + local only)
 server-rs/
+
+# Local agent tooling — never track
+.agents/
+.claude/
+.hermes/
+.junie/
+.pi/
+.qwen/
+.vibe/
+skills-lock.json

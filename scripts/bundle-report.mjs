@@ -66,7 +66,7 @@ const initialCandidates = rows.filter(r => r.name.startsWith('index-') || r.name
 let initialGzip = 0;
 for (const r of initialCandidates) initialGzip += r.gz;
 console.log(`\nInitial app JS (index chunk): ${kb(initialGzip)} kB gzip (budget ≤250 kB: ${initialGzip <= budgets.totalInitialJsGzip ? 'PASS' : 'OVER'})`);
-console.log(`Single chunk budget (≤180 kB gzip): largest ${kb(largest.gzip)} kB — ${largest.gzip <= budgets.singleChunkGzip ? 'PASS' : 'FAIL (Plotly/Three legacy)'}`);
+console.log(`Single chunk budget (≤180 kB gzip): largest ${kb(largest.gzip)} kB — ${largest.gzip <= budgets.singleChunkGzip ? 'PASS' : 'FAIL (over budget)'}`);
 
 // Overall dist size
 let distTotalRaw = 0;
@@ -80,7 +80,7 @@ function walkDir(d) {
 }
 walkDir(dist);
 console.log(`\nTotal dist size: ${kb(distTotalRaw)} kB raw (${(distTotalRaw/1024/1024).toFixed(2)} MB)`);
-console.log(`\nNote: Plotly (4.6 MB raw) and OrbitControls (0.9 MB raw) remain in Phase 1 — removal is Phase 9.\n`);
+console.log(`\nNote: Plotly and OrbitControls removed in Phase 9 — main chunk remains over budget, further code-splitting needed.\n`);
 
 // Optional JSON output for CI
 if (process.argv.includes('--json')) {

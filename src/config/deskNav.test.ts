@@ -33,15 +33,26 @@ describe('deskNav', () => {
     expect(secs.find((s) => s.id === 'desk-ws-optionpnl')).toBeUndefined();
   });
 
-  it('crypto is Lab first, then Options · Backtest · Market (Thalex tools moved to Trade desk)', () => {
+  it('crypto exposes Overview, Greek Heat, Levels, Flow, OI, Vol & Skew, Tail Strike, Scanner, Futures trio, Options, Calculator, Lab, and Backtest', () => {
     const secs = sectionsForTab('crypto');
     expect(secs.map((s) => s.id)).toEqual([
-      'crypto-sub-lab',
+      'crypto-sub-overview',
+      'crypto-sub-heatmaps',
+      'crypto-sub-levels',
+      'crypto-sub-flow',
+      'crypto-sub-oi',
+      'crypto-sub-volskew',
+      'crypto-sub-tail',
+      'crypto-sub-scanner',
+      'crypto-sub-fbasis',
+      'crypto-sub-fterm',
+      'crypto-sub-ffund',
       'crypto-sub-options',
+      'crypto-sub-calc',
+      'crypto-sub-lab',
       'crypto-sub-backtest',
-      'crypto-sub-market',
     ]);
-    // Crypto chrome no longer lists Thalex embeds — they live on the Trade desk.
+    // Embedded Thalex tools stay nested behind Lab rather than crowding the primary strip.
     expect(secs.find((s) => s.id === 'desk-ws-sim')).toBeUndefined();
     expect(secs.find((s) => s.id === 'desk-ws-basis')).toBeUndefined();
   });

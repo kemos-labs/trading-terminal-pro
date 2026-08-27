@@ -53,6 +53,30 @@ export interface DeribitFutureRow {
   creation_timestamp: number | null;
 }
 
+export interface DeribitOptionTrade {
+  trade_id: string;
+  trade_seq?: number;
+  timestamp: number;
+  instrument_name: string;
+  direction: 'buy' | 'sell';
+  amount: number;
+  price: number;
+  mark_price?: number | null;
+  iv?: number | null;
+  index_price?: number | null;
+  tick_direction?: number;
+}
+
+export interface DeribitTradesBundle {
+  currency: 'BTC' | 'ETH';
+  hours: number;
+  trades: DeribitOptionTrade[];
+  count: number;
+  hasMore: boolean;
+  fetchedAt: number;
+  source: 'deribit';
+}
+
 export interface DeribitMarketBundle {
   currency: 'BTC' | 'ETH';
   indexPrice: number;
@@ -88,7 +112,7 @@ function setCache(key: string, value: unknown, ttl: number) {
 }
 
 export function invalidateDeribitCache() {
-  for (const k of [...cache.keys()]) {
+  for (const k of cache.keys()) {
     if (k.startsWith('deribit:')) cache.delete(k);
   }
 }
@@ -228,6 +252,19 @@ export async function fetchDeribitMarket(
   return bundle;
 }
 
+export async function fetchDeribitTrades(
+  currency: 'BTC' | 'ETH',
+  hours: 1 | 4 | 24 = 24,
+  count = 500,
+): Promise<DeribitTradesBundle | null> {
+  const data = await deribitGet<DeribitTradesBundle>(
+    `trades/${currency}?hours=${hours}&count=${Math.min(1000, Math.max(50, count))}`,
+    5_000,
+  );
+  if (!data || !Array.isArray(data.trades)) return null;
+  return data;
+}
+
 export async function fetchDeribitFutures(
   currency: 'BTC' | 'ETH',
   ttl = 15_000,
@@ -235,6 +272,56 @@ export async function fetchDeribitFutures(
   const data = await deribitGet<{ futures: DeribitFutureRow[] }>(`futures/${currency}`, ttl);
   if (!data || !Array.isArray(data.futures)) return null;
   return data.futures;
+}
+
+/** DVOL + realized-vol index history from Deribit public endpoints. */
+export interface DeribitVolHistory {
+  currency: 'BTC' | 'ETH';
+  days: number;
+  dvol: { t: number; close: number }[];
+  realized: { t: number; vol: number }[];
+  fetchedAt: number;
+}
+
+export async function fetchDeribitVolHistory(
+  currency: 'BTC' | 'ETH',
+  days: 7 | 30 | 90 | 180 | 365 = 90,
+): Promise<DeribitVolHistory | null> {
+  const data = await deribitGet<DeribitVolHistory>(`volhistory/${currency}?days=${days}`, 60_000);
+  if (!data || !Array.isArray(data.dvol)) return null;
+  return data;
+}
+
+/** Aggregated options volume/OI across venues (Deribit + OKX + Bybit, public). */
+export interface VenueOptionsSummary {
+  venue: string;
+  instruments: number;
+  volCcy24h?: number;
+  volUsd24h?: number;
+  openIntContracts?: number;
+  openIntCcy?: number;
+}
+
+export interface VenueOptionsBundle {
+  currency: 'BTC' | 'ETH';
+  venues: VenueOptionsSummary[];
+  fetchedAt: number;
+}
+
+async function venuesGet<T>(currency: 'BTC' | 'ETH'): Promise<T | null> {
+  try {
+    const res = await fetch(`/api/venues/options/${currency}`);
+    if (!res.ok) return null;
+    const json = (await res.json()) as T & { error?: string };
+    if (json && typeof json === 'object' && 'error' in json) return null;
+    return json;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchVenueOptions(currency: 'BTC' | 'ETH'): Promise<VenueOptionsBundle | null> {
+  return venuesGet<VenueOptionsBundle>(currency);
 }
 
 export function deribitCurrencyFromSymbol(symbol: string): 'BTC' | 'ETH' | null {

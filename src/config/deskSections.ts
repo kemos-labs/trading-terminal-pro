@@ -135,16 +135,26 @@ export const ACADEMY_SECTIONS: DeskNavItem[] = [
 ];
 
 /**
- * Crypto desk — Thalex lab order (https://thalextech.github.io/).
- * Lab = tool card grid; Market = dual BTC/ETH tape; tools embed the real
- * Thalex second-screen apps (source: thalextech/thalextech.github.io).
- * Trade desk keeps VOLATERM-native BS tools (not Thalex embeds).
+ * Crypto desk — decision summary first, then progressive drill-down.
+ * Overview = cross-expiry command board; Market = dual BTC/ETH tape;
+ * Options = chain/surface; Lab keeps the Thalex second-screen catalog.
  */
 export const CRYPTO_SECTIONS: DeskNavItem[] = [
-  { id: 'crypto-sub-lab', label: 'Lab', short: 'Lab', apis: ['Thalex'] },
+  { id: 'crypto-sub-overview', label: 'Overview', short: 'OVR', apis: ['Deribit'] },
+  { id: 'crypto-sub-heatmaps', label: 'Greek Heat', short: 'HEAT', apis: ['Deribit'] },
+  { id: 'crypto-sub-levels', label: 'Levels', short: 'LVL', apis: ['Deribit'] },
+  { id: 'crypto-sub-flow', label: 'Options Flow', short: 'FLOW', apis: ['Deribit'] },
+  { id: 'crypto-sub-oi', label: 'Open Interest', short: 'OI', apis: ['Deribit'] },
+  { id: 'crypto-sub-volskew', label: 'Vol & Skew', short: 'VSKW', apis: ['Deribit'] },
+  { id: 'crypto-sub-tail', label: 'Tail Strike', short: 'TAIL', apis: ['Deribit'] },
+  { id: 'crypto-sub-scanner', label: 'Scanner', short: 'SCAN', apis: ['Deribit'] },
+  { id: 'crypto-sub-fbasis', label: 'Fut Basis', short: 'BAS', apis: ['Deribit'] },
+  { id: 'crypto-sub-fterm', label: 'Fut Term', short: 'TERM', apis: ['Deribit'] },
+  { id: 'crypto-sub-ffund', label: 'Funding', short: 'FUND', apis: ['Deribit'] },
   { id: 'crypto-sub-options', label: 'Options', short: 'Opts', apis: ['Binance'] },
+  { id: 'crypto-sub-calc', label: 'Calculator', short: 'CALC', apis: ['Deribit'] },
+  { id: 'crypto-sub-lab', label: 'Lab', short: 'Lab', apis: ['Thalex'] },
   { id: 'crypto-sub-backtest', label: 'Backtest', short: 'BT', apis: ['Binance'] },
-  { id: 'crypto-sub-market', label: 'Market', short: 'Mkt', apis: ['Deribit', 'CoinGecko'] },
 ];
 
 /**

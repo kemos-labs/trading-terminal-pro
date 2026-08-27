@@ -16,6 +16,10 @@ export type DualTapeSnap = {
   spot: number | null;
   fundingAnn: number | null;
   optionCount: number;
+  /** Nearest-to-30D ATM mark IV, normalized to decimal. */
+  atmIv30d: number | null;
+  totalOpenInterest: number | null;
+  volume24h: number | null;
   asOf: number;
   ok: boolean;
   /** Spot source: Deribit index when live; CoinGecko when Deribit down */
@@ -38,10 +42,65 @@ const ACTIVE_MS = 30_000;
 const INACTIVE_MS = 60_000;
 const GECKO_MS = 60_000;
 
+/** Half-rate refresh decision for the inactive currency (full rate when active). */
+export function shouldFetchCcy(
+  ccyActive: boolean,
+  lastFetch: number,
+  now: number,
+  force = false,
+): boolean {
+  return force || ccyActive || now - lastFetch >= INACTIVE_MS;
+}
+
 function geckoAsset(ccy: 'BTC' | 'ETH', g: CryptoSpotData | null): CryptoSpotAsset | null {
   if (!g) return null;
   const row = ccy === 'BTC' ? g.btc : g.eth;
   return row ?? g.assets?.find((a) => a.symbol === ccy) ?? null;
+}
+
+const MONTHS: Record<string, number> = {
+  JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
+  JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11,
+};
+
+function optionExpiryMs(instrument: string): number | null {
+  const match = instrument.match(/^[A-Z]+-(\d{1,2})([A-Z]{3})(\d{2})-/);
+  if (!match) return null;
+  const month = MONTHS[match[2]!];
+  if (month == null) return null;
+  const ms = Date.UTC(2000 + Number(match[3]), month, Number(match[1]), 8);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/** Lightweight market summary for the always-on dual tape (no snapshot rebuild). */
+export function summarizeDeribitTape(m: DeribitMarketBundle): {
+  atmIv30d: number | null;
+  totalOpenInterest: number;
+  volume24h: number;
+} {
+  const now = m.fetchedAt || Date.now();
+  const rows = m.options.map((row) => {
+    const parts = row.instrument_name.split('-');
+    return { row, expiryMs: optionExpiryMs(row.instrument_name), strike: Number(parts[2]) };
+  }).filter((x) => x.expiryMs != null && Number.isFinite(x.strike));
+  const expiries = [...new Set(rows.map((x) => x.expiryMs!))];
+  const target = expiries.reduce<number | null>((best, expiry) => {
+    const distance = Math.abs((expiry - now) / 86_400_000 - 30);
+    if (best == null) return expiry;
+    return distance < Math.abs((best - now) / 86_400_000 - 30) ? expiry : best;
+  }, null);
+  const nearest = target == null ? [] : rows
+    .filter((x) => x.expiryMs === target && x.row.mark_iv != null && x.row.mark_iv > 0)
+    .sort((a, b) => Math.abs(a.strike - m.indexPrice) - Math.abs(b.strike - m.indexPrice))
+    .slice(0, 2);
+  const rawIv = nearest.length
+    ? nearest.reduce((sum, x) => sum + (x.row.mark_iv ?? 0), 0) / nearest.length
+    : null;
+  return {
+    atmIv30d: rawIv == null ? null : rawIv > 3 ? rawIv / 100 : rawIv,
+    totalOpenInterest: m.options.reduce((sum, row) => sum + (row.open_interest ?? 0), 0),
+    volume24h: m.options.reduce((sum, row) => sum + (row.volume ?? 0), 0),
+  };
 }
 
 function toTape(
@@ -51,6 +110,7 @@ function toTape(
 ): DualTapeSnap {
   if (m?.indexPrice != null && Number.isFinite(m.indexPrice)) {
     const ga = geckoAsset(ccy, g);
+    const summary = summarizeDeribitTape(m);
     let basisBps: number | null = null;
     if (ga?.spot_usd != null && ga.spot_usd > 0) {
       basisBps = ((m.indexPrice - ga.spot_usd) / ga.spot_usd) * 10_000;
@@ -60,6 +120,9 @@ function toTape(
       spot: m.indexPrice,
       fundingAnn: m.fundingAnn,
       optionCount: m.options?.length ?? 0,
+      atmIv30d: summary.atmIv30d,
+      totalOpenInterest: summary.totalOpenInterest,
+      volume24h: summary.volume24h,
       asOf: m.fetchedAt,
       ok: true,
       spotSource: 'deribit',
@@ -76,6 +139,9 @@ function toTape(
       spot: ga.spot_usd,
       fundingAnn: null,
       optionCount: 0,
+      atmIv30d: null,
+      totalOpenInterest: null,
+      volume24h: null,
       asOf: ga.last_updated_at ? ga.last_updated_at * 1000 : (g?.as_of_ms ?? Date.now()),
       ok: true,
       spotSource: 'coingecko',
@@ -89,10 +155,23 @@ function toTape(
     spot: null,
     fundingAnn: null,
     optionCount: 0,
+    atmIv30d: null,
+    totalOpenInterest: null,
+    volume24h: null,
     asOf: Date.now(),
     ok: false,
     spotSource: null,
     basisBps: null,
+  };
+}
+
+/** Keep the prior tape (incl. Deribit spot/IV) and refresh only gecko meta. */
+function overlayGecko(prev: DualTapeSnap, g: CryptoSpotData | null): DualTapeSnap {
+  const ga = geckoAsset(prev.ccy, g);
+  return {
+    ...prev,
+    change24hPct: ga?.change_24h_pct ?? prev.change24hPct,
+    marketCapUsd: ga?.market_cap_usd ?? prev.marketCapUsd,
   };
 }
 
@@ -112,23 +191,29 @@ export function useCryptoDualBooks(opts?: { dualCharts?: boolean }) {
   }>({ btc: null, eth: null });
   const [gecko, setGecko] = useState<CryptoSpotData | null>(null);
 
-  const lastInactiveFetch = useRef(0);
+  const lastBtcFetch = useRef(0);
+  const lastEthFetch = useRef(0);
   const lastGeckoFetch = useRef(0);
   const geckoRef = useRef<CryptoSpotData | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    const load = async (forceInactive: boolean) => {
+    // Snapshot active ccy + store snapshot once: the interval must not capture
+    // a stale `active`/`storeSnap` from an earlier render.
+    const activeAtStart: 'BTC' | 'ETH' = active;
+    const storeSnapAtStart = storeSnap;
+
+    const load = async (force: boolean) => {
       const now = Date.now();
-      const needInactive = forceInactive || now - lastInactiveFetch.current >= INACTIVE_MS;
-      const needGecko = forceInactive || now - lastGeckoFetch.current >= GECKO_MS;
+      const lastFetch = { btc: lastBtcFetch.current, eth: lastEthFetch.current };
+      const needGecko = force || now - lastGeckoFetch.current >= GECKO_MS;
+      const fetchBtc = shouldFetchCcy(activeAtStart === 'BTC', lastFetch.btc, now, force);
+      const fetchEth = shouldFetchCcy(activeAtStart === 'ETH', lastFetch.eth, now, force);
 
       const [btcM, ethM, geckoRes] = await Promise.all([
-        fetchDeribitMarket('BTC').catch(() => null),
-        needInactive || active === 'ETH'
-          ? fetchDeribitMarket('ETH').catch(() => null)
-          : Promise.resolve(null),
+        fetchBtc ? fetchDeribitMarket('BTC').catch(() => null) : Promise.resolve(null),
+        fetchEth ? fetchDeribitMarket('ETH').catch(() => null) : Promise.resolve(null),
         needGecko
           ? macrovolApi.cryptoSpot().catch(() => null)
           : Promise.resolve(null),
@@ -143,32 +228,19 @@ export function useCryptoDualBooks(opts?: { dualCharts?: boolean }) {
       }
       const g = geckoRef.current;
 
-      // Active always refreshed; inactive half-rate (keep prior Deribit market via books/tape)
-      const btcMarket = btcM; // always fetch BTC in Promise above when... actually we always fetch BTC
-      const ethMarket =
-        active === 'ETH' || needInactive ? ethM : null;
+      // Active ccy refreshes every cycle; inactive refreshes half-rate and
+      // keeps its prior Deribit tape between refreshes (gecko meta overlaid).
+      setTape((prev) => ({
+        btc: fetchBtc || !prev.btc
+          ? toTape('BTC', btcM, g)
+          : overlayGecko(prev.btc, g),
+        eth: fetchEth || !prev.eth
+          ? toTape('ETH', ethM, g)
+          : overlayGecko(prev.eth, g),
+      }));
 
-      setTape((prev) => {
-        // BTC: we always re-fetch BTC market each cycle
-        const nextBtc = toTape('BTC', btcMarket, g);
-        // ETH: if we skipped inactive fetch, preserve prior Deribit spot but overlay gecko meta
-        let nextEth: DualTapeSnap;
-        if (ethMarket != null || active === 'ETH' || needInactive || forceInactive) {
-          nextEth = toTape('ETH', ethMarket, g);
-        } else if (prev.eth?.spotSource === 'deribit' && prev.eth.spot != null) {
-          const ga = geckoAsset('ETH', g);
-          nextEth = {
-            ...prev.eth,
-            change24hPct: ga?.change_24h_pct ?? prev.eth.change24hPct,
-            marketCapUsd: ga?.market_cap_usd ?? prev.eth.marketCapUsd,
-          };
-        } else {
-          nextEth = toTape('ETH', null, g);
-        }
-        return { btc: nextBtc, eth: nextEth };
-      });
-
-      if (needInactive) lastInactiveFetch.current = now;
+      if (fetchBtc) lastBtcFetch.current = now;
+      if (fetchEth) lastEthFetch.current = now;
 
       if (dualCharts) {
         const thin = { r: 0.04, q: 0, maxExpiries: 8 };
@@ -183,8 +255,8 @@ export function useCryptoDualBooks(opts?: { dualCharts?: boolean }) {
             };
           }
           const snap =
-            ccy === active && storeSnap?.symbol === ccy
-              ? storeSnap
+            ccy === activeAtStart && storeSnapAtStart?.symbol === ccy
+              ? storeSnapAtStart
               : buildDeribitSnapshot(m, thin);
           return {
             ccy,
@@ -195,11 +267,12 @@ export function useCryptoDualBooks(opts?: { dualCharts?: boolean }) {
           };
         };
         setBooks((prev) => ({
-          btc: build('BTC', btcMarket ?? prev.btc?.market ?? null),
-          eth:
-            ethMarket != null || active === 'ETH' || needInactive
-              ? build('ETH', ethMarket ?? prev.eth?.market ?? null)
-              : prev.eth,
+          btc: fetchBtc
+            ? build('BTC', btcM ?? prev.btc?.market ?? null)
+            : prev.btc,
+          eth: fetchEth
+            ? build('ETH', ethM ?? prev.eth?.market ?? null)
+            : prev.eth,
         }));
       }
     };

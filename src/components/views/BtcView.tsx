@@ -32,8 +32,28 @@ import {
 import { classifyDomainFreshness } from '../../lib/data/freshness';
 import { PerpBasisBoard } from './PerpBasisBoard';
 import { DeskView } from './DeskView';
-import { BacktestCryptoView } from './BacktestCryptoView';
-import { CryptoOptionsView } from './CryptoOptionsView';
+import { lazy, Suspense } from 'react';
+
+// Lazy-loaded crypto pages — keeps the main bundle lean (Phase 6).
+const BacktestCryptoView = lazy(() => import('./BacktestCryptoView').then((m) => ({ default: m.BacktestCryptoView })));
+const CryptoOptionsView = lazy(() => import('./CryptoOptionsView').then((m) => ({ default: m.CryptoOptionsView })));
+const CryptoDashboardView = lazy(() => import('./CryptoDashboardView').then((m) => ({ default: m.CryptoDashboardView })));
+const CryptoHeatmapView = lazy(() => import('./CryptoHeatmapView').then((m) => ({ default: m.CryptoHeatmapView })));
+const CryptoFlowView = lazy(() => import('./CryptoFlowView').then((m) => ({ default: m.CryptoFlowView })));
+const CryptoLevelsView = lazy(() => import('./CryptoLevelsView').then((m) => ({ default: m.CryptoLevelsView })));
+const CryptoOiView = lazy(() => import('./CryptoOiView').then((m) => ({ default: m.CryptoOiView })));
+const CryptoVolSkewView = lazy(() => import('./CryptoVolSkewView').then((m) => ({ default: m.CryptoVolSkewView })));
+const CryptoTailView = lazy(() => import('./CryptoTailView').then((m) => ({ default: m.CryptoTailView })));
+const CryptoScannerView = lazy(() => import('./CryptoScannerView').then((m) => ({ default: m.CryptoScannerView })));
+const FuturesBasisView = lazy(() => import('./crypto/FuturesBasisView').then((m) => ({ default: m.FuturesBasisView })));
+const FuturesTermStructureView = lazy(() => import('./crypto/FuturesTermStructureView').then((m) => ({ default: m.FuturesTermStructureView })));
+const FuturesFundingView = lazy(() => import('./crypto/FuturesFundingView').then((m) => ({ default: m.FuturesFundingView })));
+const OptionCalculatorView = lazy(() => import('./crypto/OptionCalculatorView').then((m) => ({ default: m.OptionCalculatorView })));
+
+function CryptoSuspense({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<div className="flex h-full items-center justify-center bg-[#030506] font-mono text-[11px] text-[#718087]">LOADING…</div>}>{children}</Suspense>;
+}
+import { CryptoDeskShell } from './crypto/CryptoDeskShell';
 import { THALEX_LAB_TOOLS } from '../../config/deskSections';
 
 function Stat({
@@ -237,7 +257,7 @@ function DualCol({
   );
 }
 
-export function BtcView() {
+function BtcViewContent() {
   const snapshot = useTerminalStore(s => s.snapshot);
   const symbol = useTerminalStore(s => s.symbol);
   const setSymbol = useTerminalStore(s => s.setSymbol);
@@ -258,20 +278,69 @@ export function BtcView() {
   );
   const { tape: dual, books, gecko } = useCryptoDualBooks({ dualCharts: cryptoDualCharts });
   const showThalexTool = Boolean(deskSectionId?.startsWith('desk-ws-'));
-  const showLabHome = !deskSectionId || deskSectionId === 'crypto-sub-lab';
+  const showOverview = !deskSectionId || deskSectionId === 'crypto-sub-overview';
+  const showHeatmaps = deskSectionId === 'crypto-sub-heatmaps';
+  const showFlow = deskSectionId === 'crypto-sub-flow';
+  const showLevels = deskSectionId === 'crypto-sub-levels';
+  const showOi = deskSectionId === 'crypto-sub-oi';
+  const showVolSkew = deskSectionId === 'crypto-sub-volskew';
+  const showTail = deskSectionId === 'crypto-sub-tail';
+  const showScanner = deskSectionId === 'crypto-sub-scanner';
+  const showFutBasis = deskSectionId === 'crypto-sub-fbasis';
+  const showFutTerm = deskSectionId === 'crypto-sub-fterm';
+  const showFutFund = deskSectionId === 'crypto-sub-ffund';
+  const showCalc = deskSectionId === 'crypto-sub-calc';
+  const showLabHome = deskSectionId === 'crypto-sub-lab';
   const showOptions = deskSectionId === 'crypto-sub-options';
   const showBacktest = deskSectionId === 'crypto-sub-backtest';
 
   // Auto-switch to a crypto underlier when entering this tab
   useEffect(() => {
     const allowed: CryptoAsset[] = ['BTC', 'ETH', 'IBIT', 'BITO', 'MSTR'];
-    if (!allowed.includes(symbol as CryptoAsset)) {
+    const params = new URL(window.location.href).searchParams;
+    const requested = params.get('crypto')?.toUpperCase();
+    const deepLinked = requested === 'BTC' || requested === 'ETH' ? requested : null;
+    if (deepLinked) {
+      setSymbol(deepLinked);
+      setProxy(deepLinked);
+    } else if (!allowed.includes(symbol as CryptoAsset)) {
       setSymbol('BTC');
       setProxy('BTC');
     } else {
       setProxy(symbol as CryptoAsset);
     }
+    // Deep-linked page (?crypto=BTC&page=flow) → jump to that desk section once
+    const page = params.get('page');
+    const pageToSection: Record<string, string> = {
+      overview: 'crypto-sub-overview',
+      heatmaps: 'crypto-sub-heatmaps',
+      levels: 'crypto-sub-levels',
+      flow: 'crypto-sub-flow',
+      oi: 'crypto-sub-oi',
+      volskew: 'crypto-sub-volskew',
+      tail: 'crypto-sub-tail',
+      scanner: 'crypto-sub-scanner',
+      fbasis: 'crypto-sub-fbasis',
+      fterm: 'crypto-sub-fterm',
+      ffund: 'crypto-sub-ffund',
+      options: 'crypto-sub-options',
+      calc: 'crypto-sub-calc',
+      backtest: 'crypto-sub-backtest',
+    };
+    if (page && pageToSection[page]) {
+      useTerminalStore.getState().setDeskSection(pageToSection[page]);
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep ?page= in sync with the active crypto section (shareable deep links)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const pageId = deskSectionId?.startsWith('crypto-sub-') ? deskSectionId.replace('crypto-sub-', '') : null;
+    if (pageId) url.searchParams.set('page', pageId);
+    else url.searchParams.delete('page');
+    window.history.replaceState(null, '', url.toString());
+  }, [deskSectionId]);
 
   const gex = useMemo(() => (snapshot ? gammaExposure(snapshot) : null), [snapshot]);
   const move = useMemo(() => (snapshot ? impliedMove(snapshot) : null), [snapshot]);
@@ -363,14 +432,64 @@ export function BtcView() {
     setSymbol(ccy);
   };
 
+  // Cross-expiry command overview — summary first, then drill into Market/Options.
+  if (showOverview) {
+    return <CryptoSuspense><CryptoDashboardView tape={dual} onSelectAsset={selectCcy} /></CryptoSuspense>;
+  }
+
+  if (showHeatmaps) {
+    return <CryptoSuspense><CryptoHeatmapView /></CryptoSuspense>;
+  }
+
+  if (showFlow) {
+    return <CryptoSuspense><CryptoFlowView /></CryptoSuspense>;
+  }
+
+  if (showLevels) {
+    return <CryptoSuspense><CryptoLevelsView /></CryptoSuspense>;
+  }
+
+  if (showOi) {
+    return <CryptoSuspense><CryptoOiView /></CryptoSuspense>;
+  }
+
+  if (showVolSkew) {
+    return <CryptoSuspense><CryptoVolSkewView /></CryptoSuspense>;
+  }
+
+  if (showTail) {
+    return <CryptoSuspense><CryptoTailView /></CryptoSuspense>;
+  }
+
+  if (showScanner) {
+    return <CryptoSuspense><CryptoScannerView /></CryptoSuspense>;
+  }
+
+  if (showFutBasis) {
+    return <CryptoSuspense><FuturesBasisView asset={proxy === 'ETH' ? 'ETH' : 'BTC'} /></CryptoSuspense>;
+  }
+
+  if (showFutTerm) {
+    return <CryptoSuspense><FuturesTermStructureView asset={proxy === 'ETH' ? 'ETH' : 'BTC'} /></CryptoSuspense>;
+  }
+
+  if (showFutFund) {
+    return <CryptoSuspense><FuturesFundingView asset={proxy === 'ETH' ? 'ETH' : 'BTC'} /></CryptoSuspense>;
+  }
+
   // Crypto options analytics desk
   if (showOptions) {
-    return <CryptoOptionsView />;
+    return <CryptoSuspense><CryptoOptionsView /></CryptoSuspense>;
+  }
+
+  // Multi-leg BS strategy calculator (live Deribit strikes/expiries)
+  if (showCalc) {
+    return <CryptoSuspense><OptionCalculatorView /></CryptoSuspense>;
   }
 
   // Crypto backtesting sandbox
   if (showBacktest) {
-    return <BacktestCryptoView />;
+    return <CryptoSuspense><BacktestCryptoView /></CryptoSuspense>;
   }
 
   // Thalex lab tools — crypto chrome (not Trade blotter)
@@ -797,5 +916,13 @@ export function BtcView() {
       </div>
       )}
     </div>
+  );
+}
+
+export function BtcView() {
+  return (
+    <CryptoDeskShell>
+      <BtcViewContent />
+    </CryptoDeskShell>
   );
 }

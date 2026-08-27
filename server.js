@@ -30,6 +30,7 @@ import {
   providerKeysStatus,
 } from './api/deskFeeds.js';
 import { fetchKsaBoard, fetchKsaQuote, riyadhSessionSnapshot, sahmkBudgetStatus } from './api/ksaFeeds.js';
+import { registerDeribitMarketRoutes } from './api/deribitMarketRoutes.js';
 import { registerStripeBilling, gateInfoForRequest } from './api/stripeBilling.js';
 import { registerStripeAuth } from './api/authRoutes.js';
 
@@ -2241,6 +2242,9 @@ fastify.get('/api/opra/chain/:symbol', async (request, reply) => {
     message: `Vendor adapter for ${OPRA_VENDOR} not wired yet`,
   };
 });
+
+// ── Deribit Market (public futures + funding history, no keys) ─────
+await registerDeribitMarketRoutes(fastify);
 
 // ── Stripe Billing (Payments / Billing / Invoicing-ready) ─────
 // Server-only. Warns when STRIPE_SECRET_KEY is absent; endpoints fail closed.

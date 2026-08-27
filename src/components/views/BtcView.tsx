@@ -55,6 +55,8 @@ function CryptoSuspense({ children }: { children: React.ReactNode }) {
 }
 import { CryptoDeskShell } from './crypto/CryptoDeskShell';
 import { THALEX_LAB_TOOLS } from '../../config/deskSections';
+import { CRYPTO_V2 } from '../../config/featureFlags';
+import { CryptoShell } from '../../features/crypto/shell/CryptoShell';
 
 function Stat({
   label, value, color, term, sub,
@@ -258,6 +260,7 @@ function DualCol({
 }
 
 function BtcViewContent() {
+  if (CRYPTO_V2) return <CryptoShell />;
   const snapshot = useTerminalStore(s => s.snapshot);
   const symbol = useTerminalStore(s => s.symbol);
   const setSymbol = useTerminalStore(s => s.setSymbol);

@@ -1,4 +1,5 @@
 import type { ActiveTab } from '../lib/options/types';
+import { CRYPTO_V2 } from './featureFlags';
 
 export type DeskNavItem = {
   id: string;
@@ -155,6 +156,15 @@ export const CRYPTO_SECTIONS: DeskNavItem[] = [
   { id: 'crypto-sub-calc', label: 'Calculator', short: 'CALC', apis: ['Deribit'] },
   { id: 'crypto-sub-lab', label: 'Lab', short: 'Lab', apis: ['Thalex'] },
   { id: 'crypto-sub-backtest', label: 'Backtest', short: 'BT', apis: ['Binance'] },
+];
+
+export const CRYPTO_V2_SECTIONS: DeskNavItem[] = [
+  { id: 'crypto-v2-overview', label: 'Overview', short: 'OVR', apis: ['Deribit'] },
+  { id: 'crypto-v2-volatility', label: 'Volatility', short: 'VOL', apis: ['Deribit'] },
+  { id: 'crypto-v2-positioning', label: 'Positioning', short: 'POS', apis: ['Deribit'] },
+  { id: 'crypto-v2-flow', label: 'Flow', short: 'FLOW', apis: ['Deribit'] },
+  { id: 'crypto-v2-carry', label: 'Carry', short: 'CARRY', apis: ['Deribit'] },
+  { id: 'crypto-v2-trade-risk', label: 'Trade & Risk', short: 'T&R', apis: ['Deribit'] },
 ];
 
 /**
@@ -316,7 +326,7 @@ export function sectionsForTab(tab: ActiveTab | string): DeskNavItem[] {
     case 'positioning':
       return POSITIONING_SECTIONS;
     case 'crypto':
-      return CRYPTO_SECTIONS;
+      return CRYPTO_V2 ? CRYPTO_V2_SECTIONS : CRYPTO_SECTIONS;
     case 'academy':
       return ACADEMY_SECTIONS;
     case 'ksa':

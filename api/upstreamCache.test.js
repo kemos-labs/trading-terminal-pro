@@ -164,7 +164,7 @@ describe('upstreamCache', () => {
     const after = cacheStats();
     expect(after.entries).toBeLessThanOrEqual(before + MAX_CACHE_ENTRIES);
     // Oldest inserted keys must be gone; newest must survive.
-    const firstKey = `test:lru:${Date.now()}:0`;
+    const _firstKey = `test:lru:${Date.now()}:0`;
     // (timestamp differs per iteration — instead assert via stats counters)
     expect(after.evictions).toBeGreaterThanOrEqual(overflow - (after.entries - before));
   });

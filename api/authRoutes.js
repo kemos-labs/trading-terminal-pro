@@ -10,7 +10,6 @@
 import {
   COOKIE_CLEAR,
   confirmPasswordReset,
-  createResetToken,
   createUser,
   getSessionEmail,
   issueSession,

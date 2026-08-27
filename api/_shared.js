@@ -8,7 +8,6 @@
 
 import {
   getOrFetch,
-  peek,
   TTL,
   budgetAllows,
   recordBudget,

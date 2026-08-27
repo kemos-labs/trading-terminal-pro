@@ -34,6 +34,8 @@ import { registerDeribitMarketRoutes } from './api/deribitMarketRoutes.js';
 import { registerStripeBilling, gateInfoForRequest } from './api/stripeBilling.js';
 import { registerStripeAuth } from './api/authRoutes.js';
 import { resolveProxyTrust } from './api/proxyTrust.js';
+import { registerSecurityHeaders } from './api/securityHeaders.js';
+import { normalizeIP } from '@fastify/rate-limit';
 
 // Load root .env into process.env (no dotenv dependency; keys never shipped to browser).
 function loadEnvFile(filePath) {
@@ -138,22 +140,48 @@ const MACROVOL_API_URL = resolveMacrovolBase();
 //   nothing set → trust nobody (direct exposure / local dev)
 const proxyTrust = resolveProxyTrust();
 for (const w of proxyTrust.warnings) console.warn(`WARN: ${w}`);
-const fastify = Fastify({ logger: false, trustProxy: proxyTrust.trustProxy });
+// Structured logging with redaction — replaces logger:false which hid security telemetry.
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const fastify = Fastify({
+  logger: {
+    level: LOG_LEVEL,
+    redact: {
+      paths: [
+        'req.headers.cookie',
+        'req.headers.authorization',
+        'req.headers["x-api-key"]',
+        'req.headers["x-rapidapi-key"]',
+        'req.headers["stripe-signature"]',
+        'req.body.password',
+        'req.body.token',
+        'req.body.newPassword',
+        'res.headers["set-cookie"]',
+        '*.password',
+        '*.token',
+        '*.secret',
+        'password',
+        'token',
+        'secret',
+      ],
+      censor: '***',
+    },
+  },
+  trustProxy: proxyTrust.trustProxy,
+  bodyLimit: 1_048_576, // 1 MiB — generous for JSON APIs; tighter per-route where needed
+  connectionTimeout: 30_000,
+  keepAliveTimeout: 72_000,
+  requestTimeout: 30_000,
+  maxParamLength: 200,
+});
+
+// Centralized security headers (Helmet) — replaces manual onSend hook.
+await registerSecurityHeaders(fastify);
 
 await fastify.register(cors, {
   origin: (origin, cb) => {
     if (isAllowedOrigin(origin)) return cb(null, true);
     return cb(new Error('Not allowed by CORS'), false);
   },
-});
-
-// Basic hardening headers (edge TLS still owns HSTS in production).
-fastify.addHook('onSend', async (_request, reply, payload) => {
-  reply.header('X-Content-Type-Options', 'nosniff');
-  reply.header('X-Frame-Options', 'SAMEORIGIN');
-  reply.header('Referrer-Policy', 'no-referrer');
-  reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  return payload;
 });
 
 // Rate limiting (sync caps with src/config/constants.ts rateLimit).
@@ -210,9 +238,12 @@ function rateLimitMaxForUrl(url) {
 await fastify.register(rateLimit, {
   max: (request) => rateLimitMaxForUrl(request.url),
   timeWindow: '1 minute',
+  ipv6Subnet: 64,
   // Key per (URL class, client IP): without the class prefix, a single shared
   // counter lets cheap /api/health traffic exhaust the scarce-upstream budget.
-  keyGenerator: (request) => `${rateLimitClassForUrl(request.url)}:${request.ip}`,
+  // normalizeIP ensures IPv4-mapped IPv6 (e.g. ::ffff:1.2.3.4) collapses to the
+  // same bucket as 1.2.3.4 — required for GHSA-grpc-p53c-r64v fix.
+  keyGenerator: (request) => `${rateLimitClassForUrl(request.url)}:${normalizeIP(request.ip, 64)}`,
   // Never throttle static SPA assets — browsers load many chunks in parallel.
   allowList: (request) => {
     const u = request.url || '';
@@ -854,7 +885,7 @@ async function bybitOptionsSummary(ccy) {
     const json = await res.json();
     const list = Array.isArray(json?.result?.list) ? json.result.list : [];
     if (!list.length) return null;
-    let volCcy = 0, volUsd = 0, openIntCcy = 0, instruments = 0;
+    let volCcy = 0, openIntCcy = 0, instruments = 0;
     for (const t of list) {
       instruments += 1;
       volCcy += Number(t.volume24h) || 0; // base-ccy contracts (1 = 1 ccy on Bybit)

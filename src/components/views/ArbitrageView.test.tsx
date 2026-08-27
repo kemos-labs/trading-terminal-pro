@@ -6,7 +6,6 @@ import { useTerminalStore } from '../../store/terminalStore';
 import { buildSnapshot, buildSurfaceGrid } from '../../lib/options/synthetic';
 import { sviReadout } from '../../lib/options/surfaceTools';
 import { diagnoseArbitrage } from '../../lib/options/noarb';
-import type { NoArbResult } from '../../lib/options/noarb';
 
 class ResizeObserverStub {
   observe() {}

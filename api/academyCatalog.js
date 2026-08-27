@@ -73,7 +73,7 @@ export function parseEssayMeta(md) {
       sections.push({ heading: h2[1].trim(), tags: [] });
       continue;
     }
-    if (/^#{1,6}\s/.test(line) || /^!\[/.test(line) || /^---+$/.test(line.trim())) {
+    if (/^#{1,6}\s/.test(line) || line.startsWith('![') || /^---+$/.test(line.trim())) {
       flushPara();
       continue;
     }
@@ -82,7 +82,7 @@ export function parseEssayMeta(md) {
       continue;
     }
     // skip pure table pipes for dek
-    if (/^\|/.test(line.trim())) {
+    if (line.trim().startsWith('|')) {
       flushPara();
       continue;
     }

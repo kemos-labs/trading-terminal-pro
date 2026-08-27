@@ -1,4 +1,4 @@
-import { isFmpEndpointAllowed, FMP_ALLOWED_ENDPOINTS, proxyFmp } from '../../_shared.js';
+import { isFmpEndpointAllowed, proxyFmp } from '../../_shared.js';
 
 export default async function handler(req, res) {
   const url = new URL(req.url, 'http://localhost');

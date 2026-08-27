@@ -10,7 +10,7 @@ const BASE = '/api/macrovol';
 async function fetchJson<T = unknown>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
-    headers: { Accept: 'application/json', ...(init?.headers || {}) },
+    headers: { Accept: 'application/json', ...init?.headers },
   });
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
   if (!res.ok) {

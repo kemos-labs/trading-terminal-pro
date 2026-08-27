@@ -28,14 +28,7 @@
       <h1>Kemos Research</h1>
       <p>Loading terminal… If this stays blank, hard-refresh (Ctrl+Shift+R) or check that JS assets load.</p>
     </div>
-    <script>
-      // Show fallback only if React never mounts (asset/CORS failure).
-      setTimeout(function () {
-        var root = document.getElementById('root');
-        var fb = document.getElementById('boot-fallback');
-        if (root && fb && !root.childElementCount) fb.classList.add('show');
-      }, 4000);
-    </script>
+    <script src="/boot-fallback.js"></script>
     <!--
       Vite 8 + @vitejs/plugin-react 6 should inject this via transformIndexHtml.
       In this environment the preamble is missing and every TSX dies with

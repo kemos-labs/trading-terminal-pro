@@ -21,3 +21,6 @@ cfg.json
 # Brainstorm / visual companion session artifacts
 .superpowers/
 .worktrees/
+
+# Rust port experiment (build artifacts + local only)
+server-rs/

@@ -48,6 +48,9 @@ import { DeskChartFrame, deskChartChrome, deskAxisLabel } from '../desk/DeskChar
 import { PrintStrip } from '../desk/PrintStrip';
 import { DESK_SERIES } from '../desk/seriesGrammar';
 import { DeskModeBar } from '../terminal/DeskModeBar';
+import { DealerGradientPanel } from './DealerGradientPanel';
+import { DealerGreekProfiles } from './DealerGreekProfiles';
+import { SessionGexHeatmap } from './SessionGexHeatmap';
 import {
   computeGexBookDeltas,
   loadGexBook,
@@ -833,7 +836,7 @@ export function PositioningView() {
                 {/* Gamma + Charm strike profiles (VS3D teaching cards) */}
                 {snapshot && (
                   <div className="shrink-0 border-t border-border p-2">
-                    <div>DealerGreekProfiles removed
+                    <DealerGreekProfiles
                       snapshot={snapshot}
                       weight={weight}
                       expiry={
@@ -850,12 +853,20 @@ export function PositioningView() {
 
                 {/* VS3D/TRACE session 3-pane: pos ‖ γ ‖ charm (K × time) */}
                 {snapshot && (
-                  <div className="p-2 font-mono text-xs">SessionGexHeatmap removed</div>
+                  <SessionGexHeatmap
+                    snapshot={snapshot}
+                    symbol={symbol}
+                    weight={weight}
+                  />
                 )}
 
                 {/* Calendar K×DTE gradients (structure across expiries) */}
                 {snapshot && (
-                  <div className="p-2 font-mono text-xs">DealerGradientPanel removed</div>
+                  <DealerGradientPanel
+                    snapshot={snapshot}
+                    weight={weight}
+                    onExpiryPick={(exp: any) => setExpMode(exp)}
+                  />
                 )}
 
                 {/* Multi-exp small multiples */}

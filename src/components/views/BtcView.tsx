@@ -22,7 +22,6 @@ export function BtcView() {
   const symbol = useTerminalStore(s => s.symbol);
   useEffect(() => {
     const allowed = ['BTC', 'ETH', 'IBIT', 'BITO', 'MSTR'];
-    const params = new URLSearchParams(window.location.href).searchParams;
     const requested = new URL(window.location.href).searchParams.get('crypto')?.toUpperCase();
     if (requested === 'BTC' || requested === 'ETH') {
       setSymbol(requested);

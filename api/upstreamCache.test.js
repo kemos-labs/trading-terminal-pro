@@ -185,7 +185,14 @@ describe('upstreamCache', () => {
 });
 
 describe('server.js cache wiring (regression)', () => {
-  const src = readFileSync(join(__dirname, '..', 'server.js'), 'utf8');
+  const serverPath = (() => {
+    try {
+      const s = readFileSync(join(__dirname, '..', 'server.js'), 'utf8');
+      if (s.includes('getOrFetch') || s.includes('deribit:market')) return join(__dirname, '..', 'server.js');
+    } catch {}
+    return join(__dirname, '..', 'server/app.js');
+  })();
+  const src = readFileSync(serverPath, 'utf8');
 
   it('does not reference removed cacheStore (broke Deribit LIVE chains)', () => {
     expect(src).not.toMatch(/\bcacheStore\b/);

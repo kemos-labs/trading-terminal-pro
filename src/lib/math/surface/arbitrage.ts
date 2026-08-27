@@ -11,7 +11,7 @@ export interface ArbitrageCheck {
   detail?: string;
 }
 
-export function checkCallMonotonicity(strikes: number[], callPrices: number[]): ArbitrageCheck {
+export function checkCallMonotonicity(_strikes: number[], callPrices: number[]): ArbitrageCheck {
   for (let i = 1; i < callPrices.length; i++) {
     if (callPrices[i]! > callPrices[i-1]! + 1e-12) {
       return { kind: 'call-price-monotonic', passed: false, detail: `call price increased at strike index ${i}` };

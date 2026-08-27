@@ -9,7 +9,7 @@ import {
 import { DataBadge } from './DataBadge';
 import { useTerminalStore } from '../../store/terminalStore';
 
-const Plot = lazy(() => Promise.resolve({ default: () => null as any })); // Plotly removed — V2 uses Canvas
+const Plot = lazy(() => Promise.resolve({ default: (_props: any) => null as any })); // Plotly removed — V2 uses Canvas
 
 const POPULAR = ['SPY', 'QQQ', 'AAPL', 'TSLA', 'NVDA', 'AMZN', 'MSFT', 'META', 'GLD'];
 

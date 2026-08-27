@@ -1,1 +1,0 @@
-export function surfaceStrikeMapping(..._args: any[]) { return null as any; }

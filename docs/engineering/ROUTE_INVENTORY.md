@@ -1,6 +1,6 @@
 # Route Inventory — Phase 1 Baseline
 
-Generated: 2026-08-27T22:11:14Z
+Generated: 2026-08-27T22:22:00Z
 
 Source scan: server.js, server/app.js, api/authRoutes.js, api/stripeBilling.js, server/routes/deribitMarket.js, api/health.js, api/ksaFeeds.js, api/deskFeeds.js, api/_shared.js plus api/** (excluding tests).
 Total routes: 28

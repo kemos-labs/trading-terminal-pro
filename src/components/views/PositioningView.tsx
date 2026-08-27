@@ -48,9 +48,7 @@ import { DeskChartFrame, deskChartChrome, deskAxisLabel } from '../desk/DeskChar
 import { PrintStrip } from '../desk/PrintStrip';
 import { DESK_SERIES } from '../desk/seriesGrammar';
 import { DeskModeBar } from '../terminal/DeskModeBar';
-import { DealerGradientPanel } from './DealerGradientPanel';
-import { DealerGreekProfiles } from './DealerGreekProfiles';
-import { SessionGexHeatmap } from './SessionGexHeatmap';
+// DealerGradientPanel / DealerGreekProfiles / SessionGexHeatmap removed in Phase 9 (Plotly/Three stubs).
 import {
   computeGexBookDeltas,
   loadGexBook,
@@ -831,42 +829,6 @@ export function PositioningView() {
                       </table>
                     </div>
                   </div>
-                )}
-
-                {/* Gamma + Charm strike profiles (VS3D teaching cards) */}
-                {snapshot && (
-                  <div className="shrink-0 border-t border-border p-2">
-                    <DealerGreekProfiles
-                      snapshot={snapshot}
-                      weight={weight}
-                      expiry={
-                        expMode !== 'all' && expMode !== '0dte' && expMode !== 'front'
-                          ? expMode
-                          : expMode === 'front' && snapshot.expiries[0]
-                            ? snapshot.expiries[0].expiry
-                            : null
-                      }
-                      maxDte={expMode === '0dte' ? 0 : null}
-                    />
-                  </div>
-                )}
-
-                {/* VS3D/TRACE session 3-pane: pos ‖ γ ‖ charm (K × time) */}
-                {snapshot && (
-                  <SessionGexHeatmap
-                    snapshot={snapshot}
-                    symbol={symbol}
-                    weight={weight}
-                  />
-                )}
-
-                {/* Calendar K×DTE gradients (structure across expiries) */}
-                {snapshot && (
-                  <DealerGradientPanel
-                    snapshot={snapshot}
-                    weight={weight}
-                    onExpiryPick={(exp: any) => setExpMode(exp)}
-                  />
                 )}
 
                 {/* Multi-exp small multiples */}

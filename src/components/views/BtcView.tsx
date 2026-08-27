@@ -1,10 +1,16 @@
-import { CryptoShell } from '../../features/crypto/shell/CryptoShell';
+import { lazy, Suspense } from 'react';
 import { useTerminalStore } from '../../store/terminalStore';
 import { useEffect } from 'react';
 
+const CryptoShell = lazy(() => import('../../features/crypto/shell/CryptoShell').then(m => ({ default: m.CryptoShell })));
+
 /** Crypto Desk — six-workflow V2 product (no flag). */
 function BtcViewContent() {
-  return <CryptoShell />;
+  return (
+    <Suspense fallback={<div className="p-4 font-mono text-xs animate-pulse">Loading crypto desk…</div>}>
+      <CryptoShell />
+    </Suspense>
+  );
 }
 
 export function BtcView() {

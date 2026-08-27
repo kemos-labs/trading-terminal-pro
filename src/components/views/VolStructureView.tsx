@@ -3,9 +3,6 @@
  * Greeks 1.0 lives here (not Trade). Fit is focus-only.
  */
 import { useEffect, lazy, Suspense, useState, useCallback } from 'react';
-import { SmileView } from './SmileView';
-import { TermView } from './TermView';
-import { ArbitrageView } from './ArbitrageView';
 import { useTerminalStore } from '../../store/terminalStore';
 import { DeskLoading } from '../common/Skeleton';
 import { EmptyState } from '../common/EmptyState';
@@ -15,9 +12,9 @@ import { GexLevelsStrip } from '../common/GexLevelsStrip';
 import { consumeDeskJumpOnMount } from '../../lib/market/deskJump';
 import { cn } from '../../lib/utils';
 
-const SurfaceView = lazy(() =>
-  import('./surface/SurfaceView').then((m) => ({ default: m.SurfaceView })),
-);
+const SmileView = lazy(() => import('./SmileView').then(m => ({ default: m.SmileView })));
+const TermView = lazy(() => import('./TermView').then(m => ({ default: m.TermView })));
+const ArbitrageView = lazy(() => import('./ArbitrageView').then(m => ({ default: m.ArbitrageView })));
 const GreeksView = lazy(() =>
   import('./GreeksView').then((m) => ({ default: m.GreeksView })),
 );
@@ -183,10 +180,8 @@ export function VolStructureView() {
         {useSplit ? (
           <div className="flex h-full min-h-0 flex-col lg:flex-row">
             <div className="min-h-0 min-w-0 flex-[1.4] border-b border-border lg:border-b-0 lg:border-r">
-              <SectionErrorBoundary name="Surface">
-                <Suspense fallback={<DeskLoading message={UI_COPY.load.surface} />}>
-                  <SurfaceView />
-                </Suspense>
+              <SectionErrorBoundary name="Smile">
+                <SmileView />
               </SectionErrorBoundary>
             </div>
             <div className="min-h-0 min-w-0 flex-1" key={side}>
@@ -204,10 +199,8 @@ export function VolStructureView() {
         ) : (
           <div className="h-full min-h-0 term-crossfade" key={focusSub}>
             {focusSub === 'surface' && (
-              <SectionErrorBoundary name="Surface">
-                <Suspense fallback={<DeskLoading message={UI_COPY.load.surface} />}>
-                  <SurfaceView />
-                </Suspense>
+              <SectionErrorBoundary name="Smile">
+                <SmileView />
               </SectionErrorBoundary>
             )}
             {focusSub === 'smile' && (

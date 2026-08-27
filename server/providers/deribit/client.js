@@ -24,7 +24,7 @@ let credits = 50000; // bucket simulation
 
 export async function deribitFetch(method, params = {}) {
   const base = method.split('?')[0];
-  if (!ALLOWED_METHODS.has(base) && !base.startsWith('get_')) {
+  if (!ALLOWED_METHODS.has(base)) {
     throw Object.assign(new Error(`Deribit method not allowlisted: ${method}`), { code: 'not_allowlisted' });
   }
   // Rate discipline: credits

@@ -2,18 +2,20 @@
  * Shared desk view switch — classic shell and future tiles call the same path.
  * `DeskViewGate` adds the billing paywall check (hooks-safe wrapper).
  */
-import { Suspense, type ReactNode } from 'react';
+import { Suspense, lazy, type ReactNode } from 'react';
 import { Lock } from 'lucide-react';
 import { useAccountStore } from '../../store/accountStore';
-import { VolStructureView } from '../views/VolStructureView';
-import { PositioningView } from '../views/PositioningView';
 import { DeskView } from '../views/DeskView';
-import { BtcView } from '../views/BtcView';
-import { RatesView } from '../views/RatesView';
 import { AcademyView } from '../views/AcademyView';
 import { KsaMarketView } from '../views/KsaMarketView';
+
+const RatesView = lazy(() => import('../views/RatesView').then(m => ({ default: m.RatesView })));
 import { DeskLoading } from '../common/Skeleton';
 import type { ActiveTab } from '../../lib/options/types';
+
+const VolStructureView = lazy(() => import('../views/VolStructureView').then(m => ({ default: m.VolStructureView })));
+const PositioningView = lazy(() => import('../views/PositioningView').then(m => ({ default: m.PositioningView })));
+const BtcView = lazy(() => import('../views/BtcView').then(m => ({ default: m.BtcView })));
 
 /** Desks that paint without waiting on equity chain load. */
 export const INDEPENDENT_TABS: ReadonlySet<ActiveTab> = new Set([

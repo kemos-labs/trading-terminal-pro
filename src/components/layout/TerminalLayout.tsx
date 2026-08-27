@@ -110,7 +110,6 @@ export function TerminalLayout() {
   // Preload heavy Vol chunks during boot so Greeks is not a cold lazy hit after Enter.
   useEffect(() => {
     void import('../views/GreeksView');
-    void import('../views/surface/SurfaceView');
   }, []);
 
   // Migrate stale tab ids (e.g. old "home"/"macro" → Vol, the default desk)

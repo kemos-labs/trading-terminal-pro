@@ -33,37 +33,19 @@ describe('deskNav', () => {
     expect(secs.find((s) => s.id === 'desk-ws-optionpnl')).toBeUndefined();
   });
 
-  it('crypto exposes Overview, Greek Heat, Levels, Flow, OI, Vol & Skew, Tail Strike, Scanner, Futures trio, Options, Calculator, Lab, and Backtest', () => {
+  it('crypto exposes exactly six V2 workflows (no flag)', () => {
     const secs = sectionsForTab('crypto');
     expect(secs.map((s) => s.id)).toEqual([
-      'crypto-sub-overview',
-      'crypto-sub-heatmaps',
-      'crypto-sub-levels',
-      'crypto-sub-flow',
-      'crypto-sub-oi',
-      'crypto-sub-volskew',
-      'crypto-sub-tail',
-      'crypto-sub-scanner',
-      'crypto-sub-fbasis',
-      'crypto-sub-fterm',
-      'crypto-sub-ffund',
-      'crypto-sub-options',
-      'crypto-sub-calc',
-      'crypto-sub-lab',
-      'crypto-sub-backtest',
+      'crypto-v2-overview',
+      'crypto-v2-volatility',
+      'crypto-v2-positioning',
+      'crypto-v2-flow',
+      'crypto-v2-carry',
+      'crypto-v2-trade-risk',
     ]);
-    // Embedded Thalex tools stay nested behind Lab rather than crowding the primary strip.
+    // Legacy 15-route crypto + Thalex Lab removed in Phase 9.
+    expect(secs.find((s) => s.id === 'crypto-sub-overview')).toBeUndefined();
     expect(secs.find((s) => s.id === 'desk-ws-sim')).toBeUndefined();
-    expect(secs.find((s) => s.id === 'desk-ws-basis')).toBeUndefined();
-  });
-
-  it('maps crypto tools to thalextech.github.io app slugs', async () => {
-    const { THALEX_APP_SLUG, thalexAppUrl } = await import('./deskSections');
-    expect(THALEX_APP_SLUG['desk-ws-sim']).toBe('simulator');
-    expect(THALEX_APP_SLUG['desk-ws-combopnl']).toBe('combo-pnl');
-    expect(THALEX_APP_SLUG['desk-ws-backtest']).toBe('backtest');
-    expect(thalexAppUrl('desk-ws-grid')).toBe('https://thalextech.github.io/grid/');
-    expect(Object.keys(THALEX_APP_SLUG).length).toBe(14);
   });
 
   it('finds section meta', () => {

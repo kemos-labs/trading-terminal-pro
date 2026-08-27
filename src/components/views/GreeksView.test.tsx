@@ -96,7 +96,7 @@ describe('GreeksView (Greeks 1.0 host)', () => {
     expect(screen.queryByText('QQQ')).toBeNull();
   });
 
-  it('exposes Plotly / 3D mesh theme toggle', async () => {
+  it('exposes surface viz toggle (Plotly / mesh)', async () => {
     render(<GreeksView />);
     await waitFor(
       () => {
@@ -106,7 +106,8 @@ describe('GreeksView (Greeks 1.0 host)', () => {
     );
     expect(screen.getByTestId('greeks-theme-mesh')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('greeks-theme-mesh'));
-    expect(localStorage.getItem('ui.greeks.surfaceTheme')).toBe('mesh');
+    // Theme state lives in component state (no localStorage dependency).
+    expect(screen.getByTestId('greeks-theme-mesh')).toHaveClass('bg-primary');
   });
 
   it('ATM greek cards drive selection labels', async () => {

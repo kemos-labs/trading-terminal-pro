@@ -184,35 +184,32 @@ describe('upstreamCache', () => {
   });
 });
 
-describe('server.js cache wiring (regression)', () => {
-  const serverPath = (() => {
-    try {
-      const s = readFileSync(join(__dirname, '..', 'server.js'), 'utf8');
-      if (s.includes('getOrFetch') || s.includes('deribit:market')) return join(__dirname, '..', 'server.js');
-    } catch {}
-    return join(__dirname, '..', 'server/app.js');
-  })();
-  const src = readFileSync(serverPath, 'utf8');
+describe('server cache wiring (regression)', () => {
+  // server.js → server/app.js → server/routes/* (Phase 8 decomposition).
+  // Read all server source to verify cache wiring across the decomposed modules.
+  const serverDir = join(__dirname, '..', 'server');
+  const files = ['app.js', 'routes/deribitMarket.js', 'routes/sse.js', 'routes/macrovol.js'];
+  const src = files.map(f => readFileSync(join(serverDir, f), 'utf8')).join('\n');
 
   it('does not reference removed cacheStore (broke Deribit LIVE chains)', () => {
     expect(src).not.toMatch(/\bcacheStore\b/);
     expect(src).not.toMatch(/\bCACHE_TTL\b/);
   });
 
-  it('uses getOrFetch for Deribit market and yfinance enrichment', () => {
+  it('uses getOrFetch for shared-cached routes (boot, macrovol, flashalpha)', () => {
     expect(src).toMatch(/getOrFetch/);
-    expect(src).toMatch(/deribit:market:/);
-    expect(src).toMatch(/yf:history:/);
-    expect(src).toMatch(/TTL\.DERIBIT_MS|TTL\.YF_ENRICH_MS/);
+    // Deribit routes use the canonical provider (server/providers/deribit) which
+    // has its own rate discipline + allowlist — not getOrFetch cache keys.
+    expect(src).toMatch(/deribitFetch/);
+    // TTL constants are imported and used by route modules.
+    expect(src).toMatch(/TTL\.(BRIEFING_MS|FMP_QUOTE_MS|OPTIONS_MS)/);
   });
 
   it('SSE quote stream routes through the shared budget-gated helper (no direct proxyFmp)', () => {
     expect(src).toMatch(/fetchFmpQuoteShared/);
     // writeTick must not call proxyFmp directly — that path bypassed the
     // FMP daily budget (~60 unbudgeted calls/hour per open tab).
-    const sseStart = src.indexOf('/api/stream/quote/');
-    const sseEnd = src.indexOf('// ── FMP API Proxy', sseStart);
-    const sseBlock = src.slice(sseStart, sseEnd);
+    const sseBlock = readFileSync(join(serverDir, 'routes/sse.js'), 'utf8');
     expect(sseBlock).toContain('fetchFmpQuoteShared');
     expect(sseBlock).not.toMatch(/proxyFmp\(/);
   });

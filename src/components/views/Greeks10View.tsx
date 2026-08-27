@@ -38,31 +38,10 @@ import { Explain } from '../common/Explain';
 import { useTerminalStore } from '../../store/terminalStore';
 import type { GreekKey } from './greeksTypes';
 import { cn } from '../../lib/utils';
-import { DealerGreekProfiles } from './DealerGreekProfiles';
 import { ChartZoom, useChartZoom } from '../common/ChartZoom';
-import { SessionGexHeatmap } from './SessionGexHeatmap';
 
-const Plot = lazy(() => Promise.resolve({ default: (_props: any) => null as any })); // Plotly removed
-const GreeksSurface3D = lazy(() =>
-  import('./GreeksSurface3D').then((m) => ({ default: m.GreeksSurface3D })),
-);
-
-type SurfaceTheme = 'plotly' | 'mesh';
-const THEME_KEY = 'ui.greeks.surfaceTheme';
-
-function loadSurfaceTheme(): SurfaceTheme {
-  try {
-    return localStorage.getItem(THEME_KEY) === 'mesh' ? 'mesh' : 'plotly';
-  } catch {
-    return 'plotly';
-  }
-}
-
-function saveSurfaceTheme(t: SurfaceTheme) {
-  try {
-    localStorage.setItem(THEME_KEY, t);
-  } catch { /* ignore */ }
-}
+// Plotly removed — surface renders as SVG via CurveChart (V2).
+const Plot = lazy(() => Promise.resolve({ default: (_props: any) => null as any }));
 
 const MESH_GREEKS = new Set<string>(['delta', 'gamma', 'vega', 'theta', 'vanna', 'charm']);
 
@@ -89,7 +68,7 @@ export function Greeks10View() {
   const [ohlc, setOhlc] = useState<HistoryData['data']>(() => peekGreeksCacheStale(ticker)?.ohlc ?? []);
   const [loading, setLoading] = useState(() => !peekGreeksCache(ticker));
   const [error, setError] = useState('');
-  const [surfaceTheme, setSurfaceTheme] = useState<SurfaceTheme>(loadSurfaceTheme);
+  const [surfaceTheme, setSurfaceTheme] = useState<'plotly' | 'mesh'>('plotly');
 
   // Single Greeks home = Vol · Greeks (not Trade).
   useEffect(() => {
@@ -111,11 +90,6 @@ export function Greeks10View() {
       }
     };
   }, [setDeskSection, setDeskContext]);
-
-  // Re-read theme when landing from 3D deep-link
-  useEffect(() => {
-    setSurfaceTheme(loadSurfaceTheme());
-  }, []);
 
   // Shared cache + prefetch: never blank the board if we already have this underlier.
   useEffect(() => {
@@ -183,14 +157,8 @@ export function Greeks10View() {
     .sort((a, b) => a.strike - b.strike);
 
   const colorscale = PLOTLY_CS_GREEK[selectedGreek] ?? PLOTLY_CS_GREEK.delta;
-  const meshGreek: GreekKey = MESH_GREEKS.has(selectedGreek)
-    ? (selectedGreek as GreekKey)
-    : 'gamma';
-
-  const setTheme = (t: SurfaceTheme) => {
-    setSurfaceTheme(t);
-    saveSurfaceTheme(t);
-  };
+  // meshGreek retained for future V2 surface work
+  void (MESH_GREEKS.has(selectedGreek) ? (selectedGreek as GreekKey) : 'gamma');
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -296,7 +264,7 @@ export function Greeks10View() {
                           key={t.id}
                           type="button"
                           data-testid={`greeks-theme-${t.id}`}
-                          onClick={() => setTheme(t.id)}
+                          onClick={() => setSurfaceTheme(t.id)}
                           className={cn(
                             'rounded px-2 py-0.5 font-mono text-type-2xs',
                             surfaceTheme === t.id
@@ -310,11 +278,7 @@ export function Greeks10View() {
                     </div>
                   </div>
                   <p className="mb-1 text-type-2xs text-muted-foreground">
-                    {surfaceTheme === 'plotly'
-                      ? 'Plotly · yfinance OTM field (same API as ATM cards)'
-                      : surfaceData?.T_vals?.length
-                        ? '3D mesh · yfinance grid (same numbers as Plotly) · OTM · θ/charm /day · ν /1vol'
-                        : '3D mesh · desk LIVE chain fallback until greeks grid loads · OTM · θ/charm /day'}
+                    Surface · yfinance OTM field (same API as ATM cards)
                     {data?.r != null && (
                       <span className="ml-2 tabular-nums">
                         r={(data.r * 100).toFixed(2)}%
@@ -324,68 +288,48 @@ export function Greeks10View() {
                     )}
                   </p>
                   <div className="overflow-hidden rounded-xl border border-border bg-card">
-                    {surfaceTheme === 'plotly' ? (
-                      surfaceData && surfaceData.T_vals?.length > 0 ? (
-                        <Suspense fallback={<div className="p-8 text-center text-xs text-muted-foreground">Loading surface…</div>}>
-                          <Plot
-                            data={[{
-                              type: 'surface',
-                              x: surfaceData.T_vals,
-                              y: surfaceData.K_vals,
-                              z: surfaceData.grid,
-                              colorscale,
-                              colorbar: {
-                                ...PLOTLY_COLORBAR,
-                                title: { text: greek.label, font: PLOTLY_COLORBAR.title.font },
+                    {surfaceData && surfaceData.T_vals?.length > 0 ? (
+                      <Suspense fallback={<div className="p-8 text-center text-xs text-muted-foreground">Loading surface…</div>}>
+                        <Plot
+                          data={[{
+                            type: 'surface',
+                            x: surfaceData.T_vals,
+                            y: surfaceData.K_vals,
+                            z: surfaceData.grid,
+                            colorscale,
+                            colorbar: {
+                              ...PLOTLY_COLORBAR,
+                              title: { text: greek.label, font: PLOTLY_COLORBAR.title.font },
+                            },
+                            hovertemplate: `Strike: $%{y:.0f}<br>${greek.label}: %{z:.4f}<extra></extra>`,
+                          } as never]}
+                          layout={{
+                            ...PLOTLY_LAYOUT_BASE,
+                            margin: { l: 0, r: 50, t: 24, b: 0 },
+                            scene: {
+                              xaxis: {
+                                title: { text: 'DTE' },
+                                ticktext: surfaceData.T_vals.map((t) => `${Math.round(t * 365)}d`),
+                                tickvals: surfaceData.T_vals,
+                                ...PLOTLY_SCENE_AXIS,
                               },
-                              hovertemplate: `Strike: $%{y:.0f}<br>${greek.label}: %{z:.4f}<extra></extra>`,
-                            } as never]}
-                            layout={{
-                              ...PLOTLY_LAYOUT_BASE,
-                              margin: { l: 0, r: 50, t: 24, b: 0 },
-                              scene: {
-                                xaxis: {
-                                  title: { text: 'DTE' },
-                                  ticktext: surfaceData.T_vals.map((t) => `${Math.round(t * 365)}d`),
-                                  tickvals: surfaceData.T_vals,
-                                  ...PLOTLY_SCENE_AXIS,
-                                },
-                                yaxis: { title: { text: 'Strike ($)' }, ...PLOTLY_SCENE_AXIS },
-                                zaxis: { title: { text: greek.label }, ...PLOTLY_SCENE_AXIS },
-                                bgcolor: CHART_RESOLVED.card,
-                                camera: { eye: { x: 1.6, y: -1.6, z: 0.9 } },
-                                aspectmode: 'manual',
-                                aspectratio: { x: 2, y: 1.2, z: 0.8 },
-                              },
-                              height: 320,
-                            } as never}
-                            config={{ responsive: true, displayModeBar: true, displaylogo: false }}
-                            style={{ width: '100%' }}
-                          />
-                        </Suspense>
-                      ) : (
-                        <div className="p-4 text-center text-type-2xs text-muted-foreground">
-                          No yfinance surface grid for {greek.label} yet.
-                        </div>
-                      )
-                    ) : (
-                      <Suspense fallback={<div className="p-4 text-center text-type-2xs text-muted-foreground">Loading 3D mesh…</div>}>
-                        <div className="h-[320px]">
-                          <GreeksSurface3D
-                            greek={meshGreek}
-                            hideGreekPicker
-                            className="h-full"
-                            macrovolGrid={surfaceData ?? null}
-                            macrovolSpot={data?.spot}
-                            macrovolMeta={{
-                              r: data?.r,
-                              q: data?.q,
-                              r_source: data?.r_source,
-                              source: data?.source,
-                            }}
-                          />
-                        </div>
+                              yaxis: { title: { text: 'Strike ($)' }, ...PLOTLY_SCENE_AXIS },
+                              zaxis: { title: { text: greek.label }, ...PLOTLY_SCENE_AXIS },
+                              bgcolor: CHART_RESOLVED.card,
+                              camera: { eye: { x: 1.6, y: -1.6, z: 0.9 } },
+                              aspectmode: 'manual',
+                              aspectratio: { x: 2, y: 1.2, z: 0.8 },
+                            },
+                            height: 320,
+                          } as never}
+                          config={{ responsive: true, displayModeBar: true, displaylogo: false }}
+                          style={{ width: '100%' }}
+                        />
                       </Suspense>
+                    ) : (
+                      <div className="p-4 text-center text-type-2xs text-muted-foreground">
+                        No yfinance surface grid for {greek.label} yet.
+                      </div>
                     )}
                   </div>
                 </div>
@@ -398,17 +342,6 @@ export function Greeks10View() {
                   ticker={ticker}
                   ohlc={ohlc}
                 />
-
-                {/* Live chain gamma + charm strike profiles (same book as Positioning) */}
-                {snapshot && (
-                  <div className="rounded border border-border bg-card/30 p-2">
-                    <DealerGreekProfiles snapshot={snapshot} weight="oi" />
-                  </div>
-                )}
-
-                {snapshot && (
-                  <SessionGexHeatmap snapshot={snapshot} symbol={ticker} weight="oi" />
-                )}
 
                 {/* Dense GEX book: bars ‖ OI ladder ‖ strike×expiry (VS3D / MenthorQ density) */}
                 {(gexChartData.length > 0 || data.points) && (

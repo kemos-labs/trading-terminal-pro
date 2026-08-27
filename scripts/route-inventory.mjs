@@ -19,6 +19,8 @@ function scanFile(relPath) {
   const lines = text.split('\n');
   const out = [];
   const re = /(?:fastify|instance|app)\s*\.\s*(get|post|put|delete|patch|all)\s*\(\s*['"`]([^'"`]+)['"`]/g;
+  // Also detect fastify.route({ method: ['GET','POST'], url: '...' })
+  const reRoute = /(?:fastify|instance|app)\s*\.\s*route\s*\(\s*\{[^}]*?method:\s*\[?[\s\S]*?url:\s*['"`]([^'"`]+)['"`]/g;
   for (let i = 0; i < lines.length; i++) {
     let m;
     const line = lines[i];
@@ -27,12 +29,17 @@ function scanFile(relPath) {
     while ((m = re2.exec(line)) !== null) {
       const method = m[1].toUpperCase();
       const path = m[2];
-      // filter out non-route strings like '/assets/' in allowList checks
       if (!path.startsWith('/')) continue;
-      // Skip vite/asset allowList false positives inside string literals that are not route registrations
-      // Heuristic: line must contain fastify.*( or instance.*( and path starts with /api or /docs or /health etc
-      // Keep all /api, /health, /docs, /auth, /billing, /stripe
       out.push({ method, path, file: relPath, line: i + 1 });
+    }
+    // Detect fastify.route({ method: [...], url: '...' })
+    const reRoute2 = new RegExp(reRoute.source, 'g');
+    let m2;
+    const block = lines.slice(i, Math.min(i + 8, lines.length)).join('\n');
+    while ((m2 = reRoute2.exec(block)) !== null) {
+      const path = m2[1];
+      if (!path.startsWith('/')) continue;
+      out.push({ method: 'MULTI', path, file: relPath, line: i + 1 });
     }
   }
   return out;
@@ -80,7 +87,7 @@ const filesToScan = [
   'server/app.js',
   'api/authRoutes.js',
   'api/stripeBilling.js',
-  'api/deribitMarketRoutes.js',
+  'server/routes/deribitMarket.js',
   'api/health.js',
   'api/ksaFeeds.js',
   'api/deskFeeds.js',

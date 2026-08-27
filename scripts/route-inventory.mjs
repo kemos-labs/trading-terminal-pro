@@ -77,6 +77,7 @@ function rateLimitClass(url) {
 
 const filesToScan = [
   'server.js',
+  'server/app.js',
   'api/authRoutes.js',
   'api/stripeBilling.js',
   'api/deribitMarketRoutes.js',

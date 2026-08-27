@@ -33,6 +33,22 @@ describe('CryptoShell V2', () => {
     expect(screen.getByText(/Source: Deribit/)).toBeInTheDocument();
   });
 
+  it('does not show static Observed/live badges (data-driven only)', () => {
+    render(<CryptoShell />);
+    // No static 'live' label in banner — freshness is data-driven per workflow
+    expect(screen.queryByText(/^live$/)).toBeNull();
+    // No static 'Observed' badge in shell footer — workflows render their own
+    expect(screen.queryByText(/^Observed$/)).toBeNull();
+  });
+
+  it('default production build renders all six workflows without flags', () => {
+    // No VITE_CRYPTO_V2 env, no flag mock — this is the real default build
+    render(<CryptoShell />);
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs).toHaveLength(6);
+    expect(WORKFLOWS.map(w => w.id)).toEqual(['overview','volatility','positioning','flow','carry','trade-risk']);
+  });
+
   it('URL state maps legacy page param to workflow', () => {
     window.history.pushState({}, '', '/?crypto=BTC&page=flow');
     render(<CryptoShell />);

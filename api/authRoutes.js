@@ -83,9 +83,9 @@ export async function registerStripeAuth(fastify) {
   fastify.post('/api/auth/reset-request', { config: { rateLimit: AUTH_RL } }, async (request, reply) => {
     const hasEmail = typeof request.body?.email === 'string';
     request.log.warn({ hasEmail }, 'password reset requested — public issuance disabled (no mailer); use the offline admin path');
-    // Always the same answer, whether or not the account exists.
+    // Always the same answer, whether or not the account exists. Truthful: no code is issued via this endpoint in this deployment.
     reply.header('set-cookie', COOKIE_CLEAR); // defensive: never chain a reset onto a session
-    return { ok: true, message: 'If that account exists, a reset code was issued to the operator console.' };
+    return { ok: true, message: 'If that account exists, an operator will handle the reset via the offline path. No code was issued by this endpoint (mailer not configured).' };
   });
 
   fastify.post('/api/auth/reset-confirm', { config: { rateLimit: AUTH_RL } }, async (request, reply) => {

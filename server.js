@@ -33,6 +33,7 @@ import { fetchKsaBoard, fetchKsaQuote, riyadhSessionSnapshot, sahmkBudgetStatus 
 import { registerDeribitMarketRoutes } from './api/deribitMarketRoutes.js';
 import { registerStripeBilling, gateInfoForRequest } from './api/stripeBilling.js';
 import { registerStripeAuth } from './api/authRoutes.js';
+import { resolveProxyTrust } from './api/proxyTrust.js';
 
 // Load root .env into process.env (no dotenv dependency; keys never shipped to browser).
 function loadEnvFile(filePath) {
@@ -129,13 +130,15 @@ function resolveMacrovolBase() {
 }
 const MACROVOL_API_URL = resolveMacrovolBase();
 
-// Behind Render/Railway the TCP peer is the edge proxy: without trustProxy,
-// request.ip collapses every visitor into ONE rate-limit bucket (11 bad
-// logins/min would lock out all authentication site-wide). Opt in explicitly
-// — trusting XFF on a directly-exposed dev box would let clients spoof it.
-// Set TRUST_PROXY=1 in production (single proxy hop).
-const TRUST_PROXY = ['1', 'true'].includes(String(process.env.TRUST_PROXY || '').toLowerCase());
-const fastify = Fastify({ logger: false, trustProxy: TRUST_PROXY });
+// Behind Render/Railway the TCP peer is the edge proxy. Forwarded-header trust
+// must be EXPLICIT — a boolean `trustProxy:true` lets any client spoof
+// request.ip via X-Forwarded-For and poison rate-limit/audit buckets.
+//   TRUST_PROXY_CIDRS=10.0.0.0/8,fd00::/8   exact ingress allowlist (preferred)
+//   TRUST_PROXY_HOPS=1                       trust exactly N edge hops
+//   nothing set → trust nobody (direct exposure / local dev)
+const proxyTrust = resolveProxyTrust();
+for (const w of proxyTrust.warnings) console.warn(`WARN: ${w}`);
+const fastify = Fastify({ logger: false, trustProxy: proxyTrust.trustProxy });
 
 await fastify.register(cors, {
   origin: (origin, cb) => {

@@ -71,18 +71,19 @@ export async function registerStripeAuth(fastify) {
     };
   });
 
-  // ── Password reset ────────────────────────────────────────────────────────
-  // No mailer is wired: the token is logged server-side and an operator hands
-  // it over (scripts/auth-reset.mjs is the direct admin path). The response is
-  // generic so the endpoint cannot be used to enumerate accounts.
+  // ── Password reset ─────────────────────────────────────────────────────────
+  // SECURITY (Phase 1): public self-service issuance is DISABLED until a real
+  // mail provider exists. Previously the minted token was logged here for
+  // "operator handoff", making any log reader a password-reset oracle — that
+  // logging is gone and no token is minted from a web request at all.
+  // Tokens for the confirm step are created only by the audited offline admin
+  // path (scripts/auth-reset.mjs on the deploy box). Consuming tokens still
+  // works via /api/auth/reset-confirm; responses stay generic so this endpoint
+  // cannot be used to enumerate accounts.
 
   fastify.post('/api/auth/reset-request', { config: { rateLimit: AUTH_RL } }, async (request, reply) => {
-    const { email } = request.body || {};
-    const token = createResetToken(email);
-    if (token) {
-      request.log.warn({ email }, 'password reset requested — token below (operator handoff, no mailer configured)');
-      request.log.warn({ token }, 'password reset token');
-    }
+    const hasEmail = typeof request.body?.email === 'string';
+    request.log.warn({ hasEmail }, 'password reset requested — public issuance disabled (no mailer); use the offline admin path');
     // Always the same answer, whether or not the account exists.
     reply.header('set-cookie', COOKIE_CLEAR); // defensive: never chain a reset onto a session
     return { ok: true, message: 'If that account exists, a reset code was issued to the operator console.' };

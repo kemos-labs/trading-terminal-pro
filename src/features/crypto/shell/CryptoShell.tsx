@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { cn } from '../../../lib/utils';
+const CryptoVolatilityView = lazy(() => import('../volatility/CryptoVolatilityView').then(m => ({ default: m.CryptoVolatilityView })));
+const CryptoPositioningView = lazy(() => import('../positioning/CryptoPositioningView').then(m => ({ default: m.CryptoPositioningView })));
+const CryptoFlowView = lazy(() => import('../flow/CryptoFlowView').then(m => ({ default: m.CryptoFlowView })));
+const CryptoCarryView = lazy(() => import('../carry/CryptoCarryView').then(m => ({ default: m.CryptoCarryView})));
+const CryptoOverviewView = lazy(() => import('../overview/CryptoOverviewView').then(m => ({ default: m.CryptoOverviewView})));
+const CryptoTradeView = lazy(() => import('../trade-risk/CryptoTradeView').then(m => ({ default: m.CryptoTradeView})));
 
 export type CryptoWorkflow = 'overview' | 'volatility' | 'positioning' | 'flow' | 'carry' | 'trade-risk';
 
@@ -95,13 +101,15 @@ export function CryptoShell() {
       >
         <h2 className="text-sm font-bold uppercase tracking-wider">{active.label}</h2>
         <p className="mt-1 font-mono text-xs text-muted-foreground">{active.question}</p>
-        <div className="mt-4 rounded border border-dashed border-border p-8 text-center font-mono text-xs text-muted-foreground">
-          {workflow === 'overview' && 'Overview skeleton — regime strip, spot/forward, ATM/DVOL, funding/basis, coverage (coming Phase 7)'}
-          {workflow === 'volatility' && 'Volatility workstation — term, skew, quote matrix (coming Phase 5)'}
-          {workflow === 'positioning' && 'Positioning — OI, GEX/DEX, heatmap (coming Phase 6)'}
-          {workflow === 'flow' && 'Flow — trades, taker side, premium matrix (coming Phase 6)'}
-          {workflow === 'carry' && 'Carry — funding & basis (coming Phase 7)'}
-          {workflow === 'trade-risk' && 'Trade & Risk — chain, strategy, P&L (coming Phase 7)'}
+        <div className="mt-4">
+          <Suspense fallback={<div className="p-4 font-mono text-xs animate-pulse">Loading {active.label}…</div>}>
+            {workflow === 'overview' && <CryptoOverviewView />}
+            {workflow === 'volatility' && <CryptoVolatilityView />}
+            {workflow === 'positioning' && <CryptoPositioningView />}
+            {workflow === 'flow' && <CryptoFlowView />}
+            {workflow === 'carry' && <CryptoCarryView />}
+            {workflow === 'trade-risk' && <CryptoTradeView />}
+          </Suspense>
         </div>
         <div className="mt-4 flex gap-2 text-xs">
           <span className="rounded bg-muted px-2 py-1">Observed</span>

@@ -31,15 +31,9 @@ export const helmetOptions = {
     preload: false,
   },
   referrerPolicy: { policy: 'no-referrer' },
-  // Permissions-Policy: disable sensitive APIs — [] maps to `camera=()`
-  permissionsPolicy: {
-    features: {
-      camera: [],
-      microphone: [],
-      geolocation: [],
-      payment: [],
-    },
-  },
+  // Permissions-Policy: helmet 8.x does not ship this middleware, so we set
+  // it manually via onSend hook below. Keep options here for forwards-compat
+  // when @fastify/helmet re-adds the middleware.
   // Match previous manual headers explicitly; helmet defaults cover most.
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: 'same-origin' },
@@ -47,4 +41,13 @@ export const helmetOptions = {
 
 export async function registerSecurityHeaders(fastify) {
   await fastify.register(helmet, { global: true, ...helmetOptions });
+  // Helmet 8.x has no Permissions-Policy middleware — set it explicitly to
+  // preserve the prior manual hardening (camera/microphone/geolocation off).
+  fastify.addHook('onSend', async (_request, reply, payload) => {
+    // Only set if not already present (allows tests to override per-route).
+    if (!reply.hasHeader('permissions-policy')) {
+      reply.header('permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    }
+    return payload;
+  });
 }

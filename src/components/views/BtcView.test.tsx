@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, waitFor } from '@testing-library/react';
 import React from 'react';
 import { BtcView } from './BtcView';
 import { useTerminalStore } from '../../store/terminalStore';
@@ -33,10 +33,21 @@ describe('BtcView (smoke)', () => {
     });
   });
 
-  it('renders the crypto desk from a synthetic store snapshot while feeds are down', async () => {
+  it('default production build renders all six crypto workflows', async () => {
+    // No VITE_CRYPTO_V2 env, no flag mock — this is the real default build.
+    window.history.pushState({}, '', '/?desk=crypto&view=overview&asset=BTC&venue=deribit');
     render(<BtcView />);
-    // Give mount effects (dual books fetch) a tick to settle.
-    await new Promise((r) => setTimeout(r, 50));
-    expect(document.body.textContent!.length).toBeGreaterThan(0);
+    // CryptoShell lazy-loads; wait for tabs to appear.
+    await waitFor(() => {
+      expect(document.querySelectorAll('[role="tab"]').length).toBe(6);
+    }, { timeout: 3000 });
+    const tabs = document.querySelectorAll('[role="tab"]');
+    const labels = Array.from(tabs).map(t => t.textContent);
+    expect(labels).toContain('Overview');
+    expect(labels).toContain('Volatility');
+    expect(labels).toContain('Positioning');
+    expect(labels).toContain('Flow');
+    expect(labels).toContain('Carry');
+    expect(labels).toContain('Trade & Risk');
   });
 });

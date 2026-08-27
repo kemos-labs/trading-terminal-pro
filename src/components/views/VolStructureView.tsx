@@ -15,8 +15,6 @@ import { GexLevelsStrip } from '../common/GexLevelsStrip';
 import { consumeDeskJumpOnMount } from '../../lib/market/deskJump';
 import { cn } from '../../lib/utils';
 
-const SurfaceView = lazy(() =>
-  import('./surface/SurfaceView').then((m) => ({ default: m.SurfaceView })),
 );
 const GreeksView = lazy(() =>
   import('./GreeksView').then((m) => ({ default: m.GreeksView })),
@@ -185,7 +183,7 @@ export function VolStructureView() {
             <div className="min-h-0 min-w-0 flex-[1.4] border-b border-border lg:border-b-0 lg:border-r">
               <SectionErrorBoundary name="Surface">
                 <Suspense fallback={<DeskLoading message={UI_COPY.load.surface} />}>
-                  <SurfaceView />
+                  <div className="p-4 font-mono text-xs">Surface 3D removed — use Volatility workflow 2D slices</div>
                 </Suspense>
               </SectionErrorBoundary>
             </div>
@@ -206,7 +204,7 @@ export function VolStructureView() {
             {focusSub === 'surface' && (
               <SectionErrorBoundary name="Surface">
                 <Suspense fallback={<DeskLoading message={UI_COPY.load.surface} />}>
-                  <SurfaceView />
+                  <div className="p-4 font-mono text-xs">Surface 3D removed — use Volatility workflow 2D slices</div>
                 </Suspense>
               </SectionErrorBoundary>
             )}

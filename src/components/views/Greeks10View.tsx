@@ -42,7 +42,7 @@ import { DealerGreekProfiles } from './DealerGreekProfiles';
 import { ChartZoom, useChartZoom } from '../common/ChartZoom';
 import { SessionGexHeatmap } from './SessionGexHeatmap';
 
-const Plot = lazy(() => import('react-plotly.js'));
+const Plot = lazy(() => Promise.resolve({ default: () => null as any })); // Plotly removed — V2 uses Canvas
 const GreeksSurface3D = lazy(() =>
   import('./GreeksSurface3D').then((m) => ({ default: m.GreeksSurface3D })),
 );

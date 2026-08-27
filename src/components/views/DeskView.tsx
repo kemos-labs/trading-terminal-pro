@@ -1,5 +1,5 @@
 /**
- * MM Desk — full Thalex-inspired toolkit (12 tools):
+ * MM Desk — toolkit (12 tools):
  * Simulator · Combo PnL · Straddle · Combo Greeks · Greeks · Option PnL ·
  * Break-even · Roll PnL · Basis · Subjective · Δ Follower · Hedging · Grid
  *
@@ -45,61 +45,6 @@ type ToolId =
   | 'sim' | 'combopnl' | 'straddle' | 'combo' | 'analyze' | 'optionpnl'
   | 'breakeven' | 'roll' | 'basis' | 'subjective' | 'dfollow' | 'hedge' | 'grid'
   | 'backtest';
-
-/** ToolId → Thalex deploy path (crypto chrome embeds real lab, not thin replicas). */
-const TOOL_TO_THALEX_SLUG: Record<ToolId, string> = {
-  sim: 'simulator',
-  combopnl: 'combo-pnl',
-  straddle: 'straddle',
-  combo: 'combo-greeks',
-  analyze: 'greeks',
-  optionpnl: 'option-pnl',
-  breakeven: 'break-even',
-  roll: 'roll-pnl',
-  basis: 'futures-basis',
-  subjective: 'subjective',
-  backtest: 'backtest',
-  dfollow: 'dfollow',
-  hedge: 'hedging',
-  grid: 'grid',
-};
-
-function ThalexLabEmbed({ tool }: { tool: ToolId }) {
-  const slug = TOOL_TO_THALEX_SLUG[tool];
-  const url = `https://thalextech.github.io/${slug}/`;
-  return (
-    <div className="flex h-full min-h-0 flex-col gap-1">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 rounded border border-border bg-card px-2 py-1 font-mono text-type-2xs text-muted-foreground">
-        <span className="font-bold uppercase tracking-wider text-foreground">Thalex lab</span>
-        <span className="hidden sm:inline">· live app from thalextech.github.io (not a VOLATERM replica)</span>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="ml-auto text-sky-400 hover:underline"
-        >
-          Open full screen ↗
-        </a>
-        <a
-          href="https://github.com/thalextech/thalextech.github.io"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-muted-foreground hover:text-foreground hover:underline"
-        >
-          source
-        </a>
-      </div>
-      <iframe
-        key={url}
-        title={`Thalex ${slug}`}
-        src={url}
-        className="min-h-0 w-full flex-1 rounded border border-border bg-background"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-        referrerPolicy="no-referrer-when-downgrade"
-      />
-    </div>
-  );
-}
 
 /** desk-ws-* section id → tool (red bar / function codes). */
 const SECTION_TO_TOOL: Record<string, ToolId> = {
@@ -155,7 +100,7 @@ const TOOLS: { id: ToolId; label: string; blurb: string; mode: string }[] = [
   { id: 'dfollow', label: 'Δ Follower', blurb: 'Track option delta with hedge', mode: 'trade-sub-risk' },
   { id: 'basis', label: 'Basis', blurb: 'Forward basis + ann. carry', mode: 'trade-sub-risk' },
   { id: 'roll', label: 'Roll PnL', blurb: 'Funding/basis carry heatmap', mode: 'trade-sub-risk' },
-  { id: 'analyze', label: 'Greeks', blurb: 'Greeks surfaces · GEX · OI (Thalex-class)', mode: 'trade-sub-structure' },
+  { id: 'analyze', label: 'Greeks', blurb: 'Greeks surfaces · GEX · OI', mode: 'trade-sub-structure' },
 ];
 
 const MODE_DEFAULT_TOOL: Record<string, ToolId> = {
@@ -193,8 +138,7 @@ function apiBadge(
 export function DeskView({
   chrome = 'trade',
 }: {
-  /** trade = equity blotter chrome; thalex = crypto lab (Thalex-class) chrome */
-  chrome?: 'trade' | 'thalex';
+  chrome?: 'trade';
 }) {
   const snapshot = useTerminalStore(s => s.snapshot);
   const source = useTerminalStore(s => s.source);
@@ -206,7 +150,7 @@ export function DeskView({
   const deskSectionId = useTerminalStore(s => s.deskSectionId);
   const setDeskContext = useTerminalStore(s => s.setDeskContext);
   // Lab-first default; red bar modes + function codes override via deskSectionId
-  const [tool, setTool] = useState<ToolId>(chrome === 'thalex' ? 'sim' : 'combo');
+  const [tool, setTool] = useState<ToolId>('combo');
 
   useEffect(() => consumeDeskJumpOnMount(), []);
 
@@ -223,8 +167,8 @@ export function DeskView({
         label: meta?.label ?? legacyTool,
         apis:
           legacyTool === 'analyze'
-            ? chrome === 'thalex' ? ['Deribit', 'MacroVol'] : ['MacroVol', 'yfinance']
-            : chrome === 'thalex' ? ['Deribit'] : ['yfinance', 'FMP', 'Deribit'],
+            ? ['MacroVol', 'yfinance']
+            : ['yfinance', 'FMP', 'Deribit'],
       });
       return;
     }
@@ -246,7 +190,7 @@ export function DeskView({
       setDeskContext({
         id: mode,
         label: modeLabel,
-        apis: chrome === 'thalex' ? ['Deribit'] : ['yfinance', 'FMP', 'Deribit'],
+        apis: ['yfinance', 'FMP', 'Deribit'],
       });
     }
   }, [deskSectionId, setDeskContext, chrome]);
@@ -271,20 +215,8 @@ export function DeskView({
   const topBuckets = inv.slice(0, 5);
 
   const badge = snapshot ? apiBadge(source, chainUsed, symbol) : null;
-  const deskLabel = chrome === 'thalex' ? 'THALEX LAB' : 'TRADE';
-  const deskApis = chrome === 'thalex' ? ['Thalex'] : ['yfinance', 'FMP', 'Deribit'];
-
-  // Crypto chrome: embed the real Thalex second-screen apps (full depth).
-  // Trade chrome: VOLATERM-native BS tools on our surface/snapshot.
-  if (chrome === 'thalex') {
-    return (
-      <div className="flex h-full min-h-0 flex-col gap-1 overflow-hidden">
-        <SectionErrorBoundary key={tool} name={`${deskLabel} ${tool}`}>
-          <ThalexLabEmbed tool={tool} />
-        </SectionErrorBoundary>
-      </div>
-    );
-  }
+  const deskLabel = 'TRADE';
+  const deskApis = ['yfinance', 'FMP', 'Deribit'];
 
   if (!snapshot && tool !== 'analyze') {
     return (

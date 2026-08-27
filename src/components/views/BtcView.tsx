@@ -1,20 +1,10 @@
-import { CRYPTO_V2 } from '../../config/featureFlags';
 import { CryptoShell } from '../../features/crypto/shell/CryptoShell';
 import { useTerminalStore } from '../../store/terminalStore';
 import { useEffect } from 'react';
 
-/**
- * Crypto Desk — V2 six-workflow shell when CRYPTO_V2 on, legacy placeholder when off.
- * Legacy 15-route implementation has been removed per Phase 9; this file now delegates to V2.
- */
+/** Crypto Desk — six-workflow V2 product (no flag). */
 function BtcViewContent() {
-  if (CRYPTO_V2) return <CryptoShell />;
-  // Legacy fallback — should not be reached in production after Phase 9 flag removal
-  return (
-    <div className="p-8 font-mono text-xs text-muted-foreground">
-      Legacy crypto desk removed — enable VITE_CRYPTO_V2=1 for V2 workflows.
-    </div>
-  );
+  return <CryptoShell />;
 }
 
 export function BtcView() {

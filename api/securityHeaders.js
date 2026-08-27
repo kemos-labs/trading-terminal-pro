@@ -15,10 +15,8 @@ export const helmetOptions = {
       // Vite injects <style> tags and index.html has inline <style> shell
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://thalextech.github.io'],
+      imgSrc: ["'self'", 'data:', 'blob:'],
       connectSrc: ["'self'"],
-      frameSrc: ["'self'", 'https://thalextech.github.io'],
-      childSrc: ["'self'", 'https://thalextech.github.io'],
       frameAncestors: ["'self'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],

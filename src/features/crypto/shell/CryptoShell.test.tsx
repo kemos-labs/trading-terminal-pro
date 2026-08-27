@@ -1,15 +1,10 @@
 import React from 'react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-// Mock feature flag to force V2 on
-vi.mock('../../../config/featureFlags', async () => {
-  const actual = await vi.importActual('../../../config/featureFlags') as any;
-  return { ...actual, CRYPTO_V2: true };
-});
-
+// No feature-flag mock: test the default production build (V2 is the product).
 import { CryptoShell, WORKFLOWS } from './CryptoShell';
-import { CRYPTO_V2_SECTIONS } from '../../../config/deskSections';
+import { CRYPTO_SECTIONS } from '../../../config/deskSections';
 
 describe('CryptoShell V2', () => {
   beforeEach(() => {
@@ -19,7 +14,7 @@ describe('CryptoShell V2', () => {
 
   it('exposes exactly six workflows', () => {
     expect(WORKFLOWS).toHaveLength(6);
-    expect(CRYPTO_V2_SECTIONS).toHaveLength(6);
+    expect(CRYPTO_SECTIONS).toHaveLength(6);
     expect(WORKFLOWS.map(w => w.id)).toEqual(['overview','volatility','positioning','flow','carry','trade-risk']);
   });
 

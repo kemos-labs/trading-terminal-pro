@@ -21,6 +21,7 @@ export default defineConfig({
     'process.env.NODE_ENV': JSON.stringify(TEST_NODE_ENV),
   },
   test: {
+    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**', 'playwright-report/**', 'test-results/**', '.opencode/**'],
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
@@ -40,6 +41,9 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       exclude: [
         'node_modules/',
+        'e2e/**',
+        'playwright-report/**',
+        'test-results/**',
         'src/test/',
         '**/*.d.ts',
         '**/*.config.*',

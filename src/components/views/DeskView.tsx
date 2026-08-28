@@ -23,86 +23,55 @@ import { inventoryByExpiry, portfolioGreeks } from '../../lib/options/analytics'
 import { DeskLoading } from '../common/Skeleton';
 import { consumeDeskJumpOnMount } from '../../lib/market/deskJump';
 import { resolveTradeModeSection } from '../../config/deskSections';
-const SimTool = lazy(() => import('../desk/tools/SimTool').then(m => ({ default: m.SimTool })));
-const ComboGreeksTool = lazy(() => import('../desk/tools/ComboGreeksTool').then(m => ({ default: m.ComboGreeksTool })));
-const GridTool = lazy(() => import('../desk/tools/GridTool').then(m => ({ default: m.GridTool })));
-const BreakEvenTool = lazy(() => import('../desk/tools/BreakEvenTool').then(m => ({ default: m.BreakEvenTool })));
-const SubjectiveTool = lazy(() => import('../desk/tools/SubjectiveTool').then(m => ({ default: m.SubjectiveTool })));
-const ComboPnlTool = lazy(() => import('../desk/tools/ComboPnlTool').then(m => ({ default: m.ComboPnlTool })));
-const OptionPnlTool = lazy(() => import('../desk/tools/OptionPnlTool').then(m => ({ default: m.OptionPnlTool })));
-const StraddleTool = lazy(() => import('../desk/tools/StraddleTool').then(m => ({ default: m.StraddleTool })));
-const HedgeTool = lazy(() => import('../desk/tools/HedgeTool').then(m => ({ default: m.HedgeTool })));
-const DFollowTool = lazy(() => import('../desk/tools/DFollowTool').then(m => ({ default: m.DFollowTool })));
-const BacktestTool = lazy(() => import('../desk/tools/BacktestTool').then(m => ({ default: m.BacktestTool })));
-const BasisTool = lazy(() => import('../desk/tools/BasisTool').then(m => ({ default: m.BasisTool })));
-const RollTool = lazy(() => import('../desk/tools/RollTool').then(m => ({ default: m.RollTool })));
+const StructureWorkflow = lazy(() => import('../desk/workflows/StructureWorkflow').then(m => ({ default: m.StructureWorkflow })));
+const PnlWorkflow = lazy(() => import('../desk/workflows/PnlWorkflow').then(m => ({ default: m.PnlWorkflow })));
+const HedgeWorkflow = lazy(() => import('../desk/workflows/HedgeWorkflow').then(m => ({ default: m.HedgeWorkflow })));
 
 
-type ToolId =
-  | 'sim' | 'combopnl' | 'straddle' | 'combo' | 'analyze' | 'optionpnl'
-  | 'breakeven' | 'roll' | 'basis' | 'subjective' | 'dfollow' | 'hedge' | 'grid'
-  | 'backtest';
+type ToolId = 'structure' | 'pnl' | 'risk';
 
-/** desk-ws-* section id → tool (red bar / function codes). */
+/** Every legacy desk-ws-* / greeks-* id maps directly to one of the 3 canonical workflows. */
 const SECTION_TO_TOOL: Record<string, ToolId> = {
-  'desk-ws-sim': 'sim',
-  'desk-ws-combo': 'combo',
-  'desk-ws-grid': 'grid',
-  'desk-ws-combopnl': 'combopnl',
-  'desk-ws-optionpnl': 'optionpnl',
-  'desk-ws-straddle': 'straddle',
-  'desk-ws-breakeven': 'breakeven',
-  'desk-ws-subjective': 'subjective',
-  'desk-ws-hedge': 'hedge',
-  'desk-ws-dfollow': 'dfollow',
-  'desk-ws-basis': 'basis',
-  'desk-ws-roll': 'roll',
-  'desk-ws-analyze': 'analyze',
-  'desk-ws-backtest': 'backtest',
-  // legacy greeks deep-links
-  'greeks-desk': 'analyze',
-  'greeks-sub-surface3d': 'analyze',
-  'greeks-mesh': 'analyze',
+  'desk-ws-sim': 'structure',
+  'desk-ws-combo': 'structure',
+  'desk-ws-grid': 'structure',
+  'desk-ws-analyze': 'structure',
+  'greeks-desk': 'structure',
+  'greeks-sub-surface3d': 'structure',
+  'greeks-mesh': 'structure',
+  'desk-ws-combopnl': 'pnl',
+  'desk-ws-optionpnl': 'pnl',
+  'desk-ws-straddle': 'pnl',
+  'desk-ws-breakeven': 'pnl',
+  'desk-ws-subjective': 'pnl',
+  'desk-ws-backtest': 'pnl',
+  'desk-ws-hedge': 'risk',
+  'desk-ws-dfollow': 'risk',
+  'desk-ws-basis': 'risk',
+  'desk-ws-roll': 'risk',
 };
 
 const TOOL_TO_SECTION: Record<ToolId, string> = {
-  sim: 'desk-ws-sim',
-  combo: 'desk-ws-combo',
-  grid: 'desk-ws-grid',
-  combopnl: 'desk-ws-combopnl',
-  optionpnl: 'desk-ws-optionpnl',
-  straddle: 'desk-ws-straddle',
-  breakeven: 'desk-ws-breakeven',
-  subjective: 'desk-ws-subjective',
-  hedge: 'desk-ws-hedge',
-  dfollow: 'desk-ws-dfollow',
-  basis: 'desk-ws-basis',
-  roll: 'desk-ws-roll',
-  analyze: 'desk-ws-analyze',
-  backtest: 'desk-ws-backtest',
+  structure: 'trade-sub-structure',
+  pnl: 'trade-sub-pnl',
+  risk: 'trade-sub-risk',
 };
 
-/** Quant workflow: consolidated 3-mode structure (P0 Fix: 14 mini-apps → 3 coherent workflows). Legacy 14 TOOLS collapsed: Structure = combo+grid+sim, PnL/Scenario = optionpnl+combopnl+straddle+breakeven+subjective+backtest(Scenario Monte Carlo), Hedge/Risk = hedge+dfollow+basis+roll. Greeks (analyze) removed — lives on Vol desk. */
+/** 3 canonical Trade workflows — sole presentation shells. Engines live in src/lib/options. */
 const TOOLS: { id: ToolId; label: string; blurb: string; mode: string }[] = [
-  { id: 'combo', label: 'Structure', blurb: 'Legs · Greeks · leverage · sim (one engine)', mode: 'trade-sub-structure' },
-  { id: 'optionpnl', label: 'PnL / Scenario', blurb: 'Historical PnL (observed history) + Scenario Monte Carlo', mode: 'trade-sub-pnl' },
-  { id: 'hedge', label: 'Hedge / Risk', blurb: 'Δ-hedge · basis · roll · Δ follower (shared risk engine)', mode: 'trade-sub-risk' },
+  { id: 'structure', label: 'Structure', blurb: 'Legs · Greeks · leverage · sim (one engine)', mode: 'trade-sub-structure' },
+  { id: 'pnl', label: 'PnL / Scenario', blurb: 'Historical PnL (observed history) + Scenario Monte Carlo', mode: 'trade-sub-pnl' },
+  { id: 'risk', label: 'Hedge / Risk', blurb: 'Δ-hedge · basis · roll · Δ follower (shared risk engine)', mode: 'trade-sub-risk' },
 ];
-// Legacy id mapping for deep-links — old 14 map into 3 consolidated workflows
-const LEGACY_TO_CONSOLIDATED: Record<string, ToolId> = {
-  sim: 'combo', grid: 'combo', combo: 'combo', analyze: 'combo',
-  combopnl: 'optionpnl', straddle: 'optionpnl', breakeven: 'optionpnl', subjective: 'optionpnl', backtest: 'optionpnl',
-  dfollow: 'hedge', basis: 'hedge', roll: 'hedge',
-};
 
 const MODE_DEFAULT_TOOL: Record<string, ToolId> = {
-  'trade-sub-structure': 'combo',
-  'trade-sub-pnl': 'optionpnl',
-  'trade-sub-risk': 'hedge',
+  'trade-sub-structure': 'structure',
+  'trade-sub-pnl': 'pnl',
+  'trade-sub-risk': 'risk',
 };
 
 function toolsForMode(mode: string) {
-  return TOOLS.filter((t) => t.mode === mode && t.id !== 'analyze');
+  return TOOLS.filter((t) => t.mode === mode);
 }
 
 function apiBadge(
@@ -141,49 +110,36 @@ export function DeskView({
   const symbol = useTerminalStore(s => s.symbol);
   const deskSectionId = useTerminalStore(s => s.deskSectionId);
   const setDeskContext = useTerminalStore(s => s.setDeskContext);
-  // Lab-first default; red bar modes + function codes override via deskSectionId
-  const [tool, setTool] = useState<ToolId>('combo');
+  const [tool, setTool] = useState<ToolId>('structure');
 
   useEffect(() => consumeDeskJumpOnMount(), []);
 
-  // Red bar (trade-sub-*) or legacy desk-ws-* function codes → tool workspace (consolidated)
+  // Canonical 3-workflow default; red-bar modes + legacy desk-ws-* redirects override via deskSectionId
   useEffect(() => {
     if (!deskSectionId) return;
-
-    const legacyToolRaw = SECTION_TO_TOOL[deskSectionId] as ToolId | undefined;
-    const legacyTool = legacyToolRaw ? (LEGACY_TO_CONSOLIDATED[legacyToolRaw] ?? legacyToolRaw) : undefined;
-    if (legacyTool) {
-      setTool(legacyTool as ToolId);
-      const meta = TOOLS.find((t) => t.id === legacyTool);
+    const mapped = SECTION_TO_TOOL[deskSectionId];
+    if (mapped) {
+      setTool(mapped);
+      const meta = TOOLS.find((t) => t.id === mapped);
       setDeskContext({
-        id: TOOL_TO_SECTION[legacyToolRaw!],
-        label: meta?.label ?? legacyTool,
+        id: deskSectionId,
+        label: meta?.label ?? mapped,
         apis: ['yfinance', 'FMP', 'Deribit'],
       });
       return;
     }
-
     const mode = resolveTradeModeSection(deskSectionId);
     if (
       deskSectionId === 'trade-sub-structure'
       || deskSectionId === 'trade-sub-pnl'
       || deskSectionId === 'trade-sub-risk'
     ) {
-      setTool((prev) => {
-        const inMode = toolsForMode(mode).some((t) => t.id === prev);
-        return inMode ? prev : (MODE_DEFAULT_TOOL[mode] ?? 'combo');
-      });
-      const modeLabel =
-        mode === 'trade-sub-pnl' ? 'PnL'
-          : mode === 'trade-sub-risk' ? 'Hedge'
-            : 'Structure';
-      setDeskContext({
-        id: mode,
-        label: modeLabel,
-        apis: ['yfinance', 'FMP', 'Deribit'],
-      });
+      const next = MODE_DEFAULT_TOOL[mode] ?? 'structure';
+      setTool((prev) => (toolsForMode(mode).some((t) => t.id === prev) ? prev : next));
+      const modeLabel = mode === 'trade-sub-pnl' ? 'PnL' : mode === 'trade-sub-risk' ? 'Hedge' : 'Structure';
+      setDeskContext({ id: mode, label: modeLabel, apis: ['yfinance', 'FMP', 'Deribit'] });
     }
-  }, [deskSectionId, setDeskContext, chrome]);
+  }, [deskSectionId, setDeskContext]);
 
   const activeMode = useMemo(() => {
     const fromTool = TOOLS.find((t) => t.id === tool)?.mode;
@@ -208,7 +164,7 @@ export function DeskView({
   const deskLabel = 'TRADE';
   const deskApis = ['yfinance', 'FMP', 'Deribit'];
 
-  if (!snapshot && tool !== 'analyze') {
+  if (!snapshot) {
     return (
       <Panel title={deskLabel} apis={deskApis} className="h-full">
         <EmptyState
@@ -301,25 +257,9 @@ export function DeskView({
       <div className="flex-1 min-h-0 overflow-y-auto">
         <SectionErrorBoundary key={tool} name={`${deskLabel} ${tool}`}>
           <Suspense fallback={<DeskLoading message="Loading workflow…" />}>
-            {tool === 'combo' && snapshot && (
-              <div className="flex flex-col gap-2 p-1">
-                <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">Structure — Combo Greeks (engine: src/lib/math + shared greeksPnl)</h3><p className="text-type-2xs text-muted-foreground">Single engine: computeGreeks (canonical) + portfolio reprice. Controls: legs, strikes, expiry, vol. One workflow, not 3 mini-apps.</p><ComboGreeksTool /></div>
-                <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">Leverage Grid — Ω · Δ · 1/N(d2)</h3><GridTool /></div>
-                <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">Simulator — Scenario GBM (not Historical)</h3><p className="text-type-2xs text-amber-700">Scenario Monte Carlo — user σ, drift, seed. Not a historical backtest.</p><SimTool /></div>
-              </div>
-            )}
-          {tool === 'optionpnl' && snapshot && (
-            <div className="flex flex-col gap-2 p-1">
-              <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">PnL / Scenario — Option & Combo (shared historyToSpotBars vs synthetic scenario)</h3><p className="text-type-2xs text-muted-foreground">Observed history (FMP/yfinance) labelled Historical; synthetic GBM labelled Scenario — never mix. Vega 0 = sticky IV note.</p><OptionPnlTool /><div className="mt-2"><ComboPnlTool /></div><div className="mt-2"><StraddleTool /></div><div className="mt-2"><BreakEvenTool /></div><div className="mt-2"><SubjectiveTool /></div></div>
-              <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2"><h3 className="font-mono text-type-xs font-semibold text-amber-900">Scenario Monte Carlo — NOT Historical Backtest</h3><p className="text-type-2xs text-muted-foreground">GBM 120 paths, seed 42 · drift 0 · user σ. For historical Binance backtest, use Python crypto-backtest-api (Binance klines).</p><BacktestTool /></div>
-              </div>
-            )}
-            {tool === 'hedge' && snapshot && (
-              <div className="flex flex-col gap-2 p-1">
-                <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">Hedge / Risk — Δ-hedge engine (threshold · tolerance · period)</h3><HedgeTool /><div className="mt-2"><DFollowTool /></div></div>
-                <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">Basis & Roll — forward basis, ann. carry, funding</h3><BasisTool /><div className="mt-2"><RollTool /></div></div>
-              </div>
-            )}
+            {tool === 'structure' && <StructureWorkflow />}
+            {tool === 'pnl' && <PnlWorkflow />}
+            {tool === 'risk' && <HedgeWorkflow />}
           </Suspense>
         </SectionErrorBoundary>
       </div>

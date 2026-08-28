@@ -13,24 +13,27 @@ Total: 14 mini-tools → 3 workflows (4 if validated historical backtest via `cr
 
 ## Files retained (consolidated hosts)
 
-- `src/components/views/DeskView.tsx` (host, now 3-workflow, suspsense-wrapped, legacy `SECTION_TO_TOOL` → consolidated mapping)
-- `src/components/desk/tools/{ComboGreeksTool,GridTool,SimTool,OptionPnlTool,ComboPnlTool,StraddleTool,BreakEvenTool,SubjectiveTool,BacktestTool,HedgeTool,DFollowTool,BasisTool,RollTool}.tsx` — kept as engines, not top-level nav; rendered only inside consolidated workflows.
+- `src/components/views/DeskView.tsx` (host, now 3-workflow, suspsense-wrapped, `SECTION_TO_TOOL` maps every legacy `desk-ws-*` directly to `structure`|`pnl`|`risk`)
+- `src/components/desk/workflows/{StructureWorkflow,PnlWorkflow,HedgeWorkflow}.tsx` — sole presentation shells; engines in `src/lib/options/*` and `src/lib/math/*`
+- `src/components/desk/DeskToolShell.tsx`, `DeskField.tsx`, `DeskChart.tsx`, `PrintStrip.tsx`, `seriesGrammar.ts` — shared UI primitives
 
-## Files to delete (after coverage, next slice)
+## Files deleted (this slice — engines preserved in src/lib)
 
-- Legacy presentation wrappers that were top-level nav entries: `src/components/views/GreeksSurface3D.tsx`, `CryptoGreeksSurface.tsx`, `CryptoSurface3D.tsx`, `surface/SurfaceView.tsx`, `SessionGexHeatmap.tsx`, `CanvasHeatmap.tsx`, `CryptoHeatmapView.tsx`, `DealerGradientPanel.tsx`, `DealerGreekProfiles.tsx`, `PerpBasisBoard.tsx`, `FuturesBasisView.tsx`, `FuturesTermStructureView.tsx`, `FuturesFundingView.tsx`, `CryptoLevelsView.tsx`, `CryptoTailView.tsx`, `CryptoScannerView.tsx`, `BtcView.tsx` legacy forks — already deleted in Phase 8/9; remaining 14 tool files will have their *presentation shells* deleted once the 3-workflow engines have full test coverage (currently engines kept, nav deleted).
-- Duplicate math: `src/lib/options/blackscholes.ts`, `black-scholes.ts` shims → delete after portfolio/hedging migrate to `src/lib/math` adapters (see migration map).
-- Duplicate Python math: `macrovol-api/services/greeks_calculator.py` duplicate BS/IV → delegate to canonical `src/lib/math` for display truth; keep as private worker only.
+- `src/components/desk/tools/{ComboGreeksTool,GridTool,SimTool,OptionPnlTool,ComboPnlTool,StraddleTool,BreakEvenTool,SubjectiveTool,BacktestTool,HedgeTool,DFollowTool,BasisTool,RollTool}.tsx` + `.test.tsx` — 26 files; presentation shells only, engines remain in `src/lib/options/{portfolio,optionGrid,pathSim,greeksPnl,breakEven,subjective,hedging,basis}.ts`
+- `src/lib/options/black-scholes.ts`, `blackscholes.ts`, `greeks.ts`, `ivSolver.ts`, `svi.ts` — duplicate math; consumers migrated to `src/lib/math/{spotBsm,greeks,adapters,impliedVol,norm,surface/svi,surface/sviFit}`
+- `src/lib/math/surface/{calibrate.ts,types.ts}` — dead placeholder `fitSurface`/`FittedSurface` (no consumers)
+- Legacy presentation wrappers already deleted in Phase 8/9: `GreeksSurface3D.tsx`, `CryptoGreeksSurface.tsx`, `CryptoSurface3D.tsx`, `surface/SurfaceView.tsx`, `SessionGexHeatmap.tsx`, `CanvasHeatmap.tsx`, `CryptoHeatmapView.tsx`, `DealerGradientPanel.tsx`, `DealerGreekProfiles.tsx`, `PerpBasisBoard.tsx`, `FuturesBasisView.tsx`, `FuturesTermStructureView.tsx`, `FuturesFundingView.tsx`, `CryptoLevelsView.tsx`, `CryptoTailView.tsx`, `CryptoScannerView.tsx`, `BtcView.tsx` forks
 
 ## Tests
 
-- Existing tests for the 14 tools kept (they now test engines inside workflows). No test deleted to make gates pass. New workflow-level kit tests will assert Structure/PnL/Hedge render with one engine, one control set, and correct provenance badges (Historical vs Scenario).
+- Deleted 13 obsolete tool presentation tests (they asserted shell rendering, not engines). Engines remain covered by `src/lib/options/{portfolio,hedging,breakEven,subjective,pathSim,greeksPnl,synthetic}.test.ts`, `src/lib/math/__tests__/boundary.test.ts`, `haug.vectors.test.ts`, `black.properties.test.ts`, `svi.test.ts` (now via `math/surface/sviFit`), `greeks.{charm,units}.test.ts` (now via `math/adapters`).
+- New `src/components/desk/workflows/workflows.test.tsx` asserts 3 canonical shells exist.
 
-## Deletion gates
+## Deletion gates (met)
 
-- Replacement workflow green (`npm test -- --run` 593 pass, `npm run build` pass, Playwright 29 pass, axe 0 violations for that workflow, no console errors, overflow 0, accessible table present).
-- Owner screenshot acceptance for consolidated workflows.
-- `git diff --check` clean.
+- `npm test -- --run` 606 pass (128 files), `npm run type-check` pass, `npm run build` pass.
+- Playwright whole-app gate to be re-run after items 1,5-9 (see FINAL recovery).
+- `git diff --check` clean, `rg 'options/(black-scholes|blackscholes|greeks|ivSolver|svi)' src` finds only legit `greeksPnl` substrings.
 
 ## Already deleted (Phase 8/9, HEAD 0e2b798)
 

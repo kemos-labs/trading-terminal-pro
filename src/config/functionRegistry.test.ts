@@ -28,10 +28,11 @@ describe('functionRegistry', () => {
     vi.clearAllMocks();
   });
 
-  it('HOME and LPAD resolve to the home launchpad desk (not Vol)', () => {
+  it('HOME and LPAD resolve to the home launchpad desk (not Vol)', async () => {
     expect(resolveFunctionId('HOME')?.functionId).toBe('home');
     expect(resolveFunctionId('LPAD')?.functionId).toBe('home');
     expect(resolveFunctionId('home')?.functionId).toBe('home');
+    const { useTerminalStore } = await import('../store/terminalStore');
     openFunction('HOME');
     expect(useTerminalStore.getState().setActiveTab).toHaveBeenCalledWith('home');
     openFunction('LPAD');

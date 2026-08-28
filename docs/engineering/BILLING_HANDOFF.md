@@ -91,9 +91,9 @@ Key implementation facts (do not regress):
   2026-08):** sessions persist to `.data/sessions.json` and survive restarts. Tokens stay
   server-side (revocable); a password reset revokes all of the account's sessions.
 - ~~No email verification / password reset yet.~~ **Password reset added** — but this
-  deployment has NO email delivery, so `POST /api/auth/reset-request` issues a single-use
-  1h token that is logged in the **server console** for operator handoff; the response is
-  generic (no account enumeration). Direct admin path: `node scripts/auth-reset.mjs <email>
+  deployment has NO email delivery, so `POST /api/auth/reset-request` returns a generic
+  response and does **not** issue or log a token. Operators use the offline admin path:
+  `node scripts/auth-reset.mjs <email>
   [newPassword]` (run while the server is stopped). Email verification still not built.
 - Entitlement↔account linking is by billing email only (documented in the dialog UI).
 - `.data/*` persistence needs a real volume in production deploys.
@@ -126,14 +126,14 @@ Next agent tasks once keys exist:
 - [ ] Verify paywall unlock round-trip in browser (subscribe → return → gate flips).
 - [ ] Go-live per `docs/engineering/BILLING.md` checklist (live RAK, prod webhook endpoint,
       AUTH_SECRET, persisted volume, optional Stripe Tax after registrations).
-- [ ] Remaining hardening: email delivery for password reset (currently operator-handoff
-      tokens / `scripts/auth-reset.mjs`), email verification, entitlement-change alerting.
+- [ ] Remaining hardening: email delivery for password reset (the public request endpoint
+      remains non-token-issuing), email verification, entitlement-change alerting.
 
 ## Hardening completed (2026-08 session)
 
 - Session persistence: `.data/sessions.json`, expired entries pruned on load/save.
-- Password reset: `POST /api/auth/reset-request` + `/api/auth/reset-confirm`; single-use
-  1h tokens in `.data/reset-tokens.json`; all account sessions revoked on reset; client
+- Password reset: `POST /api/auth/reset-request` is generic and non-token-issuing; offline
+  `scripts/auth-reset.mjs` creates single-use 1h tokens in `.data/reset-tokens.json`; all account sessions revoked on reset; client
   flow lives in `BillingDialog.tsx` ("forgot password?").
 - Rate limiting: register/login/reset routes capped at 10/min/IP via per-route
   `config.rateLimit`; global limiter's error builder fixed to throw a proper 429 Error.

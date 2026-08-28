@@ -31,7 +31,7 @@ const ALLOWED_MACROVOL = [
   { method: ['GET'], re: new RegExp('^/api/rates/global-yields/?$') },
   { method: ['GET'], re: new RegExp('^/api/rates/global-yields/[^/]+/?$') },
   { method: ['GET'], re: new RegExp('^/api/crypto/spot/?$') },
-  { method: ['GET'], re: new RegExp('^/api/perp/basis/?$') },
+  { method: ['GET'], re: new RegExp('^/api/crypto/perp-basis/?$') },
   { method: ['GET'], re: new RegExp('^/api/sec/context/[^/]+/?(\\?.*)?$') },
   { method: ['GET'], re: new RegExp('^/api/macro/summary/?$') },
   { method: ['GET'], re: new RegExp('^/api/macro/series/[^/]+/?(\\?.*)?$') },
@@ -42,10 +42,10 @@ const ALLOWED_MACROVOL = [
   { method: ['GET'], re: new RegExp('^/api/surface/[^/]+/?(\\?.*)?$') },
   { method: ['GET'], re: new RegExp('^/api/surface/[^/]+/preview/?(\\?.*)?$') },
   { method: ['GET'], re: new RegExp('^/api/greeks/[^/]+/?(\\?.*)?$') },
-  { method: ['GET'], re: new RegExp('^/api/greeks/history/[^/]+/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/greeks/[^/]+/history/?(\\?.*)?$') },
 ];
 
-function isMacroAllowed(suffix, method) {
+export function isMacroAllowed(suffix, method) {
   const check = (suffix.split('?')[0] || '').replace(/\/$/, '') || '/';
   const pathForFull = check.startsWith('/api') ? check : `/api${check}`;
   for (const rule of ALLOWED_MACROVOL) {
@@ -74,7 +74,7 @@ const ROUTE_QUERY_ALLOW = [
   { re: /^\/api\/rates\/global-yields\/?$/, allow: new Set() },
   { re: /^\/api\/rates\/global-yields\/[^/]+\/?$/, allow: new Set() },
   { re: /^\/api\/crypto\/spot\/?$/, allow: new Set() },
-  { re: /^\/api\/perp\/basis\/?$/, allow: new Set() },
+  { re: /^\/api\/crypto\/perp-basis\/?$/, allow: new Set() },
   { re: /^\/api\/sec\/context\/[^/]+\/?$/, allow: new Set(['limit']) },
   { re: /^\/api\/macro\/summary\/?$/, allow: new Set() },
   { re: /^\/api\/macro\/series\/[^/]+\/?$/, allow: new Set(['limit']) },
@@ -85,7 +85,7 @@ const ROUTE_QUERY_ALLOW = [
   { re: /^\/api\/surface\/[^/]+\/?$/, allow: new Set(['r','q','strike_range']) },
   { re: /^\/api\/surface\/[^/]+\/preview\/?$/, allow: new Set(['r','q']) },
   { re: /^\/api\/greeks\/[^/]+\/?$/, allow: new Set(['r','q']) },
-  { re: /^\/api\/greeks\/history\/[^/]+\/?$/, allow: new Set(['period']) },
+  { re: /^\/api\/greeks\/[^/]+\/history\/?$/, allow: new Set(['period']) },
 ];
 function allowedKeysForPath(path) {
   const clean = (path.split('?')[0] || '').replace(/\/$/, '') || '/';
@@ -94,7 +94,7 @@ function allowedKeysForPath(path) {
   return null;
 }
 /** Validate query params are bounded — prevent unbounded cache keys. Returns null on ok, or { error, normalized } */
-function validateMacroQuery(suffix) {
+export function validateMacroQuery(suffix) {
   const qIdx = suffix.indexOf('?');
   if (qIdx === -1) return { error: null, normalized: suffix };
   const path = suffix.slice(0, qIdx);
@@ -109,7 +109,7 @@ function validateMacroQuery(suffix) {
   for (const pair of rawPairs) {
     let k;
     try { k = decodeURIComponent(pair.split('=')[0] || '').trim(); } catch { return { error: 'malformed percent encoding', normalized: null }; }
-    if (!k) continue;
+    if (!k) return { error: 'empty query key', normalized: null };
     if (seen.has(k)) return { error: `duplicate param ${k}`, normalized: null };
     seen.add(k);
     if (!allow.has(k)) return { error: `unknown param ${k}`, normalized: null };
@@ -123,8 +123,8 @@ function validateMacroQuery(suffix) {
     }
     if (k === 'limit') {
       const n = Number(v);
-      const max = path.includes('/auctions') ? 50 : 2000;
-      if (!Number.isInteger(n) || n < 1 || n > max) return { error: 'limit out of bounds', normalized: null };
+      const max = path.includes('/auctions') ? 50 : path.includes('/sec/context') ? 20 : path.includes('/rates/basis-history') ? 400 : path.includes('/macro/series') ? 2000 : 2000;
+      if (!Number.isInteger(n) || n < (path.includes('/rates/basis-history') ? 30 : 1) || n > max) return { error: 'limit out of bounds', normalized: null };
     }
     if (k === 'history') {
       const n = Number(v);
@@ -133,6 +133,10 @@ function validateMacroQuery(suffix) {
     if (k === 'strike_range') {
       const n = Number(v);
       if (!isFinite(n) || n <= 0 || n > 1) return { error: 'strike_range out of bounds', normalized: null };
+    }
+    if (k === 'r' || k === 'q' || k === 'T' || k === 'strike_range') {
+      const canonical = Number(v);
+      if (!Number.isFinite(canonical)) return { error: `${k} out of bounds`, normalized: null };
     }
     if (k === 'r' || k === 'q') {
       const n = Number(v);
@@ -166,7 +170,14 @@ function validateMacroQuery(suffix) {
   }
   // Normalize: sort keys alphabetically for stable cache key (prevents cardinality abuse via ordering)
   const sorted = [...params.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  const normalizedQs = new URLSearchParams(sorted).toString();
+  const canonicalEntries = sorted.map(([k, v]) => {
+    if (['r','q','T','strike_range','limit','history','window','compare_days'].includes(k) && v.trim() !== '') {
+      const n = Number(v);
+      if (Number.isFinite(n)) return [k, String(n)];
+    }
+    return [k, v];
+  });
+  const normalizedQs = new URLSearchParams(canonicalEntries).toString();
   const normalized = normalizedQs ? `${path}?${normalizedQs}` : path;
   return { error: null, normalized };
 }

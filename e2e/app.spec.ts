@@ -19,22 +19,22 @@ type Desk = { id: string; label: string; url: string; expectText: RegExp; testId
 
 const DESKS: Desk[] = [
   { id: 'home', label: 'Home', url: '/?desk=home', expectText: /Home — Launchpad|LPAD|function codes/i, testId: 'launchpad-grid' },
-  { id: 'vol-surface', label: 'Vol Surface', url: '/?desk=vol&sec=vol-sub-surface', expectText: /IV Surface|strike.*expiry|MatrixHeatmap/i },
-  { id: 'vol-smile', label: 'Vol Smile', url: '/?desk=vol&sec=vol-sub-smile', expectText: /IV Smile|Skew|Moneyness|Strike/i },
-  { id: 'vol-term', label: 'Vol Term', url: '/?desk=vol&sec=vol-sub-term', expectText: /Term|ATM IV/i },
-  { id: 'vol-greeks', label: 'Vol Greeks', url: '/?desk=vol&sec=vol-sub-greeks', expectText: /DELTA|Greeks|Charm|Vanna/i },
-  { id: 'vol-fit', label: 'Vol Fit', url: '/?desk=vol&sec=vol-sub-quality', expectText: /Surface Fit|SVI|RMSE/i },
-  { id: 'positioning', label: 'Positioning', url: '/?desk=positioning&sec=pos-sub-chain', expectText: /Book|GEX|DEX|Positioning/i },
+  { id: 'vol-surface', label: 'Vol Surface', url: '/?desk=vol&sec=vol-sub-surface', expectText: /IV Surface|strike.*expiry|MatrixHeatmap/i, testId: 'vol-structure-view' },
+  { id: 'vol-smile', label: 'Vol Smile', url: '/?desk=vol&sec=vol-sub-smile', expectText: /IV Smile|Skew|Moneyness|Strike/i, testId: 'vol-structure-view' },
+  { id: 'vol-term', label: 'Vol Term', url: '/?desk=vol&sec=vol-sub-term', expectText: /Term|ATM IV/i, testId: 'vol-structure-view' },
+  { id: 'vol-greeks', label: 'Vol Greeks', url: '/?desk=vol&sec=vol-sub-greeks', expectText: /DELTA|Greeks|Charm|Vanna/i, testId: 'vol-structure-view' },
+  { id: 'vol-fit', label: 'Vol Fit', url: '/?desk=vol&sec=vol-sub-quality', expectText: /Surface Fit|SVI|RMSE/i, testId: 'vol-structure-view' },
+  { id: 'positioning', label: 'Positioning', url: '/?desk=positioning&sec=pos-sub-chain', expectText: /Book|GEX|DEX|Positioning/i, testId: 'positioning-view' },
   { id: 'trade-structure', label: 'Trade Structure', url: '/?desk=desk&sec=trade-sub-structure', expectText: /Structure|Combo|Leverage|Simulator/i, testId: 'trade-structure-workflow' },
   { id: 'trade-pnl', label: 'Trade PnL', url: '/?desk=desk&sec=trade-sub-pnl', expectText: /PnL|Scenario|Break.*Even|Subjective/i, testId: 'trade-pnl-workflow' },
   { id: 'trade-hedge', label: 'Trade Hedge', url: '/?desk=desk&sec=trade-sub-risk', expectText: /Hedge|Risk|Delta|Basis|Roll/i, testId: 'trade-hedge-workflow' },
-  { id: 'rates-funding', label: 'Rates Funding', url: '/?desk=rates&sec=rates-mode-funding', expectText: /Funding|SOFR|Basis|Plumbing/i },
-  { id: 'rates-ust', label: 'Rates UST', url: '/?desk=rates&sec=rates-mode-ust', expectText: /UST|Yield|Curve|Auction/i },
-  { id: 'rates-stir', label: 'Rates STIR', url: '/?desk=rates&sec=rates-mode-stir', expectText: /STIR|SOFR Strip/i },
-  { id: 'rates-world', label: 'Rates World', url: '/?desk=rates&sec=rates-mode-world', expectText: /World|Global|FX|JGB/i },
+  { id: 'rates-funding', label: 'Rates Funding', url: '/?desk=rates&sec=rates-mode-funding', expectText: /Funding|SOFR|Basis|Plumbing/i, testId: 'rates-view' },
+  { id: 'rates-ust', label: 'Rates UST', url: '/?desk=rates&sec=rates-mode-ust', expectText: /UST|Yield|Curve|Auction/i, testId: 'rates-view' },
+  { id: 'rates-stir', label: 'Rates STIR', url: '/?desk=rates&sec=rates-mode-stir', expectText: /STIR|SOFR Strip/i, testId: 'rates-view' },
+  { id: 'rates-world', label: 'Rates World', url: '/?desk=rates&sec=rates-mode-world', expectText: /World|Global|FX|JGB/i, testId: 'rates-view' },
   { id: 'ksa', label: 'KSA', url: '/?desk=ksa', expectText: /KSA|TADAWUL|TASI|Board/i, testId: 'ksa-view' },
   { id: 'academy-home', label: 'Academy Home', url: '/?desk=academy&sec=academy-sub-start', expectText: /Academy|Kemos Research Academy/i, testId: 'academy-root' },
-  { id: 'academy-article', label: 'Academy Article', url: '/?desk=academy&sec=academy-sub-options', expectText: /Options|Academy/i },
+  { id: 'academy-article', label: 'Academy Article', url: '/?desk=academy&sec=academy-sub-options', expectText: /Options|Academy/i, testId: 'academy-root' },
   { id: 'crypto-overview', label: 'Crypto Overview', url: '/?desk=crypto&view=overview', expectText: /Overview|VOLATERM/i, testId: 'overview-workstation' },
   { id: 'crypto-volatility', label: 'Crypto Volatility', url: '/?desk=crypto&view=volatility', expectText: /Volatility/i, testId: 'volatility-workstation' },
   { id: 'crypto-positioning', label: 'Crypto Positioning', url: '/?desk=crypto&view=positioning', expectText: /Positioning/i, testId: 'positioning-workstation' },
@@ -71,6 +71,8 @@ function yahooResponse(symbol = 'SPY', spot = 500) {
 }
 
 async function mockAll(page: import('@playwright/test').Page) {
+  await page.route('**/favicon.ico', async (route) => await route.fulfill({ status: 204, body: '' }));
+  await page.route('**/api/auth/me', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: null }) }));
   const { readFileSync } = await import('node:fs');
   const { join, dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
@@ -113,7 +115,7 @@ async function mockAll(page: import('@playwright/test').Page) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(yResp) });
   });
   await page.route('**/api/fmp/**', async (route) => {
-    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'FMP not configured (mock)' }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) });
   });
   await page.route('**/api/ksa/board', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasi: { index_value: 11500, index_change_percent: 0.5, advancing: 80, declining: 70, unchanged: 10 }, nomu: { index_value: 22000 }, gainers: [], losers: [], volumeLeaders: [], sectors: [], mega: [], depth: { breadth: { adv: 80, dec: 70, unc: 10, ratio: 0.07 } }, session: { phase: 'open', open: true, local: '2026-08-28 11:00:00', timezone: 'Asia/Riyadh', weekday: 'Thu' }, budget: { used: 10, capDaily: 100 }, fromCache: false, ageMs: 1000, stale: false, source: 'sahmk', fetched_at: new Date().toISOString(), configured: true }) });
@@ -213,10 +215,7 @@ for (const vp of VIEWPORTS) {
         page.on('console', (msg) => {
           if (msg.type() !== 'error') return;
           const txt = msg.text();
-          // Whitelist expected resource failures that are intentionally mocked as 503/502 for fallback (FMP, macrovol fallback, yf) and favicon 404
-          // The app is fail-closed and shows exact error UI; console 503 is expected for mocked upstream 503s, not a JS exception
-          if (/Failed to load resource.*(404|503|502)/.test(txt)) return;
-          if (txt.includes('FMP not configured')) return;
+          if (txt.includes('favicon')) return;
           if (txt.includes('Download the React DevTools')) return;
           errors.push(txt);
         });

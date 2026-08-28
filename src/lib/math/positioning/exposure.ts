@@ -25,6 +25,7 @@ export interface ExposureResult {
   charm: number | null; // per day
   coverage: number; // fraction of rows with OI
   missingOiCount: number;
+  coverageState: 'observed' | 'observed-zero' | 'partial' | 'missing';
 }
 
 export function normalizeQuantity(row: PositionRow): number | null {
@@ -43,7 +44,7 @@ export function aggregateExposure(
     const Q = normalizeQuantity(r);
     if (Q == null) {
       missing++;
-      return { gex: null, dex: null, vanna: null, charm: null, coverage: 0, missingOiCount: 1 };
+      return { gex: null, dex: null, vanna: null, charm: null, coverage: 0, missingOiCount: 1, coverageState: 'missing' };
     }
     const s = sign(r) as number;
     const S = r.spot;
@@ -51,7 +52,7 @@ export function aggregateExposure(
     const dex = s * r.delta * Q * S;
     const vanna = s * r.vannaRaw * 0.01 * Q * S;
     const charm = s * r.charmRaw / 365 * Q * S;
-    return { gex, dex, vanna, charm, coverage: 1, missingOiCount: 0 };
+    return { gex, dex, vanna, charm, coverage: 1, missingOiCount: 0, coverageState: Q === 0 ? 'observed-zero' : 'observed' };
   });
 
   const coverage = rows.length ? (rows.length - missing) / rows.length : 0;
@@ -67,6 +68,7 @@ export function aggregateExposure(
     charm: sum(perRow.map(r=>r.charm)),
     coverage,
     missingOiCount: missing,
+    coverageState: rows.length === 0 || missing === rows.length ? 'missing' : missing > 0 ? 'partial' : (perRow.some(r => r.coverageState === 'observed') ? 'observed' : 'observed-zero'),
   };
   return { perRow, total };
 }

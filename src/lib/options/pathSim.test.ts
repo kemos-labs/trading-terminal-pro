@@ -4,6 +4,13 @@ import { templateLegs } from './portfolio';
 import { simulatePaths } from './pathSim';
 
 describe('path simulator', () => {
+  // Regression coverage includes unavailable valuation below and guards UI consumers/mocks.
+  it('fails closed when executable valuation is unavailable', () => {
+    const snap = buildSnapshot('TEST', Date.now(), 100, 0.05, 0.01);
+    const legs = [{ ...templateLegs('long_call', snap, 0)[0]!, entryPrice: null }];
+    const result = simulatePaths(legs as any, snap, { drift: 0, vol: 0.2, days: 10, steps: 5, paths: 2 });
+    expect(result.pnlBands.p50).toEqual([]);
+  });
   it('produces bands and win rate in [0,1]', () => {
     const snap = buildSnapshot('BTC', Date.now(), 90_000, 0, 0);
     const legs = templateLegs('short_straddle', snap, 0);

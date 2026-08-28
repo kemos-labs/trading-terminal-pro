@@ -21,6 +21,8 @@ export interface PathSimConfig {
 }
 
 export interface PathResult {
+  available: boolean;
+  reason?: string;
   /** Time axis in days */
   t: number[];
   /** Percentile bands of spot: p5, p25, p50, p75, p95 */
@@ -28,9 +30,9 @@ export interface PathResult {
   /** Percentile bands of combo mark PnL */
   pnlBands: { p5: number[]; p25: number[]; p50: number[]; p75: number[]; p95: number[] };
   /** Mean terminal PnL */
-  meanTerminalPnl: number;
+  meanTerminalPnl: number | null;
   /** Prob PnL > 0 */
-  winRate: number;
+  winRate: number | null;
   /** Sample paths (spot) for cloud viz — subset */
   sampleSpots: number[][];
   samplePnls: number[][];
@@ -83,6 +85,7 @@ export function simulatePaths(
   snap: VolSnapshot,
   cfg: PathSimConfig,
 ): PathResult {
+  const unavailable = (reason: string): PathResult => ({ available: false, reason, t: [], spotBands: { p5: [], p25: [], p50: [], p75: [], p95: [] }, pnlBands: { p5: [], p25: [], p50: [], p75: [], p95: [] }, meanTerminalPnl: null, winRate: null, sampleSpots: [], samplePnls: [] });
   const rand = rng(cfg.seed ?? 42);
   const S0 = snap.spot;
   const dt = (cfg.days / 365) / cfg.steps;
@@ -97,6 +100,9 @@ export function simulatePaths(
   const spotPaths: number[][] = [];
   const pnlPaths: number[][] = [];
   const entry = evaluateCombo(legs, snap, { spot: S0, daysElapsed: 0 });
+  if (entry.unavailable || entry.mark == null) {
+    return unavailable('unavailable-mark');
+  }
 
   for (let p = 0; p < n; p++) {
     const spots: number[] = [S0];
@@ -108,6 +114,7 @@ export function simulatePaths(
       spots.push(S);
       const daysElapsed = t[i]!;
       const m = evaluateCombo(legs, snap, { spot: S, daysElapsed });
+      if (m.unavailable || m.mark == null) return unavailable('unavailable-mark');
       pnls.push(m.mark - entry.mark);
     }
     spotPaths.push(spots);
@@ -135,5 +142,5 @@ export function simulatePaths(
   const sampleSpots = spotPaths.slice(0, sampleN);
   const samplePnls = pnlPaths.slice(0, sampleN);
 
-  return { t, spotBands, pnlBands, meanTerminalPnl, winRate, sampleSpots, samplePnls };
+  return { available: true, t, spotBands, pnlBands, meanTerminalPnl, winRate, sampleSpots, samplePnls };
 }

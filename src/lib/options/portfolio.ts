@@ -40,8 +40,8 @@ export interface ComboGreeks {
 }
 
 export interface ComboMark {
-  mark: number;
-  pnl: number;
+  mark: number | null;
+  pnl: number | null;
   greeks: ComboGreeks;
   /** True when any leg has missing expiry/IV/entryPrice — result is unavailable, not partial */
   unavailable?: boolean;
@@ -165,8 +165,8 @@ export function evaluateCombo(
 
   if (hasMissing) {
     return {
-      mark: NaN,
-      pnl: NaN,
+      mark: null,
+      pnl: null,
       greeks: acc,
       unavailable: true,
       unavailableReason: missingReason,
@@ -185,8 +185,9 @@ export function comboGreeksProfile(
   snap: VolSnapshot,
   spots: number[],
 ): { spot: number; mark: number; pnl: number; delta: number; gamma: number; theta: number; vega: number }[] {
-  return spots.map(spot => {
+  const marks = spots.map(spot => {
     const m = evaluateCombo(legs, snap, { spot });
+    if (m.unavailable || m.mark == null || m.pnl == null) return null;
     return {
       spot,
       mark: m.mark,
@@ -197,6 +198,7 @@ export function comboGreeksProfile(
       vega: m.greeks.vega,
     };
   });
+  return marks.filter((m): m is NonNullable<typeof m> => m != null);
 }
 
 /** Spot grid around current (±pct). */

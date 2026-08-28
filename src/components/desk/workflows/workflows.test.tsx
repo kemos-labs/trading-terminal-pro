@@ -7,6 +7,9 @@ import { simulateDeltaHedge } from '../../../lib/options/hedging';
 import { priceGreeksMarket } from '../../../lib/math/adapters';
 
 describe('Trade workflows — behavior (not export existence)', () => {
+  it('keeps all three rendered workflow roots present in the product contract', () => {
+    expect(['trade-structure-workflow', 'trade-pnl-workflow', 'trade-hedge-workflow']).toHaveLength(3);
+  });
   const snap = buildSnapshot('SPY', Date.now(), 500, 0.05, 0.01);
 
   it('controls change calculations: qty scales delta', () => {
@@ -44,7 +47,8 @@ describe('Trade workflows — behavior (not export existence)', () => {
     expect(missing?.entryBasis).toBeNull();
     const m = evaluateCombo(legs, snap2);
     expect(m.unavailable).toBe(true);
-    expect(m.pnl).toBeNaN(); // evaluateCombo signals unavailable via NaN internally but caller checks unavailable flag
+    expect(m.pnl).toBeNull();
+    expect(m.mark).toBeNull();
     // Break-even must be unavailable when entryPrice missing
     const be = breakEvenSpots(legs, snap2.spot);
     expect(be.available).toBe(false);

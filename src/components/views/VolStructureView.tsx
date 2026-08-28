@@ -96,7 +96,7 @@ export function VolStructureView() {
   }, [sub, setDeskContext, chainUsed]);
 
   if (loading && !snapshot) {
-    return <DeskLoading message={UI_COPY.load.chain} />;
+    return <div data-testid="vol-structure-view" className="h-full"><DeskLoading message={UI_COPY.load.chain} /></div>;
   }
   if (!snapshot) {
     return (

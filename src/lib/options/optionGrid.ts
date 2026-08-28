@@ -13,7 +13,8 @@ export interface GridCell {
   dte: number;
   type: 'call' | 'put';
   iv: number | null;
-  mid: number;
+  mid: number | null;
+  modelPrice?: number | null;
   delta: number | null;
   /** Elasticity ω = Δ · S / V */
   omega: number | null;
@@ -77,19 +78,19 @@ export function buildOptionGrid(
       if (!closeEnough || q.iv == null || q.iv <= 0) {
         row.push({
           strike: K, expiry: sl.expiry, dte: sl.dte, type,
-          iv: null, mid: 0, delta: null, omega: null, nd2: null, invNd2: null,
+          iv: null, mid: null, modelPrice: null, delta: null, omega: null, nd2: null, invNd2: null,
         });
         continue;
       }
-      const midRaw = q.mid != null && q.mid > 0 ? q.mid : priceGreeksMarket(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv).price;
-      const mid = midRaw ?? 0;
+      const mid = q.mid != null && q.mid > 0 ? q.mid : null;
+      const modelPrice = priceGreeksMarket(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv).price;
       const g = priceGreeksMarket(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv);
-      const omega = mid > 1e-8 ? (g.delta * snap.spot) / mid : null;
+      const omega = mid != null && mid > 1e-8 ? (g.delta * snap.spot) / mid : null;
       const nd2 = nd2Of(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv);
       const invNd2 = nd2 > 1e-4 ? 1 / nd2 : null;
       row.push({
         strike: K, expiry: sl.expiry, dte: sl.dte, type,
-        iv: q.iv, mid, delta: g.delta, omega, nd2, invNd2,
+        iv: q.iv, mid, modelPrice, delta: g.delta, omega, nd2, invNd2,
       });
     }
     cells.push(row);

@@ -136,10 +136,10 @@ export function PnlWorkflow() {
       r: snapshot.riskFreeRate, q: snapshot.dividendYield, seed: 7,
     }, snapshot.spot);
   }, [snapshot, rv, mcDays]);
-  const mcChart = mcSim.t.map((t, i) => ({
+  const mcChart = mcSim.available ? mcSim.t.map((t, i) => ({
     t, p5: mcSim.pnlBands.p5[i], p25: mcSim.pnlBands.p25[i], p50: mcSim.pnlBands.p50[i],
     p75: mcSim.pnlBands.p75[i], p95: mcSim.pnlBands.p95[i],
-  }));
+  })) : [];
   const mcDomain = tightDomain(mcChart.flatMap((r) => [r.p5, r.p95]), 0.08, { includeZero: true });
 
   const xTitleDate = { xTitle: 'Date', yTitle: 'PnL ($)' } as const;
@@ -368,8 +368,8 @@ export function PnlWorkflow() {
           <DeskField label="Realized σ" value={rv} onChange={setRv} step={0.01} />
         </>}
         print={<PrintStrip items={[
-          { label: 'E[PnL]', value: fmtSigned(mcSim.meanTerminalPnl), tone: mcSim.meanTerminalPnl >= 0 ? 'up' : 'down' },
-          { label: 'Win', value: fmtPct(mcSim.winRate) },
+          { label: 'E[PnL]', value: mcSim.meanTerminalPnl != null ? fmtSigned(mcSim.meanTerminalPnl) : '—', tone: mcSim.meanTerminalPnl != null && mcSim.meanTerminalPnl >= 0 ? 'up' : 'down' },
+          { label: 'Win', value: mcSim.winRate != null ? fmtPct(mcSim.winRate) : '—' },
           { label: 'Weeks', value: String(weeks) },
           { label: 'σ', value: rv.toFixed(2) },
           ...(mcHedge ? [{ label: 'Hedge PnL', value: fmtSigned(mcHedge.terminalPnl), tone: (mcHedge.terminalPnl >= 0 ? 'up' : 'down') as 'up' | 'down' }] : []),

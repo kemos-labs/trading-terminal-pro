@@ -121,7 +121,8 @@ function buildOptionQuote(
     theta = (thetaPerDay(rawG.theta as unknown as import('../math/units').RawThetaPerYear) as unknown as number);
     vega = (vegaPerVolPoint(rawG.vega as unknown as import('../math/units').RawVegaPerVol) as unknown as number);
     // vanna/charm adapters
-    vanna = (rawG.vanna * 0.01) as unknown as number;
+    // Canonical vanna is per 1.0 volatility (raw scale), identical across feeds.
+    vanna = rawG.vanna as unknown as number;
     charm = (rawG.charm as unknown as number) / 365;
   }
   const mid = pickMid(raw);

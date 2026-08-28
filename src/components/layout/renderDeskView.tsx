@@ -29,7 +29,8 @@ export const INDEPENDENT_TABS: ReadonlySet<ActiveTab> = new Set([
 
 export function renderDeskView(tab: ActiveTab, loading: boolean): ReactNode {
   if (loading && !INDEPENDENT_TABS.has(tab)) {
-    return <DeskLoading message="Building chain surface…" />;
+    const testId = tab === 'vol' ? 'vol-structure-view' : tab === 'positioning' ? 'positioning-view' : tab === 'rates' ? 'rates-view' : undefined;
+    return <div data-testid={testId} className="h-full"><DeskLoading message="Building chain surface…" /></div>;
   }
 
   const view = (() => {
@@ -56,7 +57,7 @@ export function renderDeskView(tab: ActiveTab, loading: boolean): ReactNode {
   })();
 
   return (
-    <div key={tab} className="h-full term-crossfade">
+    <div key={tab} className="h-full term-crossfade" data-testid={tab === 'vol' ? 'vol-structure-view' : tab === 'positioning' ? 'positioning-view' : tab === 'rates' ? 'rates-view' : undefined}>
       <Suspense fallback={<DeskLoading message="Loading view…" />}>{view}</Suspense>
     </div>
   );

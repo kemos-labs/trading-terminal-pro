@@ -95,7 +95,7 @@ export function HedgeWorkflow() {
           {mode === 'threshold' && <DeskField label="|Δ| trigger" value={threshold} onChange={setThreshold} step={0.01} />}
           {mode === 'tolerance' && <DeskField label="Band" value={tolerance} onChange={setTolerance} step={0.01} />}
           {mode === 'period' && <DeskField label="Every N steps" value={period} onChange={setPeriod} step={1} min={1} />}
-          <DeskField label="Implied vol (scenario)" value={rv} onChange={setRv} step={0.01} />
+          <DeskField label="Path vol scenario — initialized from ATM IV" value={rv} onChange={setRv} step={0.01} />
           <DeskField label="Opt qty (− short)" value={qty} onChange={setQty} step={1} />
         </>}
         print={<PrintStrip items={hedgeResult ? [
@@ -104,7 +104,7 @@ export function HedgeWorkflow() {
           { label: 'Max DD', value: fmtSigned(hedgeResult.maxDrawdown), tone: 'down' },
           { label: 'Avg |Δ|', value: hedgeResult.avgAbsNetDelta.toFixed(3) },
           { label: 'Strike', value: defaults.strike != null ? fmtPrice(defaults.strike) : '—' },
-          { label: 'Vol scenario', value: `${(rv*100).toFixed(1)}% implied (ATM IV)`, tone: 'muted' as const },
+          { label: 'Path vol scenario', value: `${(rv*100).toFixed(1)}% · initialized from ATM IV`, tone: 'muted' as const },
         ] : [{ label: 'Terminal PnL', value: '—', tone: 'muted' as const }]} />}
       >
         <DeskChartFrame xTitle="Day" yTitle="PnL ($) · Net Δ" className="min-h-[220px]" header={<span className="text-muted-foreground">Δ-hedge — spot hedge instrument · implied-vol scenario (seed 19) — not realized vol</span>}>
@@ -128,14 +128,14 @@ export function HedgeWorkflow() {
         controls={<>
           <DeskField label="Band" value={band} onChange={setBand} step={0.01} />
           <DeskField label="Option qty" value={fQty} onChange={setFQty} step={1} />
-          <DeskField label="Implied σ (scenario)" value={fRv} onChange={setFRv} step={0.01} />
+          <DeskField label="Path vol scenario — initialized from ATM IV" value={fRv} onChange={setFRv} step={0.01} />
         </>}
         print={<PrintStrip items={followResult ? [
           { label: 'Terminal PnL', value: fmtSigned(followResult.terminalPnl), tone: followResult.terminalPnl >= 0 ? 'up' : 'down' },
           { label: 'Trades', value: String(followResult.tradeCount) },
           { label: 'Max DD', value: fmtSigned(followResult.maxDrawdown), tone: 'down' },
           { label: 'Avg |Δ|', value: followResult.avgAbsNetDelta.toFixed(3) },
-          { label: 'Vol scenario', value: `${(fRv*100).toFixed(1)}% implied (ATM IV)`, tone: 'muted' as const },
+          { label: 'Path vol scenario', value: `${(fRv*100).toFixed(1)}% · initialized from ATM IV`, tone: 'muted' as const },
         ] : [{ label: 'Terminal PnL', value: '—', tone: 'muted' as const }]} />}
       >
         <DeskChartFrame xTitle="Day" yTitle="PnL ($) · Net Δ" className="min-h-[220px]" header={<span className="text-muted-foreground">Δ-follower — futures hedge · tolerance band (seed 33) · implied-vol scenario</span>}>

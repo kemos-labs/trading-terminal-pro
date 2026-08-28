@@ -239,6 +239,14 @@ export function comboGreeksPnl(
   // Entry mark at first bar
   const days0 = 0;
   const entryMark = evaluateCombo(legs, snap, { spot: path[0]!.close, daysElapsed: days0 }).mark;
+  if (entryMark == null) {
+    return {
+      bars: [], available: false, reason: 'unavailable-mark', terminalPnl: null,
+      totalDelta: null, totalGamma: null, totalTheta: null, totalVega: null, totalResidual: null,
+      method: pathProvenance === 'scenario-synthetic' ? 'scenario-synthetic-gbm-sticky-iv' : 'bs-sticky-iv',
+      provenance: pathProvenance, vegaNote: 'Unavailable — missing market mark (fail-closed)',
+    };
+  }
   let prevMark = entryMark;
   let prevSpot = path[0]!.close;
   let prevTs = path[0]!.ts;
@@ -289,6 +297,12 @@ export function comboGreeksPnl(
     const bar = path[i]!;
     const daysElapsed = Math.max(0, (bar.ts - t0) / 86_400_000);
     const mark = evaluateCombo(legs, snap, { spot: bar.close, daysElapsed }).mark;
+    if (mark == null || prevMark == null) return {
+      bars: [], available: false, reason: 'unavailable-mark', terminalPnl: null,
+      totalDelta: null, totalGamma: null, totalTheta: null, totalVega: null, totalResidual: null,
+      method: pathProvenance === 'scenario-synthetic' ? 'scenario-synthetic-gbm-sticky-iv' : 'bs-sticky-iv',
+      provenance: pathProvenance, vegaNote: 'Unavailable — missing market mark (fail-closed)',
+    };
     const dPnl = mark - prevMark;
     const dS = bar.close - prevSpot;
     const dTdays = Math.max(0, (bar.ts - prevTs) / 86_400_000);

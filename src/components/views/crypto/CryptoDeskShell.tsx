@@ -31,7 +31,6 @@ const GROUPS: CryptoNavGroup[] = [
       { id: 'crypto-sub-tail', label: 'Tail Strike', code: 'TAIL' },
       { id: 'crypto-sub-scanner', label: 'Scanner', code: 'SCAN' },
       { id: 'crypto-sub-options', label: 'Chain & Surfaces', code: 'VOL' },
-      { id: 'crypto-sub-backtest', label: 'Strategy Lab', code: 'BT' },
     ],
   },
   {
@@ -184,4 +183,3 @@ export function CryptoDeskShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
-

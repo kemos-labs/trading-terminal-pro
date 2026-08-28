@@ -213,7 +213,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   lastUpdate: Date.now(),
   lastSpotUpdate: 0,
   lastChainUpdate: 0,
-  activeTab: 'vol',
+  activeTab: (() => {
+    try {
+      const d = new URLSearchParams(window.location.search).get('desk');
+      return (['home', 'vol', 'positioning', 'rates', 'ksa', 'academy', 'desk', 'crypto'].includes(d ?? '') ? d : 'vol') as ActiveTab;
+    } catch { return 'vol' as ActiveTab; }
+  })(),
   displayMode: 'strike',
   selectedExpiry: null,
   fmpQuote: null,
@@ -241,7 +246,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     } catch { /* ignore */ }
     return 'readable' as const;
   })(),
-  deskSectionId: null,
+  deskSectionId: (() => {
+    try { return new URLSearchParams(window.location.search).get('sec'); } catch { return null; }
+  })(),
   deskSectionLabel: null,
   deskSectionApis: [],
   fundingAnn: null,

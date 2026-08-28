@@ -58,10 +58,10 @@ export function StructureWorkflow() {
     () => simulatePaths(legs, snapshot, { drift, vol, days, steps: 40, paths: 200, seed: 99 }),
     [legs, snapshot, drift, vol, days],
   );
-  const simChart = sim.t.map((t, i) => ({
+  const simChart = sim.available ? sim.t.map((t, i) => ({
     t, p5: sim.pnlBands.p5[i], p25: sim.pnlBands.p25[i], p50: sim.pnlBands.p50[i],
     p75: sim.pnlBands.p75[i], p95: sim.pnlBands.p95[i],
-  }));
+  })) : [];
   const simLast = simChart.length - 1;
 
   const gridValues = grid.cells.flatMap((row) =>
@@ -100,8 +100,8 @@ export function StructureWorkflow() {
         }
         print={
           <PrintStrip items={[
-            { label: 'Mark', value: fmtSigned(mark.mark) },
-            { label: 'PnL', value: fmtSigned(mark.pnl), tone: mark.pnl >= 0 ? 'up' : 'down' },
+            { label: 'Mark', value: mark.mark != null ? fmtSigned(mark.mark) : '—' },
+            { label: 'PnL', value: mark.pnl != null ? fmtSigned(mark.pnl) : '—', tone: mark.pnl != null && mark.pnl >= 0 ? 'up' : 'down' },
             { label: 'Δ', value: fmtSigned(mark.greeks.delta, 3), title: 'delta' },
             { label: 'Γ', value: fmtCompact(mark.greeks.gamma), title: 'gamma' },
             { label: 'ν', value: fmtSigned(mark.greeks.vega, 2), title: 'vega' },
@@ -213,10 +213,10 @@ export function StructureWorkflow() {
           </>
         }
         print={<PrintStrip items={[
-          { label: 'E[PnL]', value: fmtSigned(sim.meanTerminalPnl), tone: sim.meanTerminalPnl >= 0 ? 'up' : 'down' },
-          { label: 'Win', value: fmtPct(sim.winRate) },
-          { label: 'p5 term', value: fmtSigned(sim.pnlBands.p5[simLast] ?? 0), tone: 'down' },
-          { label: 'p95 term', value: fmtSigned(sim.pnlBands.p95[simLast] ?? 0), tone: 'up' },
+          { label: 'E[PnL]', value: sim.meanTerminalPnl != null ? fmtSigned(sim.meanTerminalPnl) : '—', tone: sim.meanTerminalPnl != null && sim.meanTerminalPnl >= 0 ? 'up' : 'down' },
+          { label: 'Win', value: sim.winRate != null ? fmtPct(sim.winRate) : '—' },
+          { label: 'p5 term', value: sim.pnlBands.p5[simLast] != null ? fmtSigned(sim.pnlBands.p5[simLast]!) : '—', tone: 'down' },
+          { label: 'p95 term', value: sim.pnlBands.p95[simLast] != null ? fmtSigned(sim.pnlBands.p95[simLast]!) : '—', tone: 'up' },
         ]} />}
       >
         <DeskChartFrame

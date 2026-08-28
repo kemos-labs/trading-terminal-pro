@@ -77,9 +77,11 @@ export function priceGreeksMarket(
   const priceRes = priceEuropeanSpot(side, S, K, asYearFraction(t), asDecimalRate(r), asDecimalRate(q), asDecimalVol(vol));
   if (!(t > 0) || !(vol > 0)) {
     // Expiry / zero-vol boundary: discounted intrinsic + intrinsic delta.
-    const atm = Math.abs(S - K) < 1e-12;
+    const discountedSpot = S * Math.exp(-q * t);
+    const discountedStrike = K * Math.exp(-r * t);
+    const atm = Math.abs(discountedSpot - discountedStrike) < 1e-12;
     const delta =
-      side === 'call' ? (S > K ? 1 : atm ? 0.5 : 0) : (S < K ? -1 : atm ? -0.5 : 0);
+      side === 'call' ? (discountedSpot > discountedStrike ? Math.exp(-q * t) : atm ? 0.5 * Math.exp(-q * t) : 0) : (discountedSpot < discountedStrike ? -Math.exp(-q * t) : atm ? -0.5 * Math.exp(-q * t) : 0);
     return {
       price: priceRes.price,
       delta,

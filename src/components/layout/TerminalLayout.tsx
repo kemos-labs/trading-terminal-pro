@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback } from 'react';
 import { useTerminalStore } from '../../store/terminalStore';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import {
@@ -50,6 +50,7 @@ export function TerminalLayout() {
   const [quoteStripOn] = useState(() => isQuoteStripEnabled());
   const [displayStripOn, setDisplayStripOn] = useState(() => isDisplayStripEnabled());
   const [cmdFocusToken, setCmdFocusToken] = useState(0);
+  const [urlHydrated, setUrlHydrated] = useState(false);
   /** First-open chain briefing — only for chain-dependent desks (vol/positioning). Independent desks (crypto/rates/ksa/academy/trade) never wait for equity chain. */
   const [bootOpen, setBootOpen] = useState(() => {
     const tab = useTerminalStore.getState().activeTab as string;
@@ -86,9 +87,24 @@ export function TerminalLayout() {
     void useAccountStore.getState().refresh();
   }, []);
 
+  useLayoutEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const desk = params.get('desk');
+    const sec = params.get('sec');
+    const s = useTerminalStore.getState();
+    if (desk && TABS.some((t) => t.id === desk)) s.setActiveTab(desk as never);
+    if (sec) {
+      s.setDeskSection(sec);
+      try { s.setDeskContext({ id: sec, label: sec, apis: [] }); } catch { /* ignore */ }
+      try { setDeskJump(sec); } catch { /* ignore */ }
+    }
+    setUrlHydrated(true);
+  }, [setDeskJump]);
+
   // Seed default baby section when a desk has none, or when switching into Academy
   // with a stale non-academy section (otherwise filters desync → wrong track).
   useEffect(() => {
+    if (!urlHydrated) return;
     const s = useTerminalStore.getState();
     const first = sectionsForTab(activeTab)[0]?.id;
     if (!first) return;
@@ -99,7 +115,7 @@ export function TerminalLayout() {
     if (activeTab === 'academy' && !s.deskSectionId.startsWith('academy-sub-')) {
       s.setDeskSection(first);
     }
-  }, [activeTab]);
+  }, [activeTab, urlHydrated]);
 
   // SSE spot ticks in live mode (Node/Docker server). No-ops if stream unavailable.
   useSpotStream(symbol, source === 'live');
@@ -107,6 +123,7 @@ export function TerminalLayout() {
   // Always boot into LIVE so desks never start on synthetic/demo market data.
   // Only kick chain load for chain-dependent desks (vol/positioning) — independent desks never trigger equity chain.
   useEffect(() => {
+    if (!urlHydrated) return;
     const s = useTerminalStore.getState();
     if (s.source !== 'live') {
       void s.setSource('live');
@@ -116,7 +133,7 @@ export function TerminalLayout() {
     if (chainDependent && !s.snapshot && s.lastChainUpdate === 0) {
       void setSymbol(s.symbol || 'SPY');
     }
-  }, [setSymbol]);
+  }, [setSymbol, urlHydrated]);
 
   // Preload heavy Vol chunks during boot so Greeks is not a cold lazy hit after Enter — only for chain-dependent desks.
   useEffect(() => {
@@ -140,7 +157,7 @@ export function TerminalLayout() {
       try { setDeskContext({ id: sec, label: sec, apis: [] }); } catch { /* ignore */ }
       try { setDeskJump(sec); } catch { /* ignore */ }
     }
-  }, [setActiveTab]);
+  }, [setActiveTab, urlHydrated]);
 
   // Migrate stale tab ids — Home is real Launchpad (not silent Vol); Macro → Rates with notice.
   useEffect(() => {
@@ -329,9 +346,6 @@ export function TerminalLayout() {
         <BootBriefing
           heavyReady={heavyReady}
           onEnter={() => {
-            if (useTerminalStore.getState().activeTab !== 'vol') {
-              setActiveTab('vol');
-            }
             setBootOpen(false);
           }}
         />

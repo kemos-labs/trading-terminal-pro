@@ -9,7 +9,7 @@
 - **Hedge / Risk** (`trade-sub-risk`): Hedging (threshold/tolerance/period) + Δ Follower + Basis + Roll — shared Δ-hedge engine (`hedging.ts` → canonical). Replaces 4 mini-apps.
 - **Greeks** removed from Trade — lives on Vol · Greeks (single home).
 
-Total: 14 mini-tools → 3 workflows (4 if validated historical backtest via `crypto-backtest-api` Binance klines is kept as separate Historical tab).
+Total: 14 mini-tools → 3 workflows. Historical backtesting is intentionally unavailable until a provenance-backed implementation exists.
 
 ## Files retained (consolidated hosts)
 

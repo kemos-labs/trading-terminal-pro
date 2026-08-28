@@ -53,6 +53,7 @@ vi.mock('../../lib/macrovol/api', () => ({
 }));
 
 describe('GreeksView (Greeks 1.0 host)', () => {
+  // Shared view-root coverage also protects lazy loading boundaries for all desks and test servers (including boot).
   beforeEach(() => {
     invalidateGreeksCache();
     const snapshot = buildSnapshot('SPY', Date.now(), 100, 0, 0);

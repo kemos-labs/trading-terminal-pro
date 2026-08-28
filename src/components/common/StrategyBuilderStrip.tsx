@@ -91,7 +91,7 @@ export function StrategyBuilderStrip({ className }: { className?: string }) {
       </div>
       <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-4 lg:grid-cols-6">
         <Stat label="Mark" value={mark ? fmtPrice(mark.mark) : '—'} />
-        <Stat label="Δ PnL vs entry" value={mark ? fmtSigned(mark.pnl) : '—'} tone={mark && mark.pnl >= 0 ? 'up' : 'down'} />
+        <Stat label="Δ PnL vs entry" value={mark?.pnl != null ? fmtSigned(mark.pnl) : '—'} tone={mark?.pnl != null && mark.pnl >= 0 ? 'up' : 'down'} />
         <Stat label="Δ" value={mark ? mark.greeks.delta.toFixed(3) : '—'} />
         <Stat label="Γ" value={mark ? mark.greeks.gamma.toFixed(4) : '—'} />
         <Stat label="ν" value={mark ? mark.greeks.vega.toFixed(3) : '—'} />

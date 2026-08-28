@@ -133,8 +133,10 @@ export function joinCatalogueWithQuotes(catalogue, quotes, asOfMs = Date.now()) 
  * price (BTC) × amount (base ccy contracts) × contract_size. NOT quote currency.
  */
 export function normalizeTrade(raw, meta /* contract_size from catalogue */) {
-  const price = Number(raw.price) || 0;
-  const amount = Number(raw.amount) || 0;
+  const parsedPrice = Number(raw.price);
+  const parsedAmount = Number(raw.amount);
+  const price = Number.isFinite(parsedPrice) && parsedPrice > 0 ? parsedPrice : null;
+  const amount = Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : null;
   const contractSize = meta?.contractSize ?? null;
   return {
     instrument: String(raw.instrument_name ?? ''),
@@ -144,7 +146,7 @@ export function normalizeTrade(raw, meta /* contract_size from catalogue */) {
     side: raw.direction === 'buy' ? 'buy' : 'sell',
     markIv: ivPctToDecimal(raw.mark_iv),
     // Native settlement-currency premium (inverse options: BTC)
-    premiumNative: contractSize != null ? price * amount * contractSize : null,
+    premiumNative: contractSize != null && price != null && amount != null ? price * amount * contractSize : null,
     contractSize,
     nativeCurrency: meta?.settlementCurrency ?? null,
     blockTrade: Boolean(raw.block_trade),

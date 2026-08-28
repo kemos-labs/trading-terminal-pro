@@ -665,8 +665,6 @@ export function PositioningView() {
                           return (
                             <div
                               style={style}
-                              role="row"
-                              aria-selected={isFocused}
                               onClick={() => focusDealer(index, 'strike')}
                               className={cn(
                                 'flex cursor-default items-center justify-between gap-1 border-b border-border/30 px-1.5 font-mono text-type-2xs hover:bg-muted/20',

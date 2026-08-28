@@ -95,8 +95,6 @@ export function SerffBoard({
           return (
             <div
               style={style}
-              role="row"
-              aria-selected={isFocused}
               onClick={() => focusRow(index, 'name')}
               className={`grid grid-cols-[48px_1fr_2fr_72px_72px_100px] items-center gap-0 border-t border-border/40 px-1.5 text-type-xs cursor-default hover:bg-muted/20 ${
                 isFocused ? 'focus-ring-term-inset bg-primary/10' : ''

@@ -51,7 +51,7 @@ function BoardShell({
         </div>
         {actions}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">{children}</div>
+      <div className="min-h-0 flex-1 overflow-auto" tabIndex={0} role="region" aria-label="Scrollable data">{children}</div>
     </div>
   );
 }
@@ -319,8 +319,6 @@ export function StirSection({
                 return (
                   <div
                     key={c.contract}
-                    role="row"
-                    aria-selected={stirFocused && index === stirRow}
                     onClick={() => focusStir(index, 'ticker')}
                     className={`${SR3_COLS} cursor-default px-1.5 py-[3px] font-mono text-type-2xs hover:bg-muted/20 ${
                       stirFocused && index === stirRow

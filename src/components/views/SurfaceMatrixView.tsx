@@ -85,7 +85,7 @@ export function SurfaceMatrixView() {
             yLabels={grid.expiries}
             title={`IV Surface ${side} — ${grid.min.toFixed(1)} to ${grid.max.toFixed(1)}%`}
           />
-          <div className="mt-2 max-h-[160px] overflow-auto border border-border rounded">
+          <div className="mt-2 max-h-[160px] overflow-auto border border-border rounded" tabIndex={0} role="region" aria-label="IV surface matrix">
             <table className="w-full font-mono text-type-2xs">
               <caption className="sr-only">IV surface matrix — accessible table fallback for Canvas heatmap</caption>
               <thead className="sticky top-0 bg-card"><tr><th className="px-1 py-1 text-left">Strike \ DTE</th>{grid.expiries.map((e) => <th key={e} className="px-1 py-1 text-right">{e}</th>)}</tr></thead>

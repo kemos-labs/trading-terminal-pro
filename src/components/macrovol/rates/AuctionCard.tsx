@@ -112,7 +112,7 @@ export function AuctionCard() {
               )}
             </div>
           )}
-          <div className="max-h-40 overflow-auto">
+          <div className="max-h-40 overflow-auto" tabIndex={0} role="region" aria-label="Scrollable data">
             <table className="w-full border-collapse font-mono text-type-2xs">
               <thead className="sticky top-0 bg-background/95 text-muted-foreground">
                 <tr className="border-b border-border text-left">

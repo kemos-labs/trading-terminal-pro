@@ -168,8 +168,6 @@ export function OptionChain() {
           renderRow={({ index, style, item: r }) => (
             <div
               style={style}
-              role="row"
-              aria-selected={focused && index === rowIndex}
               onClick={() => onRowClick(index)}
               className={cn(
                 'flex text-type-xs font-mono items-center border-b border-border/30 hover:bg-muted/20 cursor-default',

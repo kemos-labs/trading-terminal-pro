@@ -17,7 +17,7 @@ export function CorrSection({ corr }: { corr: CorrelationData }) {
       storageKey="rates.sec.corr"
       subtitle="Pearson on daily % changes · 30D window · 1Y lookback"
     >
-      <div className="overflow-auto">
+      <div className="overflow-auto" tabIndex={0} role="region" aria-label="Scrollable data">
         <table className="border-collapse text-type-xs">
           <thead>
             <tr>

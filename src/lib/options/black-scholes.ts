@@ -34,7 +34,7 @@ export function blackScholes(
   vol: number,
 ): BSResult {
   if (!(S > 0) || !(K > 0) || !(T > 0) || !(vol > 0) || !isFinite(vol) || !isFinite(S) || !isFinite(K) || !isFinite(T)) {
-    const intrinsic = type === 'call' ? Math.max(S - K, 0) : Math.max(K - S, 0);
+    const intrinsic = type === 'call' ? Math.max(S * Math.exp(-q * T) - K * Math.exp(-r * T), 0) : Math.max(K * Math.exp(-r * T) - S * Math.exp(-q * T), 0);
     return { price: intrinsic, delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
   }
   const priceRes = priceEuropeanSpot(type, S, K, asYearFraction(T), asDecimalRate(r), asDecimalRate(q), asDecimalVol(vol));

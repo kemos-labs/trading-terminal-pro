@@ -56,7 +56,8 @@ describe('OptionPnlTool', () => {
     expect(screen.getByText('Side')).toBeTruthy();
 
     expect(screen.getByText('Path')).toBeTruthy();
-    expect(screen.getByText('synth')).toBeTruthy();
+    // P0: fail-closed — no history → none (synthetic only via explicit Scenario toggle)
+    expect(screen.getByText(/none|No history|Scenario/i)).toBeTruthy();
     expect(screen.getByText('Term PnL')).toBeTruthy();
     expect(screen.getByText('Marks')).toBeTruthy();
 

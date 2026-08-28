@@ -49,7 +49,7 @@ export function CryptoFlowView() {
         <span className="rounded bg-muted px-2 py-1">As of {asOf ? new Date(asOf).toISOString().slice(11, 19) + 'Z' : '—'}</span>
         {stale
           ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Stale</span>
-          : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-700" title={`Deribit snapshot ${asOf ? new Date(asOf).toISOString() : ''}`}>Observed</span>}
+          : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-400" title={`Deribit snapshot ${asOf ? new Date(asOf).toISOString() : ''}`}>Observed</span>}
       </div>
       <div className="rounded border">
         <table className="w-full" aria-label="Recent Deribit options trades, taker side">
@@ -70,7 +70,7 @@ export function CryptoFlowView() {
               <tr key={i} className="font-mono text-xs hover:bg-muted/30">
                 <td className="p-2">{t.timestamp != null ? new Date(t.timestamp).toISOString().slice(11, 19) : '—'}</td>
                 <td className="p-2 max-w-40 truncate">{t.instrument}</td>
-                <td className={`p-2 ${t.side === 'buy' ? 'text-emerald-600' : 'text-red-600'}`}>{t.side}</td>
+                <td className={`p-2 ${t.side === 'buy' ? 'text-emerald-400' : 'text-red-400'}`}>{t.side}</td>
                 <td className="p-2">{t.quantity}</td>
                 <td className="p-2">{t.price.toFixed(4)}</td>
                 <td className="p-2">{t.premiumNative != null ? `${t.premiumNative.toFixed(4)} ${t.nativeCurrency ?? ''}` : 'unavailable'}</td>

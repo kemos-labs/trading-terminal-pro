@@ -105,7 +105,7 @@ export function CryptoTradeView() {
         <span className="rounded bg-muted px-2 py-1">Premium in BTC (inverse, coin-settled)</span>
         {stale
           ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Stale</span>
-          : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-700" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()}`}>Observed</span>}
+          : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-400" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()}`}>Observed</span>}
       </div>
 
       <ChainTable rows={rows} />

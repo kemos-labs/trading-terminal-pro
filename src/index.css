@@ -1543,6 +1543,14 @@ a.academy-news-headline:hover { color: var(--info); }
   background: var(--muted-foreground);
 }
 
+/* Sonner toast description — ensure WCAG AA contrast on dark card */
+[data-sonner-toast][data-styled=true] [data-description] {
+  color: var(--muted-foreground) !important;
+}
+[data-sonner-toast][data-styled=true] [data-title] {
+  color: var(--foreground) !important;
+}
+
 /* BBG chrome details: amber text selection, amber caret */
 ::selection {
   background: var(--brand);

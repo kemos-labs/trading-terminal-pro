@@ -48,7 +48,7 @@ export function CryptoOverviewView() {
           ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Stale</span>
           : (bundle.coverage ?? 0) < 0.5
             ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400" title={`Quotes joined for ${Math.round((bundle.coverage ?? 0) * 100)}% of active catalogue`}>Partial</span>
-            : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-700" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()} — quotes joined for ${Math.round((bundle.coverage ?? 0) * 100)}% of active catalogue`}>Observed</span>}
+            : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-400" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()} — quotes joined for ${Math.round((bundle.coverage ?? 0) * 100)}% of active catalogue`}>Observed</span>}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded border p-3">

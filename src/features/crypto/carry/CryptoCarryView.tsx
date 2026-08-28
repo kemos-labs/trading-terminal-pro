@@ -52,7 +52,7 @@ export function CryptoCarryView() {
         <span className="rounded bg-muted px-2 py-1">As of {new Date(bundle.fetchedAt).toISOString().slice(11, 19)}Z</span>
         {stale
           ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Stale</span>
-          : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-700" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()}`}>Observed</span>}
+          : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-400" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()}`}>Observed</span>}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded border p-3">

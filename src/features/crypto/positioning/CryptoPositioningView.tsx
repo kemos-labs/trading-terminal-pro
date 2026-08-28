@@ -74,7 +74,7 @@ export function CryptoPositioningView() {
   return (
     <div data-testid="positioning-workstation" className="space-y-3">
       <div className="flex flex-wrap gap-2 font-mono text-xs">
-        <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-800" title="OI-weighted exposure proxy from public Deribit data — not dealer inventory">
+        <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400" title="OI-weighted exposure proxy from public Deribit data — not dealer inventory">
           Exposure proxy — not dealer book
         </span>
         <span className="rounded bg-muted px-2 py-1" title="Calls +1 / Puts −1 applied to OI-weighted greeks">Sign model: Calls + / Puts − (naive)</span>
@@ -87,7 +87,7 @@ export function CryptoPositioningView() {
         ) : gexComputable < matrix.flat().length ? (
           <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400" title={`${gexComputable}/${matrix.flat().length} cells computable (need OI + observed IV)`}>Partial</span>
         ) : (
-          <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-700" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()}`}>Observed</span>
+          <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-400" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()}`}>Observed</span>
         )}
         <span className="rounded bg-muted px-2 py-1">Coverage {((total.coverage ?? 0) * 100).toFixed(0)}% ({rows.length - (total.missingOiCount ?? 0)}/{rows.length} rows with OI)</span>
       </div>

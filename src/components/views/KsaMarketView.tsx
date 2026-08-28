@@ -506,7 +506,7 @@ export function KsaMarketView() {
 
   return (
     <SectionErrorBoundary name="KSA Market">
-      <div className="flex h-full min-h-0 flex-col gap-2 overflow-auto p-2">
+      <div className="flex h-full min-h-0 flex-col gap-2 overflow-auto p-2" data-testid="ksa-view">
         {/* Session strip */}
         <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-card/40 px-2 py-1.5 font-mono text-type-xs">
           <span className="font-semibold tracking-wide">KSA · TADAWUL</span>

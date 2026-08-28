@@ -10,7 +10,7 @@ import {
 } from './greeksPnl';
 import { priceGreeksMarket } from '../math/adapters';
 import { solveImpliedVol } from '../math/impliedVol';
-import { asDecimalRate, asDecimalVol, asYearFraction } from '../math/units';
+import { asDecimalRate, asYearFraction } from '../math/units';
 
 describe('greeksPnl / BS foundation', () => {
   it('implied vol recovers BS price (Black–Scholes invertibility)', () => {

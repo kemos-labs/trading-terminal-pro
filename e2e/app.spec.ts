@@ -163,7 +163,6 @@ async function mockAll(page: import('@playwright/test').Page) {
       total_points: 44, as_of, source: 'yfinance',
       surface_note: 'mock surface', charm_note: 'mock charm',
       units: { theta: 'per day', vega: 'per 1 vol pt', surface_side: 'OTM' },
-      r: 0.05, q: 0.01,
       ohlc: Array.from({ length: 20 }, (_, i) => ({ date: `2026-01-${String(i+1).padStart(2,'0')}`, open: 500, high: 505, low: 495, close: 500 + i * 0.2, volume: 1000 })),
       surfaces: {
         delta: { T_vals: [0.25, 0.5], K_vals: [450,500,550], grid: [[0.5,0.6,0.4],[0.45,0.55,0.35]] },

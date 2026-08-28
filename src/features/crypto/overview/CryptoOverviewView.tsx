@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { fetchDeribitMarket, type DeribitMarketBundle } from '../../../api/deribit';
 import { toFundingSnapshot } from '../../../lib/math/carry/funding';
+import { fetchFreeCryptoMarket, type FreeCryptoMarket } from '../../../api/freeCrypto';
 
 export function CryptoOverviewView() {
   const [bundle, setBundle] = useState<DeribitMarketBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
+  const [freeMarket, setFreeMarket] = useState<FreeCryptoMarket | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -14,6 +16,7 @@ export function CryptoOverviewView() {
       setBundle(r);
       setStale(Date.now() - r.fetchedAt > 60_000);
     }).catch((e: Error) => { if (!cancelled) setError(e.message); });
+    fetchFreeCryptoMarket('BTC').then(r => { if (!cancelled) setFreeMarket(r); }).catch(() => { /* Deribit remains authoritative for options */ });
     return () => { cancelled = true; };
   }, []);
 
@@ -83,6 +86,24 @@ export function CryptoOverviewView() {
           </div>
         </div>
       </div>
+      {freeMarket && (
+        <div className="rounded border border-sky-500/30 p-3" data-testid="free-market-snapshot">
+          <div className="flex flex-wrap items-center gap-2 font-mono text-xs font-bold uppercase">
+            <span>Free multi-venue snapshot</span>
+            <span className="rounded bg-sky-500/15 px-2 py-1 text-sky-300">Binance + Bybit</span>
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-2 font-mono text-xs md:grid-cols-2">
+            {freeMarket.venues.map(v => (
+              <div key={v.venue} className="rounded bg-muted/50 p-2">
+                <div className="font-bold">{v.venue}</div>
+                <div>Mark: {v.mark != null ? v.mark.toFixed(1) : '—'} · 24h: {v.change24hPct != null ? `${v.change24hPct.toFixed(2)}%` : '—'}</div>
+                <div>Funding 8h: {v.funding8h != null ? `${(v.funding8h * 100).toFixed(4)}%` : '—'} · OI: {v.openInterest != null ? v.openInterest.toLocaleString() : '—'}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-[10px] text-muted-foreground">Public exchange data; free alternative to Velo, not Velo-normalized.</div>
+        </div>
+      )}
     </div>
   );
 }

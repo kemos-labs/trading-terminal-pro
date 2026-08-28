@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { registerSecurityHeaders } from '../api/securityHeaders.js';
 import { registerDeribitMarketRoutes } from './routes/deribitMarket.js';
+import { registerFreeCryptoMarketRoutes } from './routes/freeCryptoMarket.js';
 import { registerMacrovolRoutes } from './routes/macrovol.js';
 import { registerSseRoutes } from './routes/sse.js';
 import { registerStripeBilling, gateInfoForRequest } from '../api/stripeBilling.js';
@@ -65,7 +66,7 @@ const proxyTrust = resolveProxyTrust();
 const RL_GLOBAL = 600, RL_UPSTREAM = 120, RL_SCARCE = 30;
 function rateLimitClassForUrl(url) {
   if (url.startsWith('/api/alphavantage') || url.startsWith('/api/tradingview')) return 'scarce';
-  if (url.startsWith('/api/fmp') || url.startsWith('/api/finnhub') || url.startsWith('/api/massive') || url.startsWith('/api/flashalpha') || url.startsWith('/api/desk') || url.startsWith('/api/macrovol') || url.startsWith('/api/options') || url.startsWith('/api/yf') || url.startsWith('/api/deribit') || url.startsWith('/api/ksa') || url.startsWith('/api/history')) return 'upstream';
+  if (url.startsWith('/api/fmp') || url.startsWith('/api/finnhub') || url.startsWith('/api/massive') || url.startsWith('/api/flashalpha') || url.startsWith('/api/desk') || url.startsWith('/api/macrovol') || url.startsWith('/api/options') || url.startsWith('/api/yf') || url.startsWith('/api/deribit') || url.startsWith('/api/free-crypto') || url.startsWith('/api/ksa') || url.startsWith('/api/history')) return 'upstream';
   return 'global';
 }
 function rateLimitMaxForUrl(url) {
@@ -244,6 +245,7 @@ export async function buildServer() {
   registerFmpRoutes(fastify);
   registerSseRoutes(fastify);
   await registerDeribitMarketRoutes(fastify);
+  await registerFreeCryptoMarketRoutes(fastify);
   await registerMacrovolRoutes(fastify);
   registerFlashalphaRoutes(fastify);
   registerKsaRoutes(fastify);

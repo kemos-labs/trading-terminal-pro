@@ -28,6 +28,18 @@ describe('functionRegistry', () => {
     vi.clearAllMocks();
   });
 
+  it('HOME and LPAD resolve to the home launchpad desk (not Vol)', () => {
+    expect(resolveFunctionId('HOME')?.functionId).toBe('home');
+    expect(resolveFunctionId('LPAD')?.functionId).toBe('home');
+    expect(resolveFunctionId('home')?.functionId).toBe('home');
+    openFunction('HOME');
+    expect(useTerminalStore.getState().setActiveTab).toHaveBeenCalledWith('home');
+    openFunction('LPAD');
+    expect(useTerminalStore.getState().setActiveTab).toHaveBeenCalledWith('home');
+    // Launchpad grid tiles stay on Home (no section jump)
+    expect(sessionStorage.getItem(DESK_JUMP_KEY)).toBeNull();
+  });
+
   it('maps GEX and SOFR codes to exact functionIds', () => {
     expect(resolveFunctionId('GEX')?.functionId).toBe('positioning:pos-sub-chain');
     expect(resolveFunctionId('SOFR')?.functionId).toBe('rates:sec-stir');

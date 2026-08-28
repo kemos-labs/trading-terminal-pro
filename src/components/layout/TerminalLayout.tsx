@@ -52,12 +52,12 @@ export function TerminalLayout() {
   /** First-open chain briefing — only for chain-dependent desks (vol/positioning). Independent desks (crypto/rates/ksa/academy/trade) never wait for equity chain. */
   const [bootOpen, setBootOpen] = useState(() => {
     const tab = useTerminalStore.getState().activeTab as string;
-    const independent = ['crypto', 'rates', 'ksa', 'academy', 'desk'].includes(tab);
+    const independent = ['crypto', 'rates', 'ksa', 'academy', 'desk', 'home'].includes(tab);
     return independent ? false : true;
   });
   const heavyReady = Boolean(snapshot && chainAvailable && lastChainUpdate > 0) || (!loading && lastChainUpdate > 0);
   // Make independent desks never block on chain: they are ready immediately.
-  const isIndependentDesk = ['crypto', 'rates', 'ksa', 'academy', 'desk'].includes(activeTab as string);
+  const isIndependentDesk = ['crypto', 'rates', 'ksa', 'academy', 'desk', 'home'].includes(activeTab as string);
   const effectiveBootOpen = isIndependentDesk ? false : bootOpen;
 
   const jumpSection = useCallback((dir: 1 | -1) => {
@@ -192,6 +192,7 @@ export function TerminalLayout() {
     tab5: () => setActiveTab('rates'),
     tab6: () => setActiveTab('academy'),
     tab7: () => setActiveTab('ksa'),
+    h: () => setActiveTab('home'),
     b: () => setActiveTab('crypto'),
     m: () => setActiveTab('desk'),
     v: () => setActiveTab('vol'),

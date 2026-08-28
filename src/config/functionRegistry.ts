@@ -32,8 +32,9 @@ export type FunctionDescriptor = {
 
 /** Exact code → functionId (v1). */
 const CODE_MAP: Record<string, FunctionId> = {
+  HOME: 'home',
+  LPAD: 'home',
   VOL: 'vol',
-  HOME: 'vol',
   DES: 'vol',
   SURF: 'vol:vol-sub-surface',
   OVDV: 'vol:vol-sub-surface',
@@ -121,7 +122,7 @@ const STUDY_ALIAS_KEYWORDS: Record<string, string[]> = {
   'vol:vol-sub-greeks': ['greeks', 'delta gamma', 'vol risk', 'vgrk', 'analyze', 'grk'],
   vol: [
     'hvt', 'historical vol', 'hist vol', 'realized vol',
-    'des', 'description', 'security description', 'home',
+    'des', 'description', 'security description',
   ],
   'positioning:pos-sub-tools': ['ovme', 'option payoff', 'scenario', 'strategy builder', 'levels', 'parity', 'flashalpha', 'fa'],
   academy: ['learn', 'education', 'training', 'docs', 'curriculum'],

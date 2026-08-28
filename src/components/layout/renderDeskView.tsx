@@ -24,6 +24,7 @@ export const INDEPENDENT_TABS: ReadonlySet<ActiveTab> = new Set([
   'desk',
   'academy',
   'ksa',
+  'home',
 ]);
 
 export function renderDeskView(tab: ActiveTab, loading: boolean): ReactNode {
@@ -33,6 +34,8 @@ export function renderDeskView(tab: ActiveTab, loading: boolean): ReactNode {
 
   const view = (() => {
     switch (tab) {
+      case 'home':
+        return null;
       case 'vol':
         return <VolStructureView />;
       case 'positioning':

@@ -3,7 +3,7 @@
  * Interprets listed OI GEX/VEX/Charm (customer-long OI → dealers short convention).
  * Educational path bias — not a trade signal.
  */
-import { normCdf } from './black-scholes';
+import { normCdf } from '../math/norm';
 import { yearFractionFromSlice } from './time';
 
 export type HedgeFlowInputs = {

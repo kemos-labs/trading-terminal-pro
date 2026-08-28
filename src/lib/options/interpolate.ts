@@ -1,4 +1,4 @@
-import { fitSVI, sviIv } from './svi';
+import { fitSVI, sviIv } from '../math/surface/sviFit';
 import type { SVIFit } from './types';
 
 /**

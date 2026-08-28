@@ -12,7 +12,7 @@
  * Greeks come from computeGreeks (θ per day, ν per 1 vol point).
  */
 
-import { computeGreeks } from './greeks';
+import { priceGreeksMarket } from '../math/adapters';
 import type { PortfolioLeg } from './portfolio';
 import { evaluateCombo } from './portfolio';
 import { yearFractionFromSlice } from './time';
@@ -247,7 +247,7 @@ export function comboGreeksPnl(
         delta += sgn * (leg.kind === 'call' ? (S > leg.strike ? 1 : 0) : (S < leg.strike ? -1 : 0));
         continue;
       }
-      const g = computeGreeks(leg.kind, S, leg.strike, T, r, q, vol);
+      const g = priceGreeksMarket(leg.kind, S, leg.strike, T, r, q, vol);
       delta += sgn * g.delta;
       gamma += sgn * g.gamma;
       theta += sgn * g.theta; // per day

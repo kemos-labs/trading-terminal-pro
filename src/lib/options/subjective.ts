@@ -3,7 +3,8 @@
  * and compare to market mid (Thalex Subjective Valuation).
  */
 
-import { blackScholes, normCdf } from './black-scholes';
+import { priceGreeksMarket } from '../math/adapters';
+import { normCdf } from '../math/norm';
 import { yearFractionFromSlice } from './time';
 import type { VolSnapshot, OptionQuote } from './types';
 
@@ -40,7 +41,7 @@ function priceWithDrift(
   S: number, K: number, T: number, q: number, vol: number, drift: number,
 ): number {
   const rEff = drift + q;
-  return blackScholes(type, S, K, T, rEff, q, vol).price;
+  return priceGreeksMarket(type, S, K, T, rEff, q, vol).price;
 }
 
 export function subjectiveVol(marketIv: number, vrp: number, minVol = 0.01): number {

@@ -2,8 +2,9 @@
  * Multi-leg portfolio builder — combo greeks and mark PnL (Thalex-style).
  */
 
-import { computeGreeks, type GreeksResult } from './greeks';
-import { blackScholes } from './black-scholes';
+import { priceGreeksMarket, type MarketGreeks } from '../math/adapters';
+import { priceEuropeanSpot } from '../math/spotBsm';
+import { asDecimalRate, asDecimalVol, asYearFraction } from '../math/units';
 import { yearFractionFromSlice } from './time';
 import type { VolSnapshot, OptionQuote } from './types';
 
@@ -148,7 +149,7 @@ export function evaluateCombo(
       continue;
     }
 
-    const g: GreeksResult = computeGreeks(leg.kind, S, leg.strike, T, r, q, vol);
+    const g: MarketGreeks = priceGreeksMarket(leg.kind, S, leg.strike, T, r, q, vol);
     acc.price += sgn * g.price;
     acc.delta += sgn * g.delta;
     acc.gamma += sgn * g.gamma;
@@ -347,5 +348,5 @@ export function theoreticalPrice(
   type: 'call' | 'put',
   S: number, K: number, T: number, r: number, q: number, vol: number,
 ): number {
-  return blackScholes(type, S, K, T, r, q, vol).price;
+  return priceEuropeanSpot(type, S, K, asYearFraction(T), asDecimalRate(r), asDecimalRate(q), asDecimalVol(vol)).price;
 }

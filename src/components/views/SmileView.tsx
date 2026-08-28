@@ -13,7 +13,7 @@ import { useTerminalStore } from '../../store/terminalStore';
 import { Panel } from '../terminal/Panel';
 import { fmtPct } from '../../lib/format';
 import { DiagnosticsStrip } from './DiagnosticsStrip';
-import { fitSVI, svi } from '../../lib/options/svi';
+import { fitSVI, svi } from '../../lib/math/surface/sviFit';
 import { yearFractionFromSlice } from '../../lib/options/time';
 import type { OptionQuote } from '../../lib/options/types';
 import { Explain } from '../common/Explain';

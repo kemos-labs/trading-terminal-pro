@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { repriceSnapshotAtSpot } from './reprice';
-import { computeGreeks } from './greeks';
+import { priceGreeksMarket } from '../math/adapters';
 import { yearFractionFromSlice } from './time';
 import type { VolSnapshot } from './types';
 
@@ -12,7 +12,7 @@ function makeSnap(spot: number, gammaAtSpot: number): VolSnapshot {
   const T = yearFractionFromSlice({ expiry, dte }, 1);
   const r = 0.05;
   const q = 0.01;
-  const g = computeGreeks('call', spot, 100, T, r, q, iv);
+  const g = priceGreeksMarket('call', spot, 100, T, r, q, iv);
   // Sanity: caller may pass expected gamma
   void gammaAtSpot;
   return {
@@ -71,7 +71,7 @@ describe('repriceSnapshotAtSpot', () => {
     expect(next.timestamp).toBe(ts);
     const newGamma = next.expiries[0]!.calls[0]!.gamma!;
     const T = yearFractionFromSlice(snap.expiries[0]!, ts);
-    const expected = computeGreeks('call', 110, 100, T, 0.05, 0.01, 0.2).gamma;
+    const expected = priceGreeksMarket('call', 110, 100, T, 0.05, 0.01, 0.2).gamma;
     expect(newGamma).toBeCloseTo(expected, 6);
     expect(newGamma).not.toBeCloseTo(oldGamma, 6);
     // Original snap not mutated

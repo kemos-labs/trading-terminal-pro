@@ -8,14 +8,16 @@ import {
   straddleBreakEvens,
   syntheticSpotPath,
 } from './greeksPnl';
-import { impliedVol } from './ivSolver';
-import { blackScholes } from './black-scholes';
+import { priceGreeksMarket } from '../math/adapters';
+import { solveImpliedVol } from '../math/impliedVol';
+import { asDecimalRate, asDecimalVol, asYearFraction } from '../math/units';
 
 describe('greeksPnl / BS foundation', () => {
   it('implied vol recovers BS price (Black–Scholes invertibility)', () => {
     const S = 100, K = 100, T = 0.25, r = 0.05, q = 0.01, vol = 0.22;
-    const px = blackScholes('call', S, K, T, r, q, vol).price;
-    const iv = impliedVol('call', px, S, K, T, r, q);
+    const px = priceGreeksMarket('call', S, K, T, r, q, vol).price;
+    const res = solveImpliedVol('call', S, K, asYearFraction(T), asDecimalRate(r), asDecimalRate(q), px);
+    const iv = res.ok ? (res.sigma as unknown as number) : null;
     expect(iv).not.toBeNull();
     expect(iv!).toBeCloseTo(vol, 4);
   });

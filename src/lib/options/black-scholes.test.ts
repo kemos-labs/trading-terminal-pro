@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { blackScholes, normCdf, normPdf } from './black-scholes';
+import { priceGreeksMarket } from '../math/adapters';
+import { normCdf, normPdf } from '../math/norm';
 
 describe('Normal Distribution Functions', () => {
   it('should calculate CDF correctly', () => {
@@ -29,7 +30,7 @@ describe('Black-Scholes Option Pricing', () => {
   const vol = 0.2; // Volatility
 
   it('should price call options correctly', () => {
-    const result = blackScholes('call', S, K, T, r, q, vol);
+    const result = priceGreeksMarket('call', S, K, T, r, q, vol);
     
     expect(result.price).toBeGreaterThan(0);
     expect(result.delta).toBeGreaterThan(0);
@@ -41,7 +42,7 @@ describe('Black-Scholes Option Pricing', () => {
   });
 
   it('should price put options correctly', () => {
-    const result = blackScholes('put', S, K, T, r, q, vol);
+    const result = priceGreeksMarket('put', S, K, T, r, q, vol);
     
     expect(result.price).toBeGreaterThan(0);
     expect(result.delta).toBeLessThan(0);
@@ -53,8 +54,8 @@ describe('Black-Scholes Option Pricing', () => {
   });
 
   it('should satisfy put-call parity', () => {
-    const call = blackScholes('call', S, K, T, r, q, vol);
-    const put = blackScholes('put', S, K, T, r, q, vol);
+    const call = priceGreeksMarket('call', S, K, T, r, q, vol);
+    const put = priceGreeksMarket('put', S, K, T, r, q, vol);
     
     // Put-call parity: C - P = S*exp(-qT) - K*exp(-rT)
     const leftSide = call.price - put.price;
@@ -64,29 +65,29 @@ describe('Black-Scholes Option Pricing', () => {
   });
 
   it('should handle at-the-money options', () => {
-    const call = blackScholes('call', S, S, T, r, q, vol);
-    const put = blackScholes('put', S, S, T, r, q, vol);
+    const call = priceGreeksMarket('call', S, S, T, r, q, vol);
+    const put = priceGreeksMarket('put', S, S, T, r, q, vol);
     
     // ATM options should have similar prices
     expect(Math.abs(call.price - put.price)).toBeLessThan(1);
   });
 
   it('should handle in-the-money call options', () => {
-    const result = blackScholes('call', S, S * 0.9, T, r, q, vol);
+    const result = priceGreeksMarket('call', S, S * 0.9, T, r, q, vol);
     
     expect(result.delta).toBeGreaterThan(0.5);
     expect(result.price).toBeGreaterThan(S - K * Math.exp(-r * T)); // Intrinsic value
   });
 
   it('should handle out-of-the-money call options', () => {
-    const result = blackScholes('call', S, S * 1.1, T, r, q, vol);
+    const result = priceGreeksMarket('call', S, S * 1.1, T, r, q, vol);
     
     expect(result.delta).toBeLessThan(0.5);
   });
 
   it('should handle zero time to expiration', () => {
-    const call = blackScholes('call', S, K, 0, r, q, vol);
-    const put = blackScholes('put', S, K, 0, r, q, vol);
+    const call = priceGreeksMarket('call', S, K, 0, r, q, vol);
+    const put = priceGreeksMarket('put', S, K, 0, r, q, vol);
     
     // At expiration, options should be worth their intrinsic value
     expect(call.price).toBeCloseTo(Math.max(0, S - K), 4);
@@ -94,8 +95,8 @@ describe('Black-Scholes Option Pricing', () => {
   });
 
   it('should handle zero volatility', () => {
-    const call = blackScholes('call', S, K, T, r, q, 0);
-    const put = blackScholes('put', S, K, T, r, q, 0);
+    const call = priceGreeksMarket('call', S, K, T, r, q, 0);
+    const put = priceGreeksMarket('put', S, K, T, r, q, 0);
     
     // With zero volatility, options should be worth their discounted intrinsic value
     const expectedCall = Math.max(0, S * Math.exp(-q * T) - K * Math.exp(-r * T));
@@ -106,8 +107,8 @@ describe('Black-Scholes Option Pricing', () => {
   });
 
   it('should handle high volatility', () => {
-    const lowVol = blackScholes('call', S, K, T, r, q, 0.1);
-    const highVol = blackScholes('call', S, K, T, r, q, 0.5);
+    const lowVol = priceGreeksMarket('call', S, K, T, r, q, 0.1);
+    const highVol = priceGreeksMarket('call', S, K, T, r, q, 0.5);
     
     // Higher volatility should increase option prices
     expect(highVol.price).toBeGreaterThan(lowVol.price);

@@ -5,7 +5,7 @@ import {
   estimateParityDividend,
   blendDividendYield,
 } from './parity';
-import { blackScholes } from './black-scholes';
+import { priceGreeksMarket } from '../math/adapters';
 
 describe('forwardFromParity / impliedDividendYield', () => {
   const S = 100;
@@ -17,8 +17,8 @@ describe('forwardFromParity / impliedDividendYield', () => {
   it('recovers forward from fair BS call/put mids', () => {
     const K = 100;
     const vol = 0.2;
-    const c = blackScholes('call', S, K, T, r, q, vol).price;
-    const p = blackScholes('put', S, K, T, r, q, vol).price;
+    const c = priceGreeksMarket('call', S, K, T, r, q, vol).price;
+    const p = priceGreeksMarket('put', S, K, T, r, q, vol).price;
     const f = forwardFromParity(c, p, K, T, r);
     expect(f).toBeCloseTo(F, 4);
   });
@@ -45,8 +45,8 @@ describe('estimateParityDividend', () => {
     const calls = [];
     const puts = [];
     for (const K of strikes) {
-      calls.push({ strike: K, mid: blackScholes('call', S, K, T, r, q, vol).price });
-      puts.push({ strike: K, mid: blackScholes('put', S, K, T, r, q, vol).price });
+      calls.push({ strike: K, mid: priceGreeksMarket('call', S, K, T, r, q, vol).price });
+      puts.push({ strike: K, mid: priceGreeksMarket('put', S, K, T, r, q, vol).price });
     }
     return { calls, puts };
   }

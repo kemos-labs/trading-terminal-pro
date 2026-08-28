@@ -1,5 +1,5 @@
 import type { SurfaceGrid, SVIParams, SVIFit } from './types';
-import { fitSVI } from './svi';
+import { fitSVI } from '../math/surface/sviFit';
 import { yearFractionFromSlice } from './time';
 
 export interface SmileSlice {

@@ -1,5 +1,5 @@
 import type { VolSnapshot, ExpirySlice, OptionQuote, SurfaceGrid } from './types';
-import { computeGreeks } from './greeks';
+import { priceGreeksMarket } from '../math/adapters';
 import { DATA_CONFIG } from '../../config/constants';
 import { interpolateSurface } from './interpolate';
 import { yearFractionFromSlice } from './time';
@@ -100,8 +100,8 @@ export function buildSnapshot(
 
     for (const strike of expStrikes) {
       const iv = modelIV(ei, expiries.length, strike, spot, atmIV, crypto);
-      const g = computeGreeks('call', spot, strike, T, r, q, iv);
-      const putG = computeGreeks('put', spot, strike, T, r, q, iv);
+      const g = priceGreeksMarket('call', spot, strike, T, r, q, iv);
+      const putG = priceGreeksMarket('put', spot, strike, T, r, q, iv);
 
       const spread = 0.01 + iv * 0.05 * strike * Math.sqrt(T);
       const oi = Math.round(10000 * Math.exp(-Math.abs(strike - spot) / (spot * 0.1)) * (1 + 10 * Math.random()));

@@ -2,7 +2,8 @@
  * Break-even analysis + N(d2) for selected maturity (Thalex Break Even).
  */
 
-import { blackScholes, normCdf } from './black-scholes';
+import { priceGreeksMarket } from '../math/adapters';
+import { normCdf } from '../math/norm';
 import { yearFractionFromSlice } from './time';
 import type { VolSnapshot } from './types';
 import { breakEvenSpots, comboPayoffAtExpiry, type PortfolioLeg } from './portfolio';
@@ -44,7 +45,7 @@ export function breakEvenTable(
     const mid = midRaw ?? 0;
     const beLong = qt.type === 'call' ? qt.strike + mid : qt.strike - mid;
     const beShort = beLong; // same strike-crossing for single-leg
-    const g = blackScholes(qt.type, S, qt.strike, T, r, div, qt.iv!);
+    const g = priceGreeksMarket(qt.type, S, qt.strike, T, r, div, qt.iv!);
     const d2 = (Math.log(S / qt.strike) + (r - div - 0.5 * qt.iv! * qt.iv!) * T) / (qt.iv! * Math.sqrt(T));
     const nd2 = qt.type === 'call' ? normCdf(d2) : normCdf(-d2);
     return {

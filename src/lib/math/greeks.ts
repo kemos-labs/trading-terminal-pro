@@ -45,9 +45,16 @@ export function greeksEuropean(
     rho = -K * t * dfR * normCdf(-d2);
   }
 
+  // Charm = -dΔ/dT per year (Haug / MacroVol Python cross-language form).
+  // term = n(d1)·(2(r−q)T − d2·σ·√T)/(2T·σ·√T)  (= n(d1)·∂d1/∂T); the dividend
+  // term ±q·N(±d1) is call/put specific:
+  //   call: charm = −e^{−qT}·(term − q·N(d1))    put: charm = −e^{−qT}·(term + q·N(−d1))
   const vannaRaw = -dfQ * nd1 * d2 / sigma;
-  const charm = dfQ * nd1 * (2 * (rr - qq) * t - d2 * sigma * sqrtT) / (2 * t * sigma * sqrtT);
-  // Safer: compute charm via -d delta / dT using analytic approximation; fallback to finite diff in tests
+  const charmTerm = nd1 * (2 * (rr - qq) * t - d2 * sigma * sqrtT) / (2 * t * sigma * sqrtT);
+  const charm =
+    side === 'call'
+      ? -dfQ * (charmTerm - qq * normCdf(d1))
+      : -dfQ * (charmTerm + qq * normCdf(-d1));
 
-  return { delta, gamma, theta, vega, rho, vanna: vannaRaw, charm: charm as number };
+  return { delta, gamma, theta, vega, rho, vanna: vannaRaw, charm };
 }

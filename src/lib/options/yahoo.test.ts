@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildYahooSnapshot, YahooResponse } from './yahoo';
-import { blackScholes } from './black-scholes';
+import { priceGreeksMarket } from '../math/adapters';
 import { yearFractionToExpiry } from './time';
 
 const SPOT = 550;
@@ -17,7 +17,7 @@ function makeQuote(
   overrides: { bid?: number; ask?: number; last?: number; iv?: number | null } = {},
 ) {
   const t = yearFractionToExpiry(expiry, NOW) ?? 30 / 365.25;
-  const bs = blackScholes(type, SPOT, strike, t, R, Q, targetIV);
+  const bs = priceGreeksMarket(type, SPOT, strike, t, R, Q, targetIV);
   // Symmetric spread around the fair BS price; keeps bid positive and mid == fair price.
   const epsilon = Math.max(0.005, bs.price * 0.03);
   const bid = bs.price > epsilon ? bs.price - epsilon : bs.price * 0.5;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { svi, sviIv, fitSVI } from './svi';
+import { svi, sviIv, fitSVI } from '../math/surface/sviFit';
 import type { SVIParams } from './types';
 
 const TRUE: SVIParams = { a: 0.04, b: 0.15, rho: -0.3, m: 0, sigma: 0.1 };

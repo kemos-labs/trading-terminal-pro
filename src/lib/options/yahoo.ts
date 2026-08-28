@@ -2,7 +2,7 @@ import type { VolSnapshot, ExpirySlice, OptionQuote } from './types';
 import { solveImpliedVol } from '../math/impliedVol';
 import { greeksEuropean } from '../math/greeks';
 import { asDecimalRate, asDecimalVol, asYearFraction, thetaPerDay, vegaPerVolPoint } from '../math/units';
-import { fitSVI, sviIv } from './svi';
+import { fitSVI, sviIv } from '../math/surface/sviFit';
 import { DATA_CONFIG, VALIDATION_CONFIG } from '../../config/constants';
 import { yearFractionToExpiry, calendarDte } from './time';
 import { estimateParityDividend, blendDividendYield } from './parity';

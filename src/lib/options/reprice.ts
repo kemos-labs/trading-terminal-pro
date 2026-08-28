@@ -6,7 +6,7 @@
  * and desk tools read stale greeks × new spot (audit H2).
  */
 
-import { computeGreeks } from './greeks';
+import { priceGreeksMarket } from '../math/adapters';
 import { yearFractionFromSlice } from './time';
 import type { OptionQuote, ExpirySlice, VolSnapshot } from './types';
 
@@ -19,7 +19,7 @@ function repriceQuote(
 ): OptionQuote {
   if (q.iv == null || !(q.iv > 0) || !Number.isFinite(q.iv)) return q;
   if (!(spot > 0) || !(T > 0)) return q;
-  const g = computeGreeks(q.type, spot, q.strike, T, r, div, q.iv);
+  const g = priceGreeksMarket(q.type, spot, q.strike, T, r, div, q.iv);
   return {
     ...q,
     delta: g.delta,

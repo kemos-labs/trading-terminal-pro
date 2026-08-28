@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { computeGreeks } from './greeks';
+import { priceGreeksMarket } from '../math/adapters';
 
 /**
- * Unit matrix — Terminal TS `computeGreeks` vs MacroVol Python `compute_greeks`
+ * Unit matrix — Terminal TS `priceGreeksMarket` vs MacroVol Python `compute_greeks`
+ * (canonical math/greeks + named adapters in math/adapters.ts).
  *
  * | Quantity | Terminal TS | MacroVol Python | Required |
  * |----------|-------------|-----------------|----------|
@@ -49,7 +50,7 @@ describe('greeks unit matrix (TS ↔ MacroVol Python)', () => {
   it.each(PYTHON_GOLDEN)(
     'matches Python golden for $type S=$S K=$K',
     (c) => {
-      const g = computeGreeks(c.type, c.S, c.K, c.T, c.r, c.q, c.sigma);
+      const g = priceGreeksMarket(c.type, c.S, c.K, c.T, c.r, c.q, c.sigma);
       // Python rounds delta/vega/theta/vanna to 4 dp; gamma/charm to 6 dp
       expect(g.delta).toBeCloseTo(c.greeks.delta, 3);
       expect(g.gamma).toBeCloseTo(c.greeks.gamma, 5);
@@ -61,7 +62,7 @@ describe('greeks unit matrix (TS ↔ MacroVol Python)', () => {
   );
 
   it('scales θ and charm as calendar-day (raw/365), not annual', () => {
-    const g = computeGreeks('call', 100, 100, 0.25, 0.05, 0.01, 0.2);
+    const g = priceGreeksMarket('call', 100, 100, 0.25, 0.05, 0.01, 0.2);
     // Annual θ would be ~10× larger magnitude than typical daily θ
     expect(Math.abs(g.theta)).toBeLessThan(1);
     expect(Math.abs(g.charm)).toBeLessThan(0.01);
@@ -70,7 +71,7 @@ describe('greeks unit matrix (TS ↔ MacroVol Python)', () => {
   });
 
   it('scales ν per 1 vol point (raw/100)', () => {
-    const g = computeGreeks('call', 100, 100, 0.25, 0.05, 0.01, 0.2);
+    const g = priceGreeksMarket('call', 100, 100, 0.25, 0.05, 0.01, 0.2);
     // Raw vega S·φ·√T ~ 20 for these inputs; /100 → ~0.2
     expect(g.vega).toBeGreaterThan(0.05);
     expect(g.vega).toBeLessThan(2);
@@ -78,10 +79,10 @@ describe('greeks unit matrix (TS ↔ MacroVol Python)', () => {
 
   it('returns finite zeros (not NaN) for T<=0 or vol<=0', () => {
     for (const g of [
-      computeGreeks('call', 100, 100, 0, 0.05, 0.01, 0.2),
-      computeGreeks('put', 100, 100, 0.25, 0.05, 0.01, 0),
-      computeGreeks('call', 100, 100, -1, 0.05, 0.01, 0.2),
-      computeGreeks('call', NaN, 100, 0.25, 0.05, 0.01, 0.2),
+      priceGreeksMarket('call', 100, 100, 0, 0.05, 0.01, 0.2),
+      priceGreeksMarket('put', 100, 100, 0.25, 0.05, 0.01, 0),
+      priceGreeksMarket('call', 100, 100, -1, 0.05, 0.01, 0.2),
+      priceGreeksMarket('call', NaN, 100, 0.25, 0.05, 0.01, 0.2),
     ]) {
       expect(Number.isFinite(g.delta)).toBe(true);
       expect(Number.isFinite(g.gamma)).toBe(true);
@@ -92,7 +93,7 @@ describe('greeks unit matrix (TS ↔ MacroVol Python)', () => {
   });
 
   it('vanna is raw ∂²V/∂S∂σ (not /100)', () => {
-    const g = computeGreeks('call', 100, 100, 0.25, 0.05, 0.01, 0.2);
+    const g = priceGreeksMarket('call', 100, 100, 0.25, 0.05, 0.01, 0.2);
     // ATM vanna near 0; finite and not volga-scale
     expect(Number.isFinite(g.vanna)).toBe(true);
     expect(Math.abs(g.vanna)).toBeLessThan(5);

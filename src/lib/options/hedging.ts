@@ -7,7 +7,7 @@
  *  - period: rehedge every N steps
  */
 
-import { blackScholes } from './black-scholes';
+import { priceGreeksMarket } from '../math/adapters';
 import { yearFractionFromSlice } from './time';
 import type { VolSnapshot } from './types';
 
@@ -97,7 +97,7 @@ export function simulateDeltaHedge(cfg: HedgeConfig, S0: number): HedgeResult {
   let cash = 0;
   let tradeCount = 0;
 
-  const entryOpt = blackScholes(cfg.type, S, cfg.strike, Math.max(T, 1e-8), r, q, cfg.vol);
+  const entryOpt = priceGreeksMarket(cfg.type, S, cfg.strike, Math.max(T, 1e-8), r, q, cfg.vol);
   // Finance option purchase: pay premium
   cash -= cfg.optionQty * entryOpt.price;
 
@@ -115,7 +115,7 @@ export function simulateDeltaHedge(cfg: HedgeConfig, S0: number): HedgeResult {
   for (let i = 0; i <= cfg.steps; i++) {
     const tDay = (cfg.days * i) / cfg.steps;
     T = Math.max(1e-8, cfg.T - tDay / 365);
-    const opt = blackScholes(cfg.type, S, cfg.strike, T, r, q, cfg.vol);
+    const opt = priceGreeksMarket(cfg.type, S, cfg.strike, T, r, q, cfg.vol);
     const optionDelta = opt.delta;
     const netDelta = cfg.optionQty * optionDelta + hedgeQty;
     const optionMark = cfg.optionQty * opt.price;

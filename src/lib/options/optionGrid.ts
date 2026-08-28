@@ -2,7 +2,8 @@
  * Option Grid — leverage (omega) and 1/N(d2) by strike × expiry (Thalex Grid).
  */
 
-import { blackScholes, normCdf } from './black-scholes';
+import { priceGreeksMarket } from '../math/adapters';
+import { normCdf } from '../math/norm';
 import { yearFractionFromSlice } from './time';
 import type { VolSnapshot } from './types';
 
@@ -80,9 +81,9 @@ export function buildOptionGrid(
         });
         continue;
       }
-      const midRaw = q.mid != null && q.mid > 0 ? q.mid : blackScholes(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv).price;
+      const midRaw = q.mid != null && q.mid > 0 ? q.mid : priceGreeksMarket(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv).price;
       const mid = midRaw ?? 0;
-      const g = blackScholes(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv);
+      const g = priceGreeksMarket(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv);
       const omega = mid > 1e-8 ? (g.delta * snap.spot) / mid : null;
       const nd2 = nd2Of(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv);
       const invNd2 = nd2 > 1e-4 ? 1 / nd2 : null;

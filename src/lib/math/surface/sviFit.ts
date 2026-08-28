@@ -1,26 +1,34 @@
-import type { SVIParams, SVIFit } from './types';
-import { sviTotalVariance, sviImpliedVol } from '../math/surface/svi';
-import type { SviParams } from '../math/surface/svi';
-
 /**
- * Pure SVI total implied variance evaluation (Gatheral raw SVI) — now delegates to canonical.
-
+ * Canonical SVI calibration — Gatheral raw SVI w(k) = a + b·(ρ·(k−m) + √((k−m)² + σ²))
+ * on forward log-moneyness k = ln(K/F) and total variance w = σ²·T.
  *
- *   w(k) = a + b * (rho * (k - m) + sqrt((k - m)^2 + sigma^2))
- *
- * where k = log(K/F) is log-moneyness and w = σ² · T is total variance.
- * Convert to IV with: σ = sqrt(w / T)  (see sviIv).
+ * Levenberg–Marquardt fit with no-arbitrage projection. Single implementation —
+ * consumers (yahoo, interpolate, surfaceTools, SmileView) import from here only.
  */
-export function svi(param: SVIParams, k: number): number {
-  return sviTotalVariance(k, param as unknown as SviParams);
+import { sviImpliedVol, sviTotalVariance, type SviParams } from './svi';
+
+export type { SviParams };
+
+export interface SviFitResult {
+  params: SviParams;
+  rmse: number;
+  samples: number;
+}
+
+/** Pure SVI total variance evaluation (convenience for consumers). */
+export function svi(param: SviParams, k: number): number {
+  return sviTotalVariance(k, param);
 }
 
 /** Implied vol from SVI total variance: σ = √(max(w,0) / T). */
-export function sviIv(param: SVIParams, k: number, T: number): number {
-  return sviImpliedVol(k, T, param as unknown as SviParams);
+export function sviIv(param: SviParams, k: number, T: number): number {
+  return sviImpliedVol(k, T, param);
 }
 
 const NO_ARB_EPS = 1e-9;
+const PROJECT_B_MIN = 1e-4;
+const PROJECT_SIGMA_MIN = 1e-4;
+const PROJECT_RHO_BOUND = 0.999;
 
 /**
  * Project SVI parameters onto the no-arbitrage (no-calendar + no-butterfly)
@@ -32,10 +40,10 @@ const NO_ARB_EPS = 1e-9;
  *   sigma >= 1e-4        (positive smile curvature)
  *   a + b * sigma * sqrt(1 - rho^2) >= 0   (no butterfly arbitrage)
  */
-function projectNoArb(p: SVIParams): SVIParams {
-  const b = Math.max(p.b, 1e-4);
-  const rho = Math.max(-0.999, Math.min(0.999, p.rho));
-  const sigma = Math.max(p.sigma, 1e-4);
+export function projectNoArb(p: SviParams): SviParams {
+  const b = Math.max(p.b, PROJECT_B_MIN);
+  const rho = Math.max(-PROJECT_RHO_BOUND, Math.min(PROJECT_RHO_BOUND, p.rho));
+  const sigma = Math.max(p.sigma, PROJECT_SIGMA_MIN);
   let a = p.a;
   const butterfly = a + b * sigma * Math.sqrt(1 - rho * rho);
   if (butterfly < 0) {
@@ -47,24 +55,25 @@ function projectNoArb(p: SVIParams): SVIParams {
 /**
  * Jacobian of the SVI model w.r.t. {a, b, rho, m, sigma} at log-moneyness k.
  */
-function sviJacobian(p: SVIParams, k: number): [number, number, number, number, number] {
+export function sviJacobian(p: SviParams, k: number): [number, number, number, number, number] {
   const { b, rho, m, sigma } = p;
   const dk = k - m;
   const dist = Math.sqrt(dk * dk + sigma * sigma);
   const term = rho * dk + dist;
-  const dA = 1;
-  const dB = term;
-  const dRho = b * dk;
-  const dM = b * (-rho - dk / dist);
-  const dSigma = b * (sigma / dist);
-  return [dA, dB, dRho, dM, dSigma];
+  return [
+    1,
+    term,
+    b * dk,
+    b * (-rho - dk / dist),
+    b * (sigma / dist),
+  ];
 }
 
-function residual(p: SVIParams, k: number, w: number): number {
+function residual(p: SviParams, k: number, w: number): number {
   return svi(p, k) - w;
 }
 
-function sse(p: SVIParams, samples: { k: number; w: number }[]): number {
+function sse(p: SviParams, samples: { k: number; w: number }[]): number {
   let s = 0;
   for (const { k, w } of samples) {
     const r = residual(p, k, w);
@@ -110,9 +119,9 @@ function solve5x5(A: number[][], rhs: number[]): number[] {
 }
 
 /**
- * Fit SVI to an implied-volatility smile via total variance.
+ * Fit raw SVI to an implied-volatility smile on forward moneyness.
  *
- * Fits w(k) = IV² · T (canonical Gatheral raw SVI). Pass the year fraction T
+ * Fits w(k) = IV²·T (canonical Gatheral raw SVI). Pass the year fraction T
  * for the expiry being fit. When T is omitted, defaults to 1 (fit on variance
  * units with unit time — only appropriate for synthetic/unit tests).
  *
@@ -126,7 +135,7 @@ export function fitSVI(
   ivs: (number | null)[],
   spot: number,
   T = 1,
-): SVIFit | null {
+): SviFitResult | null {
   if (spot <= 0 || !isFinite(spot)) return null;
   const yearFrac = Math.max(T, 1e-8);
 

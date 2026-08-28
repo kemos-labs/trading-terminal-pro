@@ -6,7 +6,7 @@
  */
 
 import type { VolSnapshot, ExpirySlice, OptionQuote, FuturesMark } from './types';
-import { computeGreeks } from './greeks';
+import { priceGreeksMarket } from '../math/adapters';
 import { computeAtmIV } from './yahoo';
 import { yearFractionToExpiry, calendarDte } from './time';
 import type { DeribitBookRow, DeribitFutureRow, DeribitMarketBundle } from '../data/deribitClient';
@@ -144,7 +144,7 @@ function toQuote(
   if (!(mid > 0) && mark > 0) mid = mark;
   if (!(mid > 0)) return null;
 
-  const g = computeGreeks(parsed.type, index, parsed.strike, T, r, q, iv);
+  const g = priceGreeksMarket(parsed.type, index, parsed.strike, T, r, q, iv);
   const oi = Math.max(0, row.open_interest ?? 0);
   const vol = Math.max(0, row.volume ?? 0);
 

@@ -1,6 +1,6 @@
 import type { VolSnapshot, GreeksProfile, SensitivityMatrix } from './types';
-import { computeGreeks } from './greeks';
-import { normCdf } from './black-scholes';
+import { priceGreeksMarket } from '../math/adapters';
+import { normCdf } from '../math/norm';
 import { yearFractionFromSlice } from './time';
 
 /** Unit greek keys available on each quote for strike profiles. */
@@ -55,7 +55,7 @@ export function spotSensitivity(snap: VolSnapshot): SensitivityMatrix {
         if (q.iv == null || q.iv <= 0) continue;
         const T = yearFractionFromSlice(slice);
         if (T <= 0) continue;
-        const g = computeGreeks(q.type, S, q.strike, T, snap.riskFreeRate, snap.dividendYield, q.iv);
+        const g = priceGreeksMarket(q.type, S, q.strike, T, snap.riskFreeRate, snap.dividendYield, q.iv);
         dSum += g.delta;
         gSum += g.gamma;
         vSum += g.vega;
@@ -93,7 +93,7 @@ export function ivSensitivity(snap: VolSnapshot): SensitivityMatrix {
         const T = yearFractionFromSlice(slice);
         if (T <= 0) continue;
         const vol = Math.max(0.01, q.iv * (1 + ivS));
-        const g = computeGreeks(q.type, snap.spot, q.strike, T, snap.riskFreeRate, snap.dividendYield, vol);
+        const g = priceGreeksMarket(q.type, snap.spot, q.strike, T, snap.riskFreeRate, snap.dividendYield, vol);
         dSum += g.delta;
         gSum += g.gamma;
         vSum += g.vega;

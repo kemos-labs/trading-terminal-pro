@@ -13,7 +13,6 @@ import { BasisSection } from './rates/BasisSection';
 import { CashFuturesMonitor } from './rates/CashFuturesMonitor';
 import { PlumbingSection } from './rates/PlumbingSection';
 import { PlumbingBarometer } from './rates/PlumbingBarometer';
-import { CurveSection } from './rates/CurveSection';
 import { CorrSection } from './rates/CorrSection';
 import { PremiumSection } from './rates/PremiumSection';
 import { JapanCarryPanel } from './rates/JapanCarryPanel';
@@ -21,9 +20,7 @@ import { CurvesBoard } from './rates/CurvesBoard';
 import { FxBoard } from './rates/FxBoard';
 import { GlobalYieldsBoard } from './rates/GlobalYieldsBoard';
 import { UstDataStrip } from './rates/UstDataStrip';
-import { YieldCurveCompare } from './rates/YieldCurveCompare';
 import { AuctionCard } from './rates/AuctionCard';
-import { CollapsibleSection } from '../terminal/CollapsibleSection';
 
 /**
  * US rates desk — information hierarchy:
@@ -116,34 +113,9 @@ export function RatesPanel({
     </>
   );
 
+  // P0 Fix: removed duplicate UST curve panels (YieldCurveCompare early + CurveSection duplicate). Single CurvesBoard is canonical; stale/error provenance preserved via DataBadge/freshness.
   const ust = (
     <>
-      {curveComparePoints.length >= 2 && (
-        <div id="sec-curves">
-          <CollapsibleSection
-            id="sec-ust-curve-early"
-            className="order-4"
-            title="UST YIELD CURVE"
-            apis={['FRED']}
-            defaultOpen
-            storageKey="rates.sec.ust-curve-early"
-            subtitle="Live vs compare window · tight yield scale · full charts + auction pack sit lower on the desk"
-          >
-            <YieldCurveCompare
-              points={curveComparePoints}
-              todayAsOf={curveCompare?.today_as_of ?? curveMeta?.as_of}
-              compareAsOf={curveCompare?.compare_as_of}
-              height={220}
-              source={curveMeta?.source || 'FRED'}
-              compareWindow={compareWindow}
-              onCompareWindow={setCompareWindow}
-              customDays={customDays}
-              onCustomDays={setCustomDays}
-              compareLoading={compareLoading}
-            />
-          </CollapsibleSection>
-        </div>
-      )}
       <div id="sec-ust-data">
         <UstDataStrip
           summary={summary}
@@ -177,7 +149,6 @@ export function RatesPanel({
           />
         </div>
       )}
-      <CurveSection curve={curve} curveMeta={curveMeta} />
       <div id="sec-auctions">
         <AuctionCard />
       </div>

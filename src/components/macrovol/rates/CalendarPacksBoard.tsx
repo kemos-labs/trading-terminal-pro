@@ -123,12 +123,11 @@ function PackTable({
                         ? 'text-up'
                         : ''
                 }`}
+                title={bps == null && s.implied_rate != null ? `Level ${s.implied_rate.toFixed(3)}% — not a spread` : undefined}
               >
                 {bps != null
                   ? `${bps >= 0 ? '+' : ''}${bps.toFixed(1)}`
-                  : s.implied_rate != null
-                    ? `${s.implied_rate.toFixed(3)}%`
-                    : '—'}
+                  : '—'}
               </span>
               <span className="text-right font-mono tabular-nums text-muted-foreground">
                 {s.price_spread != null
@@ -179,13 +178,10 @@ export function CalendarPacksBoard({
           []
         ).slice(0, capFor(kind));
         if (!rows.length) return null;
+        // P0 Fix: level (implied_rate) never substitutes for spread (rate_bps). Null stays null — no unit mixing.
         const curvePoints = toCurvePoints(rows, {
           x: (r) => r.name,
-          bps: (r) => (r.rate_bps != null
-            ? r.rate_bps
-            : r.implied_rate != null
-              ? r.implied_rate * 100
-              : null),
+          bps: (r) => r.rate_bps ?? null,
           full: (r) => r.legs?.join(' / '),
         });
         return (

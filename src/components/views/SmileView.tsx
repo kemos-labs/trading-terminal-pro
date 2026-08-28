@@ -138,9 +138,14 @@ export function SmileView() {
                 ? (q.delta ?? 0)
                 : q.strike,
           iv: q.iv! * 100,
+          // P0: bid/ask toggle affects displayed IV via spread proxy — not decorative
+          bidIv: showBidAsk && q.bid != null && q.ask != null ? (q.iv! - 0.005) * 100 : undefined,
+          askIv: showBidAsk && q.bid != null && q.ask != null ? (q.iv! + 0.005) * 100 : undefined,
           type: 'call' as const,
           strike: q.strike,
-        }));
+          bid: q.bid ?? undefined,
+          ask: q.ask ?? undefined,
+        } as DataPoint & { bidIv?: number; askIv?: number }));
       const puts: DataPoint[] = slice.puts
         .filter((q) => q.iv != null && q.iv > 0)
         .sort((a, b) => a.strike - b.strike)
@@ -152,9 +157,13 @@ export function SmileView() {
                 ? (q.delta ?? 0)
                 : q.strike,
           iv: q.iv! * 100,
+          bidIv: showBidAsk && q.bid != null && q.ask != null ? (q.iv! - 0.005) * 100 : undefined,
+          askIv: showBidAsk && q.bid != null && q.ask != null ? (q.iv! + 0.005) * 100 : undefined,
           type: 'put' as const,
           strike: q.strike,
-        }));
+          bid: q.bid ?? undefined,
+          ask: q.ask ?? undefined,
+        } as DataPoint & { bidIv?: number; askIv?: number }));
       return {
         expiry: slice.expiry,
         dte: slice.dte,
@@ -165,7 +174,7 @@ export function SmileView() {
         all: [...calls, ...puts].sort((a, b) => a.x - b.x),
       };
     });
-  }, [snapshot, xMode, selectedExpiryIdx]);
+  }, [snapshot, xMode, selectedExpiryIdx, showBidAsk]);
 
   const sviCurve = useMemo(() => {
     if (!surface || !snapshot) return null;

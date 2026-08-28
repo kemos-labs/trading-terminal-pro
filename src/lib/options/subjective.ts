@@ -68,8 +68,9 @@ export function evaluateSubjective(
   const rows: SubjectiveRow[] = [];
   for (const qt of quotes) {
     if (qt.iv == null || qt.iv <= 0) continue;
-    const mid = qt.mid > 0 ? qt.mid : (qt.bid + qt.ask) / 2;
-    if (!(mid > 0)) continue;
+    const midRaw = qt.mid ?? (qt.bid != null && qt.ask != null ? (qt.bid + qt.ask)/2 : null);
+    if (midRaw == null || !(midRaw > 0)) continue;
+    const mid = midRaw as number;
     const sVol = subjectiveVol(qt.iv, params.vrp, minVol);
     const sPrice = priceWithDrift(qt.type, S, qt.strike, T, q, sVol, params.drift);
     const edge = sPrice - mid;

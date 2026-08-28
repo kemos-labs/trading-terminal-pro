@@ -148,13 +148,13 @@ export function impliedMove(snap: VolSnapshot) {
   let straddle = 0;
   let bestDist = Infinity;
   for (const c of calls) {
-    if (!(c.mid > 0)) continue;
+    if (!(c.mid != null && c.mid > 0)) continue;
     const p = puts.find((pp) => pp.strike === c.strike);
-    if (!p || !(p.mid > 0)) continue;
+    if (!p || !(p.mid != null && p.mid > 0)) continue;
     const dist = Math.abs(c.strike - snap.spot);
     if (dist < bestDist) {
       bestDist = dist;
-      straddle = c.mid + p.mid;
+      straddle = (c.mid as number) + (p.mid as number);
     }
   }
 
@@ -193,11 +193,11 @@ export function maxPainStrike(snap: VolSnapshot): number | null {
   for (const strike of allStrikes) {
     let pain = 0;
     for (const q of [...slice.calls, ...slice.puts]) {
-      if (q.openInterest <= 0) continue;
+      if ((q.openInterest ?? 0) <= 0) continue;
       if (q.type === 'call') {
-        pain += Math.max(0, strike - q.strike) * q.openInterest;
+        pain += Math.max(0, strike - q.strike) * (q.openInterest ?? 0);
       } else {
-        pain += Math.max(0, q.strike - strike) * q.openInterest;
+        pain += Math.max(0, q.strike - strike) * (q.openInterest ?? 0);
       }
     }
     if (pain < minPain) {
@@ -340,8 +340,8 @@ export interface DealerProfilePoint {
 }
 
 type WeightableQuote = {
-  openInterest: number;
-  volume: number;
+  openInterest: number | null;
+  volume: number | null;
   gamma?: number | null;
 };
 
@@ -398,17 +398,19 @@ export function resolveExposureWeight(
       note: 'OI-weighted · GEX = γ·S²·0.01·OI·mult (1% $gamma) · DEX/VEX use ×S',
     };
   }
+  // P0 Fix: missing OI stays null — do not silently fall to volume/unit when caller requested OI (observed positioning).
+  // Volume/unit are separate scenario modes; callers must explicitly request them.
   if (volume > 0) {
     return {
-      weight: 'volume',
+      weight: 'oi',
       fallback: true,
-      note: 'OI missing from feed — volume-weighted proxy (not true inventory GEX)',
+      note: 'OI missing — observed positioning unavailable. Switch to Volume-weighted scenario for proxy.',
     };
   }
   return {
-    weight: 'unit',
+    weight: 'oi',
     fallback: true,
-    note: 'OI & volume missing — unit weight on contracts with γ (structure only)',
+    note: 'OI & volume missing — observed positioning unavailable (null). Use Unit scenario for structure only.',
   };
 }
 
@@ -492,6 +494,8 @@ export function dealerExposure(
     for (const q of [...slice.calls, ...slice.puts]) {
       const w = weightOf(q, weight);
       if (w <= 0) continue;
+      // P0 Fix: missing Greeks remain null — skip quote if gamma/delta missing (no zero substitution)
+      if (q.gamma == null || q.delta == null) continue;
       const acc = map.get(q.strike) ?? {
         callGEX: 0, putGEX: 0,
         callDEX: 0, putDEX: 0,
@@ -501,22 +505,22 @@ export function dealerExposure(
       // 1% dollar-gamma (SpotGamma): γ · S² · 0.01 · OI · mult
       const gexScale = S * S * 0.01 * w * mult;
       const notionalScale = S * w * mult;
-      const gamma = q.gamma ?? 0;
-      const delta = q.delta ?? 0;
-      const vanna = q.vanna ?? 0;
+      const gamma = q.gamma;
+      const delta = q.delta;
+      const vanna = q.vanna ?? null;
       // computeGreeks stores charm per calendar day (same unit as θ)
-      const charmDay = q.charm ?? 0;
+      const charmDay = q.charm ?? null;
 
       if (q.type === 'call') {
         acc.callGEX += gamma * gexScale;
         acc.callDEX += delta * notionalScale;
-        acc.callVEX += vanna * notionalScale;
-        acc.callCharm += charmDay * notionalScale;
+        if (vanna != null) acc.callVEX += vanna * notionalScale;
+        if (charmDay != null) acc.callCharm += charmDay * notionalScale;
       } else {
         acc.putGEX -= gamma * gexScale; // dealer-style put GEX negative
         acc.putDEX += delta * notionalScale; // put δ already ≤ 0
-        acc.putVEX += vanna * notionalScale;
-        acc.putCharm += charmDay * notionalScale;
+        if (vanna != null) acc.putVEX += vanna * notionalScale;
+        if (charmDay != null) acc.putCharm += charmDay * notionalScale;
       }
       map.set(q.strike, acc);
     }
@@ -817,17 +821,17 @@ export function scanParityEdges(
     for (const c of slice.calls) {
       if (Math.abs(c.strike / snap.spot - 1) > band) continue;
       const p = putByK.get(c.strike);
-      if (!p || !(c.mid > 0) || !(p.mid > 0)) continue;
+      if (!p || !(c.mid != null && c.mid > 0) || !(p.mid != null && p.mid > 0)) continue;
       const theo = discS - c.strike * Math.exp(-r * T);
-      const residual = (c.mid - p.mid) - theo;
+      const residual = ((c.mid as number) - (p.mid as number)) - theo;
       const halfSpread =
-        Math.max(0, (c.ask - c.bid) / 2) + Math.max(0, (p.ask - p.bid) / 2);
+        Math.max(0, ((c.ask ?? 0) - (c.bid ?? 0)) / 2) + Math.max(0, ((p.ask ?? 0) - (p.bid ?? 0)) / 2);
       rows.push({
         expiry: slice.expiry,
         dte: slice.dte,
         strike: c.strike,
-        callMid: c.mid,
-        putMid: p.mid,
+        callMid: c.mid as number,
+        putMid: p.mid as number,
         residual,
         residualPctSpot: residual / snap.spot,
         tradeable: Math.abs(residual) > halfSpread + 1e-9 && halfSpread > 0,
@@ -849,14 +853,14 @@ export function inventoryByExpiry(snap: VolSnapshot) {
       gamma += q.gamma ?? 0;
       vega += q.vega ?? 0;
       theta += q.theta ?? 0;
-      callOI += q.openInterest;
+      callOI += q.openInterest ?? 0;
     }
     for (const q of slice.puts) {
       delta += q.delta ?? 0;
       gamma += q.gamma ?? 0;
       vega += q.vega ?? 0;
       theta += q.theta ?? 0;
-      putOI += q.openInterest;
+      putOI += q.openInterest ?? 0;
     }
     return {
       expiry: slice.expiry,

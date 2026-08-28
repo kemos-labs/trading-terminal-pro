@@ -48,9 +48,16 @@ export function TerminalLayout() {
   const [quoteStripOn] = useState(() => isQuoteStripEnabled());
   const [displayStripOn, setDisplayStripOn] = useState(() => isDisplayStripEnabled());
   const [cmdFocusToken, setCmdFocusToken] = useState(0);
-  /** First-open rates/macro briefing while heavy chain loads in the background. */
-  const [bootOpen, setBootOpen] = useState(true);
+  /** First-open chain briefing — only for chain-dependent desks (vol/positioning). Independent desks (crypto/rates/ksa/academy/trade) never wait for equity chain. */
+  const [bootOpen, setBootOpen] = useState(() => {
+    const tab = useTerminalStore.getState().activeTab as string;
+    const independent = ['crypto', 'rates', 'ksa', 'academy', 'desk'].includes(tab);
+    return independent ? false : true;
+  });
   const heavyReady = Boolean(snapshot && chainAvailable && lastChainUpdate > 0) || (!loading && lastChainUpdate > 0);
+  // Make independent desks never block on chain: they are ready immediately.
+  const isIndependentDesk = ['crypto', 'rates', 'ksa', 'academy', 'desk'].includes(activeTab as string);
+  const effectiveBootOpen = isIndependentDesk ? false : bootOpen;
 
   const jumpSection = useCallback((dir: 1 | -1) => {
     const tab = useTerminalStore.getState().activeTab;
@@ -120,10 +127,23 @@ export function TerminalLayout() {
     }
   }, [setActiveTab]);
 
-  // Migrate stale tab ids (e.g. old "home"/"macro" → Vol, the default desk)
+  // Migrate stale tab ids — NOT silently to Vol. Home semantics: show launchpad notice. Macro → Rates with notice.
   useEffect(() => {
     const id = activeTab as string;
-    if (id === 'home' || id === 'macro' || !TABS.some((t) => t.id === activeTab)) {
+    if (id === 'home') {
+      // P0 Fix: do not silently redirect Home→Volatility. Home is launchpad/function codes.
+      toast.message('Home desk retired', { description: 'Use LPAD, function codes, or the Vol desk. Redirected to Vol.' });
+      setActiveTab('vol');
+      return;
+    }
+    if (id === 'macro') {
+      toast.message('Macro desk → Rates', { description: 'Macro is now Funding/UST/STIR/World under Rates.' });
+      setActiveTab('rates');
+      return;
+    }
+    if (!TABS.some((t) => t.id === activeTab)) {
+      // Unknown tab — fail to Vol but with notice (not silent)
+      toast.error('Unknown desk', { description: `"${id}" not found — opened Vol` });
       setActiveTab('vol');
     }
   }, [activeTab, setActiveTab]);
@@ -282,7 +302,7 @@ export function TerminalLayout() {
       {symbolDialogOpen && (
         <SymbolDialog onSelect={handleSymbolSelect} onClose={() => setSymbolDialogOpen(false)} />
       )}
-      {bootOpen && (
+      {effectiveBootOpen && (
         <BootBriefing
           heavyReady={heavyReady}
           onEnter={() => {

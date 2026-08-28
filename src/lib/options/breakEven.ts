@@ -37,10 +37,11 @@ export function breakEvenTable(
   const list = [
     ...(type !== 'put' ? slice.calls : []),
     ...(type !== 'call' ? slice.puts : []),
-  ].filter(qt => qt.iv != null && qt.iv > 0 && (qt.mid > 0 || qt.last > 0));
+  ].filter(qt => qt.iv != null && qt.iv > 0 && ((qt.mid != null && qt.mid > 0) || (qt.last != null && qt.last > 0)));
 
   return list.map(qt => {
-    const mid = qt.mid > 0 ? qt.mid : qt.last;
+    const midRaw = (qt.mid != null && qt.mid > 0 ? qt.mid : qt.last) as number | null;
+    const mid = midRaw ?? 0;
     const beLong = qt.type === 'call' ? qt.strike + mid : qt.strike - mid;
     const beShort = beLong; // same strike-crossing for single-leg
     const g = blackScholes(qt.type, S, qt.strike, T, r, div, qt.iv!);

@@ -235,9 +235,11 @@ export function pushBoardHistory(board) {
   if (!isUsableBoard(board)) return;
   const tasi = board.tasi || {};
   const nomu = board.nomu || {};
-  const adv = Number(tasi.advancing) || 0;
-  const dec = Number(tasi.declining) || 0;
-  const unc = Number(tasi.unchanged) || 0;
+  // P0: keep null when missing, not 0.
+  const advRaw = tasi.advancing, decRaw = tasi.declining, uncRaw = tasi.unchanged;
+  const adv = Number.isFinite(Number(advRaw)) ? Number(advRaw) : null;
+  const dec = Number.isFinite(Number(decRaw)) ? Number(decRaw) : null;
+  const unc = Number.isFinite(Number(uncRaw)) ? Number(uncRaw) : null;
   const sectors = Array.isArray(board.sectors) ? board.sectors : [];
   const ranked = [...sectors]
     .filter((s) => s && Number.isFinite(Number(s.change_percent)))
@@ -260,7 +262,7 @@ export function pushBoardHistory(board) {
     adv,
     dec,
     unc,
-    breadth: adv + dec > 0 ? (adv - dec) / (adv + dec) : null,
+    breadth: adv != null && dec != null && (adv + dec) > 0 ? (adv - dec) / (adv + dec) : null,
     mood: tasi.market_mood || null,
     topSector: topSector
       ? { name: topSector.sector_name || topSector.sector_name_ar, pct: Number(topSector.change_percent) }
@@ -290,10 +292,15 @@ export function getBoardHistory() {
 export function deriveBoardDepth(board) {
   if (!board) return null;
   const tasi = board.tasi || {};
-  const adv = Number(tasi.advancing) || 0;
-  const dec = Number(tasi.declining) || 0;
-  const unc = Number(tasi.unchanged) || 0;
-  const total = adv + dec + unc;
+  // P0 Fix: missing breadth stays null, not 0.
+  const advRaw = tasi.advancing;
+  const decRaw = tasi.declining;
+  const uncRaw = tasi.unchanged;
+  const adv = Number.isFinite(Number(advRaw)) ? Number(advRaw) : null;
+  const dec = Number.isFinite(Number(decRaw)) ? Number(decRaw) : null;
+  const unc = Number.isFinite(Number(uncRaw)) ? Number(uncRaw) : null;
+  const hasBreadth = adv != null && dec != null && unc != null;
+  const total = hasBreadth ? (adv + dec + unc) : null;
   const sectors = Array.isArray(board.sectors) ? board.sectors : [];
   const sectorBars = [...sectors]
     .filter((s) => s && Number.isFinite(Number(s.change_percent)))
@@ -331,14 +338,16 @@ export function deriveBoardDepth(board) {
     }));
 
   return {
-    breadth: {
+    // Null breadth preserved with unavailable badge — not zero.
+    breadth: hasBreadth ? {
       adv,
       dec,
       unc,
       total,
-      ratio: adv + dec > 0 ? (adv - dec) / (adv + dec) : null,
-      advShare: total > 0 ? adv / total : null,
-    },
+      ratio: (adv + dec) > 0 ? (adv - dec) / (adv + dec) : null,
+      advShare: total != null && total > 0 ? adv / total : null,
+    } : { adv: null, dec: null, unc: null, total: null, ratio: null, advShare: null, unavailable: true },
+
     sectorBars,
     moverBars,
     volLeaders,
@@ -452,8 +461,8 @@ async function loadBoardPack() {
     gainers: gList,
     losers: lList,
     volumeLeaders: vList,
-    /** Value leaders omitted on free pack (saves 1 call); UI reuses volume for value proxy. */
-    valueLeaders: vList,
+    /** P0 Fix: no fake value leaders on free tier — true traded value unavailable */
+    valueLeaders: [],
     sectors: sectors.ok ? (sectors.data?.sectors || []) : [],
     mega,
     errors: partialErrors,

@@ -96,18 +96,16 @@ describe('GreeksView (Greeks 1.0 host)', () => {
     expect(screen.queryByText('QQQ')).toBeNull();
   });
 
-  it('exposes surface viz toggle (Plotly / mesh)', async () => {
+  it('exposes 2D fallback surface (Plotly/3D removed per P0)', async () => {
     render(<GreeksView />);
     await waitFor(
       () => {
-        expect(screen.getByTestId('greeks-theme-plotly')).toBeInTheDocument();
+        expect(screen.getByText(/2D Fallback — Plotly\/3D removed/i)).toBeInTheDocument();
       },
       { timeout: 8000 },
     );
-    expect(screen.getByTestId('greeks-theme-mesh')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('greeks-theme-mesh'));
-    // Theme state lives in component state (no localStorage dependency).
-    expect(screen.getByTestId('greeks-theme-mesh')).toHaveClass('bg-primary');
+    expect(screen.getByText(/Strike profile/i)).toBeInTheDocument();
+    expect(screen.getByText(/Term profile/i)).toBeInTheDocument();
   });
 
   it('ATM greek cards drive selection labels', async () => {
@@ -118,7 +116,7 @@ describe('GreeksView (Greeks 1.0 host)', () => {
       },
       { timeout: 8000 },
     );
-    expect(screen.getByText('DELTA')).toBeInTheDocument();
-    expect(screen.getByText('GAMMA')).toBeInTheDocument();
+    expect(screen.getAllByText('DELTA').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('GAMMA').length).toBeGreaterThanOrEqual(1);
   });
 });

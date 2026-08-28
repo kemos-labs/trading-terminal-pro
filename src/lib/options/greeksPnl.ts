@@ -1,9 +1,13 @@
 /**
- * Greek-attributed mark PnL along a spot path (Thalex Option PnL / Combo PnL).
+ * Greek-attributed mark PnL along a spot path (scenario model).
  *
+ * P0: This is a user-controlled scenario model — NOT historical market PnL.
  * Without exchange option-mark history we sticky-strike reprice with Black–Scholes
  * using the current surface IV, then decompose bar-to-bar moves:
  *   Δ·dS + ½Γ·dS² + Θ·dT + ν·dσ  (+ residual)
+ * Sticky IV ⇒ vega attribution is 0 by construction (labelled). For historical
+ * PnL, use observed HistoryToSpotBars with provenance; synthetic paths carry
+ * method 'scenario-synthetic-gbm-sticky-iv' and must be labelled Scenario.
  *
  * Greeks come from computeGreeks (θ per day, ν per 1 vol point).
  */
@@ -51,15 +55,22 @@ export interface GreeksPnlSeries {
   totalTheta: number;
   totalVega: number;
   totalResidual: number;
-  /** How marks were produced */
-  method: 'bs-sticky-iv';
+  /** How marks were produced — scenario vs historical. */
+  method: 'bs-sticky-iv' | 'scenario-synthetic-gbm-sticky-iv';
+  /** Provenance label for UI */
+  provenance: 'observed-history' | 'scenario-synthetic';
+  /** Vega attribution note: sticky IV ⇒ 0 vol move */
+  vegaNote: string;
 }
 
-function legVol(snap: VolSnapshot, leg: PortfolioLeg): number {
+function legVol(snap: VolSnapshot, leg: PortfolioLeg): number | null {
   if (leg.iv != null && leg.iv > 0) return leg.iv;
-  if (leg.kind === 'spot' || leg.kind === 'future' || !leg.expiry) return 0;
+  if (leg.kind === 'spot' || leg.kind === 'future' || !leg.expiry) return null;
   const slice = snap.expiries.find(e => e.expiry === leg.expiry);
-  if (!slice) return snap.expiries[0]?.atmIV ?? 0.25;
+  if (!slice) {
+    const fallback = snap.expiries[0]?.atmIV;
+    return fallback != null && fallback > 0 ? fallback : null;
+  }
   const list = leg.kind === 'call' ? slice.calls : slice.puts;
   if (leg.strike != null) {
     const q = list.reduce((b, x) =>
@@ -67,7 +78,7 @@ function legVol(snap: VolSnapshot, leg: PortfolioLeg): number {
     , list[0]!);
     if (q?.iv != null && q.iv > 0) return q.iv;
   }
-  return slice.atmIV > 0 ? slice.atmIV : 0.25;
+  return slice.atmIV > 0 ? slice.atmIV : null;
 }
 
 function legT0(snap: VolSnapshot, leg: PortfolioLeg): number {
@@ -78,8 +89,9 @@ function legT0(snap: VolSnapshot, leg: PortfolioLeg): number {
 }
 
 /**
- * Build a synthetic daily path around current spot when no history is available.
- * Used so Option/Combo PnL tools still work offline / demo.
+ * Build a synthetic daily path — SCENARIO MODEL ONLY, never Historical.
+ * P0: Must be labelled Scenario — synthetic GBM around current spot.
+ * Used when observed history is unavailable and caller explicitly accepts scenario.
  */
 export function syntheticSpotPath(
   spot: number,
@@ -173,6 +185,7 @@ export function comboGreeksPnl(
     return {
       bars: [], terminalPnl: 0, totalDelta: 0, totalGamma: 0,
       totalTheta: 0, totalVega: 0, totalResidual: 0, method: 'bs-sticky-iv',
+      provenance: 'observed-history', vegaNote: 'Sticky IV — 0 vol move by construction',
     };
   }
 
@@ -206,7 +219,9 @@ export function comboGreeksPnl(
       if (leg.strike == null || !leg.expiry) continue;
       const T0 = legT0(snap, leg);
       const T = Math.max(1e-8, T0 - daysElapsed / 365);
-      const vol = Math.max(0.01, legVol(snap, leg));
+      const volRaw = legVol(snap, leg);
+      if (volRaw == null || !(volRaw > 0)) continue; // P0: no silent 25% fallback — unavailable IV skips leg
+      const vol = volRaw;
       if (T <= 1e-8) {
         delta += sgn * (leg.kind === 'call' ? (S > leg.strike ? 1 : 0) : (S < leg.strike ? -1 : 0));
         continue;
@@ -291,7 +306,10 @@ export function comboGreeksPnl(
     totalVega: cumVega,
     totalResidual: cumResidual,
     method: 'bs-sticky-iv',
+    provenance: 'observed-history',
+    vegaNote: 'Sticky IV — 0 vol move by construction (vega = 0). Not a live vol PnL.',
   };
+
 }
 
 function formatDay(ts: number): string {

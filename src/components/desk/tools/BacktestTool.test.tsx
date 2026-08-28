@@ -50,7 +50,7 @@ describe('BacktestTool', () => {
 
     expect(screen.getAllByText('Weeks').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Realized σ')).toBeTruthy();
-    expect(screen.getByText(/not Thalex parquet/i)).toBeTruthy();
+    expect(screen.getAllByText(/Scenario Monte Carlo/i).length).toBeGreaterThanOrEqual(1);
 
     expect(screen.getByText('E[PnL]')).toBeTruthy();
     expect(screen.getByText('Win')).toBeTruthy();

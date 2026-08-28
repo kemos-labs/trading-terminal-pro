@@ -2,10 +2,18 @@ export interface OptionQuote {
   strike: number;
   expiry: string;
   type: 'call' | 'put';
-  bid: number;
-  ask: number;
-  last: number;
-  mid: number;
+  bid: number | null;
+  ask: number | null;
+  last: number | null;
+  mid: number | null;
+  /** Provenance per quote row: observed = exchange bid/ask/last; derived = solved mid IV; model = SVI-fitted; unavailable = missing */
+  provenance?: 'observed' | 'derived' | 'model' | 'unavailable';
+  /** Which price was used for IV inversion: 'mid' | 'last' | 'bid' | 'ask' | 'none' */
+  priceBasis?: 'mid' | 'last' | 'bid' | 'ask' | 'none';
+  /** Observed venue IV (bid/ask/mark) when supplied, separate from solved IV */
+  observedIv?: number | null;
+  /** SVI model IV when fitted, separate from solved IV */
+  modelIv?: number | null;
   iv: number | null;
   delta: number | null;
   gamma: number | null;
@@ -20,8 +28,8 @@ export interface OptionQuote {
   color: number | null;
   zomma: number | null;
   ultima: number | null;
-  openInterest: number;
-  volume: number;
+  openInterest: number | null;
+  volume: number | null;
 }
 
 export interface OptionChain {

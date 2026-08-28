@@ -297,8 +297,8 @@ export function PositioningView() {
   const oiByExpiry = useMemo(() => {
     if (!snapshot) return [];
     return snapshot.expiries.map((e) => {
-      const callOI = e.calls.reduce((s, q) => s + q.openInterest, 0);
-      const putOI = e.puts.reduce((s, q) => s + q.openInterest, 0);
+      const callOI = e.calls.reduce((s, q) => s + (q.openInterest ?? 0), 0);
+      const putOI = e.puts.reduce((s, q) => s + (q.openInterest ?? 0), 0);
       return {
         label: `${e.dte}d`,
         callOI,

@@ -13,9 +13,10 @@ describe('useSpotPath', () => {
     });
   });
 
-  it('falls back to synthetic path when history is missing', () => {
+  it('falls back to synthetic scenario path when history is missing (labelled Scenario)', () => {
     const { result } = renderHook(() => useSpotPath(20));
     expect(result.current.source).toBe('synth');
+    expect(result.current.isScenario).toBe(true);
     expect(result.current.path.length).toBeGreaterThanOrEqual(5);
     expect(result.current.path.every((b) => b.close > 0)).toBe(true);
   });
@@ -28,6 +29,7 @@ describe('useSpotPath', () => {
     useTerminalStore.setState({ fmpHistory: hist, historySource: 'yfinance' });
     const { result } = renderHook(() => useSpotPath(20));
     expect(result.current.source).toBe('yfinance');
+    expect(result.current.isScenario).toBe(false);
     expect(result.current.path.length).toBeGreaterThanOrEqual(5);
     expect(result.current.path[result.current.path.length - 1]!.close).toBe(129);
   });

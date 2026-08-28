@@ -248,9 +248,12 @@ export class LiveProvider implements DataProvider {
       if (!raw) return null;
       const quotes: YahooRawOption[] = normalizeFmp(raw as FmpOptionsResponse);
       if (quotes.length < 5) return null;
+      // P0 Fix: observed spot required — never substitute strike as spot.
+      // If spot is unavailable, return null (explicit unavailable state).
+      if (spot == null || !isFinite(spot) || spot <= 0) return null;
       const data: YahooResponse = {
         symbol: sym,
-        spot: spot ?? quotes[0]!.strike,
+        spot,
         expirations: [...new Set(quotes.map((x) => x.expiry))],
         quotes,
         timestamp: Date.now(),

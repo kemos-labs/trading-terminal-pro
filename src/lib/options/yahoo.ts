@@ -10,12 +10,15 @@ export interface YahooRawOption {
   strike: number;
   expiry: string;
   type: 'call' | 'put';
-  bid: number;
-  ask: number;
-  last: number;
+  bid: number | null;
+  ask: number | null;
+  last: number | null;
   iv: number | null;
-  volume: number;
-  openInterest: number;
+  /** Nullable — missing stays null, not 0 */
+  volume: number | null;
+  openInterest: number | null;
+  /** Per-field provenance when source provides it */
+  provenance?: 'observed' | 'derived' | 'model' | 'unavailable';
 }
 
 export interface YahooResponse {
@@ -43,25 +46,23 @@ const MAX_REL_SPREAD = 0.55;
 /** Absolute floor: always accept if abs spread is tiny (penny names). */
 const MAX_ABS_SPREAD_ALWAYS_OK = 0.05;
 
+/** Executable mid: only when both sides positive and not crossed. One-sided or last is NOT a mid. */
 function pickMid(raw: YahooRawOption): number | null {
-  const hasBid = raw.bid > 0 && isFinite(raw.bid);
-  const hasAsk = raw.ask > 0 && isFinite(raw.ask);
-  if (hasBid && hasAsk && raw.ask >= raw.bid) {
-    return (raw.bid + raw.ask) / 2;
+  const hasBid = raw.bid != null && raw.bid > 0 && isFinite(raw.bid);
+  const hasAsk = raw.ask != null && raw.ask > 0 && isFinite(raw.ask);
+  if (hasBid && hasAsk && (raw.ask as number) >= (raw.bid as number)) {
+    return ((raw.bid as number) + (raw.ask as number)) / 2;
   }
-  if (raw.last > 0 && isFinite(raw.last)) return raw.last;
-  if (hasBid) return raw.bid;
-  if (hasAsk) return raw.ask;
   return null;
 }
 
-/** True when the quote is too wide / crossed to trust for IV. */
+/** True when the quote is too wide / crossed to trust for IV. Null bid/ask or one-sided = poor liquidity for mid IV. */
 function isPoorLiquidity(raw: YahooRawOption, mid: number): boolean {
-  if (!(raw.bid > 0 && raw.ask > 0)) {
-    return !(raw.last > 0 && (raw.volume > 0 || raw.openInterest > 0));
-  }
-  if (raw.ask < raw.bid) return true;
-  const spread = raw.ask - raw.bid;
+  const hasBid = raw.bid != null && raw.bid > 0;
+  const hasAsk = raw.ask != null && raw.ask > 0;
+  if (!(hasBid && hasAsk)) return true; // one-sided → not executable mid
+  if ((raw.ask as number) < (raw.bid as number)) return true;
+  const spread = (raw.ask as number) - (raw.bid as number);
   if (spread <= MAX_ABS_SPREAD_ALWAYS_OK) return false;
   return spread / mid > MAX_REL_SPREAD;
 }
@@ -103,16 +104,23 @@ function buildOptionQuote(
   r: number,
   q: number,
   iv: number,
+  extra?: { priceBasis: 'mid' | 'last' | 'bid' | 'ask' | 'none'; observedIv?: number | null; modelIv?: number | null },
 ): OptionQuote {
   const g = computeGreeks(raw.type, spot, raw.strike, T, r, q, iv);
+  const mid = pickMid(raw);
+  const hasMid = mid != null;
   return {
     strike: raw.strike, expiry, type: raw.type,
-    bid: raw.bid, ask: raw.ask, last: raw.last,
-    mid: pickMid(raw) ?? 0,
+    bid: raw.bid ?? null, ask: raw.ask ?? null, last: raw.last ?? null,
+    mid: mid,
+    provenance: hasMid ? 'derived' : 'unavailable',
+    priceBasis: extra?.priceBasis ?? (hasMid ? 'mid' : 'none'),
+    observedIv: extra?.observedIv ?? raw.iv ?? null,
+    modelIv: extra?.modelIv ?? null,
     iv, delta: g.delta, gamma: g.gamma, theta: g.theta, vega: g.vega,
     vanna: g.vanna, charm: g.charm, volga: g.volga, speed: g.speed,
     rho: g.rho, veta: g.veta, color: g.color, zomma: g.zomma, ultima: g.ultima,
-    openInterest: raw.openInterest, volume: raw.volume,
+    openInterest: raw.openInterest ?? null, volume: raw.volume ?? null,
   };
 }
 
@@ -130,7 +138,9 @@ function filterArbFreeQuotes(
   for (const raw of rawList) {
     const mid = pickMid(raw);
     if (mid == null || mid <= 0 || !isFinite(mid)) continue;
-    if (raw.bid > raw.ask && raw.bid > 0 && raw.ask > 0) continue;
+    const hasBid = raw.bid != null && raw.bid > 0;
+    const hasAsk = raw.ask != null && raw.ask > 0;
+    if (hasBid && hasAsk && (raw.bid as number) > (raw.ask as number)) continue;
     if (isPoorLiquidity(raw, mid)) continue;
     const intr = intrinsic(type, spot, raw.strike, T, r, q);
     if (mid < intr * 0.99) continue;
@@ -242,19 +252,24 @@ function smoothWings(
   const out: OptionQuote[] = [];
   for (const raw of quotes) {
     let iv = raw.iv;
+    let modelIv: number | null = null;
     const k = Math.abs(Math.log(raw.strike / spot));
     const isWing = k > 0.15;
     if (fit && isWing) {
       const fitted = sviIv(fit.params, Math.log(raw.strike / spot), T);
       if (isFinite(fitted) && fitted > 0) {
+        modelIv = Math.max(MIN_IV, Math.min(MAX_IV, fitted));
         const lo = Math.max(MIN_IV, fitted * 0.5);
         const hi = Math.min(MAX_IV, Math.max(fitted * 2, fitted + 0.15));
+        // Keep solved IV as observed; do not silently overwrite with model unless pathological.
+        // Record modelIv separately; only use fitted when observed is extreme.
         if (iv < lo || iv > hi || iv > 1.0) {
-          iv = Math.max(MIN_IV, Math.min(MAX_IV, fitted));
+          // Use model as fallback but preserve provenance via modelIv field
+          iv = modelIv;
         }
       }
     }
-    out.push(buildOptionQuote(raw, expiry, dte, spot, T, r, q, iv));
+    out.push(buildOptionQuote(raw, expiry, dte, spot, T, r, q, iv, { priceBasis: 'mid', observedIv: raw.iv, modelIv }));
   }
   return out;
 }

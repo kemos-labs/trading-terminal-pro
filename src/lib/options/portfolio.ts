@@ -232,37 +232,37 @@ export function templateLegs(
   switch (name) {
     case 'long_straddle':
       return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid || atm.last },
-        { id: id(), kind: 'put', side: 'long', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid || atmPut.last },
+        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? 0 },
+        { id: id(), kind: 'put', side: 'long', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? 0 },
       ];
     case 'short_straddle':
       return [
-        { id: id(), kind: 'call', side: 'short', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid || atm.last },
-        { id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid || atmPut.last },
+        { id: id(), kind: 'call', side: 'short', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? 0 },
+        { id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? 0 },
       ];
     case 'long_call':
       return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid || atm.last },
+        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? 0 },
       ];
     case 'short_put':
       return [
-        { id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid || atmPut.last },
+        { id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? 0 },
       ];
     case 'risk_reversal':
       return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: otmCall.mid || otmCall.last },
-        { id: id(), kind: 'put', side: 'short', qty: 1, strike: otmPut.strike, expiry: slice.expiry, entryPrice: otmPut.mid || otmPut.last },
+        { id: id(), kind: 'call', side: 'long', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: otmCall.mid ?? otmCall.last ?? 0 },
+        { id: id(), kind: 'put', side: 'short', qty: 1, strike: otmPut.strike, expiry: slice.expiry, entryPrice: otmPut.mid ?? otmPut.last ?? 0 },
       ];
     case 'call_spread':
       return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid || atm.last },
-        { id: id(), kind: 'call', side: 'short', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: otmCall.mid || otmCall.last },
+        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? 0 },
+        { id: id(), kind: 'call', side: 'short', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: otmCall.mid ?? otmCall.last ?? 0 },
       ];
     case 'collar':
       // Long ~25Δ put + short ~25Δ call (pair with long underlier offline)
       return [
-        { id: id(), kind: 'put', side: 'long', qty: 1, strike: d25Put.strike, expiry: slice.expiry, entryPrice: d25Put.mid || d25Put.last },
-        { id: id(), kind: 'call', side: 'short', qty: 1, strike: d25Call.strike, expiry: slice.expiry, entryPrice: d25Call.mid || d25Call.last },
+        { id: id(), kind: 'put', side: 'long', qty: 1, strike: d25Put.strike, expiry: slice.expiry, entryPrice: d25Put.mid ?? d25Put.last ?? 0 },
+        { id: id(), kind: 'call', side: 'short', qty: 1, strike: d25Call.strike, expiry: slice.expiry, entryPrice: d25Call.mid ?? d25Call.last ?? 0 },
       ];
     default:
       return [];

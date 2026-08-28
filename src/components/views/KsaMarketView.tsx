@@ -629,18 +629,17 @@ export function KsaMarketView() {
         {/* Charts — all free from pack + history ring */}
         <KsaDepthCharts board={board} />
 
-        {/* Movers tables */}
-        <div className="grid min-h-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {/* Movers tables — value leaders omitted on free tier (no traded_value field) */}
+        <div className="grid min-h-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
           <MoverTable title="Gainers" rows={board?.gainers || []} mode="pct" onPick={setFocusSym} />
           <MoverTable title="Losers" rows={board?.losers || []} mode="pct" onPick={setFocusSym} />
           <MoverTable title="Volume" rows={board?.volumeLeaders || []} mode="vol" onPick={setFocusSym} />
-          <MoverTable
-            title="Value (vol proxy)"
-            rows={board?.valueLeaders || []}
-            mode="vol"
-            onPick={setFocusSym}
-          />
         </div>
+        {board?.valueLeaders && board.valueLeaders.length > 0 && board.valueLeaders !== board.volumeLeaders && (
+          <div className="mt-2">
+            <MoverTable title="Value" rows={board.valueLeaders} mode="val" onPick={setFocusSym} />
+          </div>
+        )}
 
         <Panel title="Market map · depth notes">
           <div className="space-y-1 px-2 py-2 font-mono text-type-2xs text-muted-foreground">

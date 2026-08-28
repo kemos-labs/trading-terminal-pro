@@ -40,16 +40,22 @@ function toRaw(c: FmpOptionContract, expiryFallback: string): YahooRawOption | n
 
   const iv = c.impliedVolatility != null ? Number(c.impliedVolatility) : null;
 
+  // P0: preserve per-field provenance — missing stays null, not 0.
+  const bidNum = c.bid != null ? Number(c.bid) : NaN;
+  const askNum = c.ask != null ? Number(c.ask) : NaN;
+  const lastNum = (c.last ?? c.close) != null ? Number(c.last ?? c.close) : NaN;
+  const volNum = c.volume != null ? Number(c.volume) : NaN;
+  const oiNum = c.openInterest != null ? Number(c.openInterest) : NaN;
   return {
     strike,
     expiry,
     type,
-    bid: Number(c.bid) || 0,
-    ask: Number(c.ask) || 0,
-    last: Number(c.last ?? c.close) || 0,
+    bid: isFinite(bidNum) && bidNum > 0 ? bidNum : null,
+    ask: isFinite(askNum) && askNum > 0 ? askNum : null,
+    last: isFinite(lastNum) && lastNum > 0 ? lastNum : null,
     iv: iv != null && isFinite(iv) ? iv : null,
-    volume: Number(c.volume) || 0,
-    openInterest: Number(c.openInterest) || 0,
+    volume: isFinite(volNum) && volNum >= 0 ? volNum : null,
+    openInterest: isFinite(oiNum) && oiNum >= 0 ? oiNum : null,
   };
 }
 

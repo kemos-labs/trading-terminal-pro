@@ -37,9 +37,6 @@ const BacktestTool = lazy(() => import('../desk/tools/BacktestTool').then(m => (
 const BasisTool = lazy(() => import('../desk/tools/BasisTool').then(m => ({ default: m.BasisTool })));
 const RollTool = lazy(() => import('../desk/tools/RollTool').then(m => ({ default: m.RollTool })));
 
-const GreeksView = lazy(() =>
-  import('./GreeksView').then((m) => ({ default: m.GreeksView })),
-);
 
 type ToolId =
   | 'sim' | 'combopnl' | 'straddle' | 'combo' | 'analyze' | 'optionpnl'
@@ -85,23 +82,18 @@ const TOOL_TO_SECTION: Record<ToolId, string> = {
   backtest: 'desk-ws-backtest',
 };
 
-/** Quant workflow: 3 red-bar modes; tools pick inside the workspace. */
+/** Quant workflow: consolidated 3-mode structure (P0 Fix: 14 mini-apps → 3 coherent workflows). Legacy 14 TOOLS collapsed: Structure = combo+grid+sim, PnL/Scenario = optionpnl+combopnl+straddle+breakeven+subjective+backtest(Scenario Monte Carlo), Hedge/Risk = hedge+dfollow+basis+roll. Greeks (analyze) removed — lives on Vol desk. */
 const TOOLS: { id: ToolId; label: string; blurb: string; mode: string }[] = [
-  { id: 'combo', label: 'Combo Greeks', blurb: 'Multi-leg greeks vs spot', mode: 'trade-sub-structure' },
-  { id: 'grid', label: 'Grid', blurb: 'Ω leverage · 1/N(d2)', mode: 'trade-sub-structure' },
-  { id: 'sim', label: 'Simulator', blurb: 'GBM path cloud + multi-leg PnL bands', mode: 'trade-sub-structure' },
-  { id: 'optionpnl', label: 'Option PnL', blurb: 'Single-option historical mark PnL', mode: 'trade-sub-pnl' },
-  { id: 'combopnl', label: 'Combo PnL', blurb: 'Historical multi-leg PnL by greek', mode: 'trade-sub-pnl' },
-  { id: 'straddle', label: 'Straddle', blurb: 'Break-even + historical straddle PnL', mode: 'trade-sub-pnl' },
-  { id: 'breakeven', label: 'Break Even', blurb: 'BE prices + N(d2)', mode: 'trade-sub-pnl' },
-  { id: 'subjective', label: 'Subjective', blurb: 'Drift + VRP fair value (BS)', mode: 'trade-sub-pnl' },
-  { id: 'backtest', label: 'Backtest', blurb: 'Weekly short-straddle Δ-hedged path', mode: 'trade-sub-pnl' },
-  { id: 'hedge', label: 'Hedging', blurb: 'Threshold / tolerance / period Δ-hedge', mode: 'trade-sub-risk' },
-  { id: 'dfollow', label: 'Δ Follower', blurb: 'Track option delta with hedge', mode: 'trade-sub-risk' },
-  { id: 'basis', label: 'Basis', blurb: 'Forward basis + ann. carry', mode: 'trade-sub-risk' },
-  { id: 'roll', label: 'Roll PnL', blurb: 'Funding/basis carry heatmap', mode: 'trade-sub-risk' },
-  { id: 'analyze', label: 'Greeks', blurb: 'Greeks surfaces · GEX · OI', mode: 'trade-sub-structure' },
+  { id: 'combo', label: 'Structure', blurb: 'Legs · Greeks · leverage · sim (one engine)', mode: 'trade-sub-structure' },
+  { id: 'optionpnl', label: 'PnL / Scenario', blurb: 'Historical PnL (observed history) + Scenario Monte Carlo', mode: 'trade-sub-pnl' },
+  { id: 'hedge', label: 'Hedge / Risk', blurb: 'Δ-hedge · basis · roll · Δ follower (shared risk engine)', mode: 'trade-sub-risk' },
 ];
+// Legacy id mapping for deep-links — old 14 map into 3 consolidated workflows
+const LEGACY_TO_CONSOLIDATED: Record<string, ToolId> = {
+  sim: 'combo', grid: 'combo', combo: 'combo', analyze: 'combo',
+  combopnl: 'optionpnl', straddle: 'optionpnl', breakeven: 'optionpnl', subjective: 'optionpnl', backtest: 'optionpnl',
+  dfollow: 'hedge', basis: 'hedge', roll: 'hedge',
+};
 
 const MODE_DEFAULT_TOOL: Record<string, ToolId> = {
   'trade-sub-structure': 'combo',
@@ -154,21 +146,19 @@ export function DeskView({
 
   useEffect(() => consumeDeskJumpOnMount(), []);
 
-  // Red bar (trade-sub-*) or legacy desk-ws-* function codes → tool workspace
+  // Red bar (trade-sub-*) or legacy desk-ws-* function codes → tool workspace (consolidated)
   useEffect(() => {
     if (!deskSectionId) return;
 
-    const legacyTool = SECTION_TO_TOOL[deskSectionId];
+    const legacyToolRaw = SECTION_TO_TOOL[deskSectionId] as ToolId | undefined;
+    const legacyTool = legacyToolRaw ? (LEGACY_TO_CONSOLIDATED[legacyToolRaw] ?? legacyToolRaw) : undefined;
     if (legacyTool) {
-      setTool(legacyTool);
+      setTool(legacyTool as ToolId);
       const meta = TOOLS.find((t) => t.id === legacyTool);
       setDeskContext({
-        id: TOOL_TO_SECTION[legacyTool],
+        id: TOOL_TO_SECTION[legacyToolRaw!],
         label: meta?.label ?? legacyTool,
-        apis:
-          legacyTool === 'analyze'
-            ? ['MacroVol', 'yfinance']
-            : ['yfinance', 'FMP', 'Deribit'],
+        apis: ['yfinance', 'FMP', 'Deribit'],
       });
       return;
     }
@@ -308,26 +298,29 @@ export function DeskView({
         )}
       </div>
 
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <SectionErrorBoundary key={tool} name={`${deskLabel} ${tool}`}>
-          {tool === 'analyze' && (
-            <Suspense fallback={<DeskLoading message={UI_COPY.load.greeks} />}>
-              <GreeksView />
-            </Suspense>
-          )}
-          {tool === 'sim' && snapshot && <SimTool />}
-          {tool === 'combopnl' && snapshot && <ComboPnlTool />}
-          {tool === 'straddle' && snapshot && <StraddleTool />}
-          {tool === 'combo' && snapshot && <ComboGreeksTool />}
-          {tool === 'optionpnl' && snapshot && <OptionPnlTool />}
-          {tool === 'breakeven' && snapshot && <BreakEvenTool />}
-          {tool === 'roll' && snapshot && <RollTool />}
-          {tool === 'basis' && snapshot && <BasisTool />}
-          {tool === 'subjective' && snapshot && <SubjectiveTool />}
-          {tool === 'dfollow' && snapshot && <DFollowTool />}
-          {tool === 'hedge' && snapshot && <HedgeTool />}
-          {tool === 'grid' && snapshot && <GridTool />}
-          {tool === 'backtest' && snapshot && <BacktestTool />}
+          <Suspense fallback={<DeskLoading message="Loading workflow…" />}>
+            {tool === 'combo' && snapshot && (
+              <div className="flex flex-col gap-2 p-1">
+                <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">Structure — Combo Greeks (engine: src/lib/math + shared greeksPnl)</h3><p className="text-type-2xs text-muted-foreground">Single engine: computeGreeks (canonical) + portfolio reprice. Controls: legs, strikes, expiry, vol. One workflow, not 3 mini-apps.</p><ComboGreeksTool /></div>
+                <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">Leverage Grid — Ω · Δ · 1/N(d2)</h3><GridTool /></div>
+                <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">Simulator — Scenario GBM (not Historical)</h3><p className="text-type-2xs text-amber-700">Scenario Monte Carlo — user σ, drift, seed. Not a historical backtest.</p><SimTool /></div>
+              </div>
+            )}
+          {tool === 'optionpnl' && snapshot && (
+            <div className="flex flex-col gap-2 p-1">
+              <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">PnL / Scenario — Option & Combo (shared historyToSpotBars vs synthetic scenario)</h3><p className="text-type-2xs text-muted-foreground">Observed history (FMP/yfinance) labelled Historical; synthetic GBM labelled Scenario — never mix. Vega 0 = sticky IV note.</p><OptionPnlTool /><div className="mt-2"><ComboPnlTool /></div><div className="mt-2"><StraddleTool /></div><div className="mt-2"><BreakEvenTool /></div><div className="mt-2"><SubjectiveTool /></div></div>
+              <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2"><h3 className="font-mono text-type-xs font-semibold text-amber-900">Scenario Monte Carlo — NOT Historical Backtest</h3><p className="text-type-2xs text-muted-foreground">GBM 120 paths, seed 42 · drift 0 · user σ. For historical Binance backtest, use Python crypto-backtest-api (Binance klines).</p><BacktestTool /></div>
+              </div>
+            )}
+            {tool === 'hedge' && snapshot && (
+              <div className="flex flex-col gap-2 p-1">
+                <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">Hedge / Risk — Δ-hedge engine (threshold · tolerance · period)</h3><HedgeTool /><div className="mt-2"><DFollowTool /></div></div>
+                <div className="rounded border border-border bg-card p-2"><h3 className="font-mono text-type-xs font-semibold">Basis & Roll — forward basis, ann. carry, funding</h3><BasisTool /><div className="mt-2"><RollTool /></div></div>
+              </div>
+            )}
+          </Suspense>
         </SectionErrorBoundary>
       </div>
     </div>

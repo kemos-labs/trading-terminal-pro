@@ -1,6 +1,6 @@
 # Route Inventory — Phase 1 Baseline
 
-Generated: 2026-08-28T00:50:56Z
+Generated: 2026-08-28T04:11:24Z
 
 Source scan: server.js, server/app.js, api/authRoutes.js, api/stripeBilling.js, server/routes/deribitMarket.js, api/health.js, api/ksaFeeds.js, api/deskFeeds.js, api/_shared.js plus api/** (excluding tests).
 Total routes: 28
@@ -15,14 +15,14 @@ Classification: `public` | `credential-public` | `authenticated` | `entitled` | 
 | POST | `/api/auth/register` | `api/authRoutes.js:31` | credential-public | global (600/min) but route-specific override may apply | per-route 10/min + global |
 | POST | `/api/auth/reset-confirm` | `api/authRoutes.js:91` | credential-public | global (600/min) but route-specific override may apply | per-route 10/min + global |
 | POST | `/api/auth/reset-request` | `api/authRoutes.js:83` | credential-public | global (600/min) but route-specific override may apply | per-route 10/min + global |
-| MULTI | `/api/backtest/*` | `server/app.js:133` | public (market data) | upstream (120/min) |  |
+| MULTI | `/api/backtest/*` | `server/app.js:160` | public (market data) | upstream (120/min) |  |
 | POST | `/api/billing/checkout-session` | `api/stripeBilling.js:265` | authenticated | global (600/min) but route-specific override may apply |  |
 | GET | `/api/billing/config` | `api/stripeBilling.js:254` | authenticated | global (600/min) but route-specific override may apply |  |
 | GET | `/api/billing/gate` | `api/stripeBilling.js:251` | authenticated | global (600/min) but route-specific override may apply |  |
 | POST | `/api/billing/portal-session` | `api/stripeBilling.js:317` | authenticated | global (600/min) but route-specific override may apply |  |
 | GET | `/api/billing/status` | `api/stripeBilling.js:348` | authenticated | global (600/min) but route-specific override may apply |  |
-| GET | `/api/boot/briefing` | `server/app.js:193` | public (health) | global (600/min) but route-specific override may apply |  |
-| GET | `/api/cache/status` | `server/app.js:259` | public (market data) | global (600/min) but route-specific override may apply |  |
+| GET | `/api/boot/briefing` | `server/app.js:226` | public (health) | global (600/min) but route-specific override may apply |  |
+| GET | `/api/cache/status` | `server/app.js:292` | public (market data) | global (600/min) but route-specific override may apply |  |
 | GET | `/api/deribit/funding-history` | `server/routes/deribitMarket.js:159` | public (market data) | upstream (120/min) |  |
 | GET | `/api/deribit/index/:name` | `server/routes/deribitMarket.js:144` | public (market data) | upstream (120/min) |  |
 | GET | `/api/deribit/instruments` | `server/routes/deribitMarket.js:102` | public (market data) | upstream (120/min) |  |
@@ -30,12 +30,12 @@ Classification: `public` | `credential-public` | `authenticated` | `entitled` | 
 | GET | `/api/deribit/trades/:currency` | `server/routes/deribitMarket.js:117` | public (market data) | upstream (120/min) |  |
 | GET | `/api/flashalpha/exposure/:type/:symbol` | `server/app.js:109` | public (market data) | upstream (120/min) |  |
 | GET | `/api/fmp/stable/*` | `server/app.js:78` | public (market data) | upstream (120/min) |  |
-| GET | `/api/health` | `server/app.js:258` | public (health) | global (600/min) but route-specific override may apply |  |
-| GET | `/api/ksa/board` | `server/app.js:158` | entitled (ksa desk) | upstream (120/min) |  |
-| GET | `/api/ksa/quote/:symbol` | `server/app.js:168` | entitled (ksa desk) | upstream (120/min) |  |
-| GET | `/api/ksa/session` | `server/app.js:178` | entitled (ksa desk) | upstream (120/min) |  |
-| GET | `/api/opra/chain/:symbol` | `server/app.js:221` | public (market data) | global (600/min) but route-specific override may apply |  |
-| GET | `/api/opra/status` | `server/app.js:215` | public (market data) | global (600/min) but route-specific override may apply |  |
+| GET | `/api/health` | `server/app.js:291` | public (health) | global (600/min) but route-specific override may apply |  |
+| GET | `/api/ksa/board` | `server/app.js:191` | entitled (ksa desk) | upstream (120/min) |  |
+| GET | `/api/ksa/quote/:symbol` | `server/app.js:201` | entitled (ksa desk) | upstream (120/min) |  |
+| GET | `/api/ksa/session` | `server/app.js:211` | entitled (ksa desk) | upstream (120/min) |  |
+| GET | `/api/opra/chain/:symbol` | `server/app.js:254` | public (market data) | global (600/min) but route-specific override may apply |  |
+| GET | `/api/opra/status` | `server/app.js:248` | public (market data) | global (600/min) but route-specific override may apply |  |
 | POST | `/api/stripe/webhook` | `api/stripeBilling.js:491` | webhook | global (600/min) but route-specific override may apply | rateLimit:false, RAW body scoped to child context |
 
 ## Policy summary

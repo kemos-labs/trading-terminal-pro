@@ -3,7 +3,6 @@ import { useTerminalStore } from '../../store/terminalStore';
 import { ContentReader } from '../academy/ContentReader';
 import { GlossaryPanel } from '../academy/GlossaryPanel';
 import { AcademyNews } from '../academy/AcademyNews';
-import { cn } from '../../lib/utils';
 import { SectionErrorBoundary } from '../common/SectionErrorBoundary';
 
 /**
@@ -73,22 +72,6 @@ function isNonAcademyPath(path: string): boolean {
     /^docs\/tools\/0[1-5]-/.test(path)
   );
 }
-
-const CAT_TO_SECTION: Record<CatId, string> = {
-  archive: 'academy-sub-start',
-  options: 'academy-sub-options',
-  macro: 'academy-sub-macro',
-  news: 'academy-sub-news',
-  glossary: 'academy-sub-glossary',
-};
-
-const FILTERS: { id: CatId; label: string }[] = [
-  { id: 'archive', label: 'Home' },
-  { id: 'options', label: 'Options' },
-  { id: 'macro', label: 'Macro' },
-  { id: 'news', label: 'News' },
-  { id: 'glossary', label: 'Glossary' },
-];
 
 const CAT_LABEL: Record<string, string> = {
   start: 'Start',
@@ -192,16 +175,6 @@ export function AcademyView() {
     setActivePath(path);
   }, []);
 
-  const goCategory = useCallback(
-    (catId: CatId) => {
-      setActivePath(null);
-      setActiveCategory(catId);
-      const section = CAT_TO_SECTION[catId];
-      if (section) setDeskSection(section);
-    },
-    [setDeskSection],
-  );
-
   const activePost = activePath
     ? postsByPath.current.get(activePath) ??
       archivePosts.find((p) => p.path === activePath) ??
@@ -269,22 +242,10 @@ export function AcademyView() {
             </div>
           </div>
 
-          <nav className="academy-col academy-tabs" aria-label="Publication sections">
-            {FILTERS.map((f) => {
-              const on = activeCategory === f.id;
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => goCategory(f.id)}
-                  className={cn('academy-tab', on && 'academy-tab-on')}
-                  aria-current={on ? 'page' : undefined}
-                >
-                  {f.label}
-                </button>
-              );
-            })}
-          </nav>
+          {/* P0 Fix: duplicated Academy nav removed — single navigation via red function bar (FunctionMenuBar). Publication tabs now live on the shell. */}
+          <div className="academy-col academy-tabs-info" aria-hidden>
+            <span className="font-mono text-type-2xs text-muted-foreground">Navigate via red function bar — Home · Options · Macro · News · Glossary</span>
+          </div>
         </div>
 
         <div className="academy-scroll">

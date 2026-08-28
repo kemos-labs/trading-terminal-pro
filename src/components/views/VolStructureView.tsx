@@ -18,6 +18,8 @@ const ArbitrageView = lazy(() => import('./ArbitrageView').then(m => ({ default:
 const GreeksView = lazy(() =>
   import('./GreeksView').then((m) => ({ default: m.GreeksView })),
 );
+const SurfaceMatrixView = lazy(() => import('./SurfaceMatrixView').then(m => ({ default: m.SurfaceMatrixView })));
+
 
 type Sub = 'surface' | 'smile' | 'term' | 'greeks' | 'quality';
 type SidePanel = 'smile' | 'term';
@@ -180,8 +182,8 @@ export function VolStructureView() {
         {useSplit ? (
           <div className="flex h-full min-h-0 flex-col lg:flex-row">
             <div className="min-h-0 min-w-0 flex-[1.4] border-b border-border lg:border-b-0 lg:border-r">
-              <SectionErrorBoundary name="Smile">
-                <SmileView />
+              <SectionErrorBoundary name="Surface">
+                <SurfaceMatrixView />
               </SectionErrorBoundary>
             </div>
             <div className="min-h-0 min-w-0 flex-1" key={side}>
@@ -199,8 +201,10 @@ export function VolStructureView() {
         ) : (
           <div className="h-full min-h-0 term-crossfade" key={focusSub}>
             {focusSub === 'surface' && (
-              <SectionErrorBoundary name="Smile">
-                <SmileView />
+              <SectionErrorBoundary name="Surface">
+                <Suspense fallback={<DeskLoading message={UI_COPY.load.chain} />}>
+                  <SurfaceMatrixView />
+                </Suspense>
               </SectionErrorBoundary>
             )}
             {focusSub === 'smile' && (

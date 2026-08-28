@@ -3,7 +3,7 @@
  * Surfaces / GEX from shared greeksCache (prefetched after terminal chain).
  * FlashAlpha GEX levels live on Flow · Tools (single-name free tier, not SPY).
  */
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
   ComposedChart, Line,
@@ -21,14 +21,8 @@ import {
   CHART,
   CHART_GREEK_EXT,
   CHART_HEX,
-  CHART_RESOLVED,
-  PLOTLY_AXIS,
-  PLOTLY_COLORBAR,
-  PLOTLY_CS_CHARM,
   PLOTLY_CS_GEX,
-  PLOTLY_CS_GREEK,
-  PLOTLY_LAYOUT_BASE,
-  PLOTLY_SCENE_AXIS,
+  PLOTLY_CS_CHARM,
   chartAxisTick,
   chartGridProps,
   chartTooltipStyle,
@@ -40,10 +34,8 @@ import type { GreekKey } from './greeksTypes';
 import { cn } from '../../lib/utils';
 import { ChartZoom, useChartZoom } from '../common/ChartZoom';
 
-// Plotly removed — surface renders as SVG via CurveChart (V2).
-const Plot = lazy(() => Promise.resolve({ default: (_props: any) => null as any }));
-
-const MESH_GREEKS = new Set<string>(['delta', 'gamma', 'vega', 'theta', 'vanna', 'charm']);
+// P0 Fix: Plotly/Three removed — no null stubs. Surface uses 2D accessible fallback + table.
+// 3D mesh theme deleted; 2D profiles are the product.
 
 const GREEKS = [
   { key: 'delta', label: 'DELTA', desc: 'Rate of price change per $1 move in spot', formula: '∂V/∂S = Φ(d₁)', color: CHART_GREEK_EXT.delta },
@@ -68,7 +60,6 @@ export function Greeks10View() {
   const [ohlc, setOhlc] = useState<HistoryData['data']>(() => peekGreeksCacheStale(ticker)?.ohlc ?? []);
   const [loading, setLoading] = useState(() => !peekGreeksCache(ticker));
   const [error, setError] = useState('');
-  const [surfaceTheme, setSurfaceTheme] = useState<'plotly' | 'mesh'>('plotly');
 
   // Single Greeks home = Vol · Greeks (not Trade).
   useEffect(() => {
@@ -156,9 +147,7 @@ export function Greeks10View() {
     }))
     .sort((a, b) => a.strike - b.strike);
 
-  const colorscale = PLOTLY_CS_GREEK[selectedGreek] ?? PLOTLY_CS_GREEK.delta;
-  // meshGreek retained for future V2 surface work
-  void (MESH_GREEKS.has(selectedGreek) ? (selectedGreek as GreekKey) : 'gamma');
+  void (selectedGreek as GreekKey);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -249,33 +238,11 @@ export function Greeks10View() {
                   </div>
                 </div>
 
-                {/* Greek field — Plotly (G1.0) or R3F mesh theme (same greek / symbol) */}
+                {/* Greek field — 2D accessible profiles (Plotly/3D removed per P0). */}
                 <div>
                   <div className="mb-1 flex flex-wrap items-center gap-2">
                     <h3 className="text-xs font-semibold" style={{ color: greek.color }}>{greek.label} SURFACE</h3>
-                    <span className="text-type-xs text-muted-foreground">{greek.desc}</span>
-                    <div className="ml-auto flex items-center gap-1" role="group" aria-label="Surface theme">
-                      <span className="text-type-2xs text-muted-foreground">Viz</span>
-                      {([
-                        { id: 'plotly' as const, label: 'Plotly' },
-                        { id: 'mesh' as const, label: '3D mesh' },
-                      ]).map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          data-testid={`greeks-theme-${t.id}`}
-                          onClick={() => setSurfaceTheme(t.id)}
-                          className={cn(
-                            'rounded px-2 py-0.5 font-mono text-type-2xs',
-                            surfaceTheme === t.id
-                              ? 'bg-primary text-primary-foreground'
-                              : 'border border-border text-muted-foreground hover:border-primary',
-                          )}
-                        >
-                          {t.label}
-                        </button>
-                      ))}
-                    </div>
+                    <span className="text-type-xs text-muted-foreground">{greek.desc} · 2D profiles + table (3D removed)</span>
                   </div>
                   <p className="mb-1 text-type-2xs text-muted-foreground">
                     Surface · yfinance OTM field (same API as ATM cards)
@@ -286,46 +253,46 @@ export function Greeks10View() {
                         {data.q != null ? ` · q=${(data.q * 100).toFixed(2)}%` : ''}
                       </span>
                     )}
+                    <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-700">2D Fallback — Plotly/3D removed</span>
                   </p>
                   <div className="overflow-hidden rounded-xl border border-border bg-card">
                     {surfaceData && surfaceData.T_vals?.length > 0 ? (
-                      <Suspense fallback={<div className="p-8 text-center text-xs text-muted-foreground">Loading surface…</div>}>
-                        <Plot
-                          data={[{
-                            type: 'surface',
-                            x: surfaceData.T_vals,
-                            y: surfaceData.K_vals,
-                            z: surfaceData.grid,
-                            colorscale,
-                            colorbar: {
-                              ...PLOTLY_COLORBAR,
-                              title: { text: greek.label, font: PLOTLY_COLORBAR.title.font },
-                            },
-                            hovertemplate: `Strike: $%{y:.0f}<br>${greek.label}: %{z:.4f}<extra></extra>`,
-                          } as never]}
-                          layout={{
-                            ...PLOTLY_LAYOUT_BASE,
-                            margin: { l: 0, r: 50, t: 24, b: 0 },
-                            scene: {
-                              xaxis: {
-                                title: { text: 'DTE' },
-                                ticktext: surfaceData.T_vals.map((t) => `${Math.round(t * 365)}d`),
-                                tickvals: surfaceData.T_vals,
-                                ...PLOTLY_SCENE_AXIS,
-                              },
-                              yaxis: { title: { text: 'Strike ($)' }, ...PLOTLY_SCENE_AXIS },
-                              zaxis: { title: { text: greek.label }, ...PLOTLY_SCENE_AXIS },
-                              bgcolor: CHART_RESOLVED.card,
-                              camera: { eye: { x: 1.6, y: -1.6, z: 0.9 } },
-                              aspectmode: 'manual',
-                              aspectratio: { x: 2, y: 1.2, z: 0.8 },
-                            },
-                            height: 320,
-                          } as never}
-                          config={{ responsive: true, displayModeBar: true, displaylogo: false }}
-                          style={{ width: '100%' }}
-                        />
-                      </Suspense>
+                      <div className="p-2">
+                        <div className="mb-2 grid grid-cols-2 gap-2 text-type-2xs">
+                          <div className="rounded border border-border/60 bg-card/40 p-2">
+                            <div className="font-semibold text-foreground">Strike profile (nearest expiry)</div>
+                            <div className="text-muted-foreground">T≈{Math.round(surfaceData.T_vals[0]!*365)}d · {surfaceData.K_vals.length} strikes</div>
+                            <div className="mt-1 max-h-[180px] overflow-auto">
+                              <table className="w-full font-mono text-type-2xs">
+                                <caption className="sr-only">{greek.label} by strike — accessible table fallback for Canvas</caption>
+                                <thead><tr><th className="text-left">Strike</th><th className="text-right">{greek.label}</th></tr></thead>
+                                <tbody>
+                                  {surfaceData.K_vals.slice(0, 20).map((k, i) => (
+                                    <tr key={k} className="border-t border-border/40"><td className="py-0.5 tabular-nums">{k.toFixed(0)}</td><td className="py-0.5 text-right tabular-nums">{(surfaceData.grid?.[0]?.[i] ?? 0).toFixed(4)}</td></tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                          <div className="rounded border border-border/60 bg-card/40 p-2">
+                            <div className="font-semibold text-foreground">Term profile (ATM ~ spot)</div>
+                            <div className="text-muted-foreground">{surfaceData.T_vals.length} expiries · ATM column</div>
+                            <div className="mt-1 max-h-[180px] overflow-auto">
+                              <table className="w-full font-mono text-type-2xs">
+                                <caption className="sr-only">{greek.label} term structure — accessible table</caption>
+                                <thead><tr><th className="text-left">DTE</th><th className="text-right">{greek.label}</th></tr></thead>
+                                <tbody>
+                                  {surfaceData.T_vals.slice(0, 12).map((t, ti) => {
+                                    const atmIdx = Math.floor(surfaceData.K_vals.length/2);
+                                    return <tr key={t} className="border-t border-border/40"><td className="py-0.5 tabular-nums">{Math.round(t*365)}d</td><td className="py-0.5 text-right tabular-nums">{(surfaceData.grid?.[ti]?.[atmIdx] ?? 0).toFixed(4)}</td></tr>;
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-type-2xs text-muted-foreground">Full 3D Plotly surface removed per product coherence. Use Options desk for vol term/smile and Trade desk for position-specific Greeks.</p>
+                      </div>
                     ) : (
                       <div className="p-4 text-center text-type-2xs text-muted-foreground">
                         No yfinance surface grid for {greek.label} yet.
@@ -385,63 +352,8 @@ export function Greeks10View() {
   );
 }
 
-/** Plotly that fills ChartZoom overlay when open; fixed desk height otherwise. */
-function PlotlyFill({
-  data,
-  layoutBase,
-  inlineHeight,
-}: {
-  data: never[];
-  layoutBase: Record<string, unknown>;
-  inlineHeight: number;
-}) {
-  const { zoomed } = useChartZoom();
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [boxH, setBoxH] = useState(inlineHeight);
-
-  useEffect(() => {
-    if (!zoomed) {
-      setBoxH(inlineHeight);
-      return;
-    }
-    const el = wrapRef.current;
-    if (!el) return;
-    const measure = () => {
-      const h = Math.floor(el.getBoundingClientRect().height);
-      if (h > 40) setBoxH(h);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [zoomed, inlineHeight]);
-
-  return (
-    <div
-      ref={wrapRef}
-      className={cn('w-full min-h-0', zoomed ? 'h-full min-h-0 flex-1' : '')}
-      style={zoomed ? { height: '100%' } : { height: inlineHeight }}
-    >
-      <Suspense fallback={null}>
-        <Plot
-          data={data}
-          layout={{
-            ...layoutBase,
-            height: boxH,
-            autosize: true,
-          } as never}
-          config={{ responsive: true, displayModeBar: false, displaylogo: false }}
-          style={{ width: '100%', height: boxH }}
-          useResizeHandler
-        />
-      </Suspense>
-    </div>
-  );
-}
-
 function HeatmapPlot({
   grid,
-  colorscale,
   label,
   spot,
 }: {
@@ -450,41 +362,21 @@ function HeatmapPlot({
   label: string;
   spot: number;
 }) {
-  const dteLabels = grid.T_vals.map((t) => Math.round(t * 365));
+  const dtes = grid.T_vals.slice(0, 6).map((t) => Math.round(t * 365));
+  const strikes = grid.K_vals.slice(0, 8);
   return (
-    <PlotlyFill
-      inlineHeight={220}
-      data={[{
-        type: 'heatmap',
-        x: dteLabels,
-        y: grid.K_vals,
-        z: grid.grid,
-        colorscale,
-        zsmooth: 'best',
-        colorbar: {
-          title: { text: label, font: { color: CHART_RESOLVED.mutedForeground, size: 10 } },
-          thickness: 12,
-          tickfont: { color: CHART_RESOLVED.mutedForeground, size: 9 },
-        },
-        hovertemplate: `DTE: %{x}d<br>Strike: $%{y:.0f}<br>${label}: %{z:.2f}<extra></extra>`,
-      } as never]}
-      layoutBase={{
-        ...PLOTLY_LAYOUT_BASE,
-        font: { ...PLOTLY_LAYOUT_BASE.font, size: 9 },
-        margin: { l: 40, r: 28, t: 18, b: 28 },
-        title: { text: label, font: { color: CHART_RESOLVED.foreground, size: 10 }, x: 0.02 },
-        xaxis: { title: { text: 'DTE' }, ...PLOTLY_AXIS },
-        yaxis: { title: { text: 'K' }, ...PLOTLY_AXIS },
-        shapes: [{
-          type: 'line',
-          x0: Math.min(...dteLabels),
-          y0: spot,
-          x1: Math.max(...dteLabels),
-          y1: spot,
-          line: { color: CHART_HEX.brand, width: 1.5, dash: 'dash' },
-        }],
-      }}
-    />
+    <div className="rounded border border-border bg-card p-2">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="font-mono text-type-xs font-semibold">{label} heatmap</span><span className="rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-type-2xs text-amber-700">2D Fallback</span><span className="text-type-2xs text-muted-foreground">spot {spot.toFixed(0)} dashed</span>
+      </div>
+      <div className="overflow-auto">
+        <table className="w-full font-mono text-type-2xs">
+          <caption className="sr-only">{label} by DTE and strike — accessible table fallback</caption>
+          <thead><tr><th className="px-1 py-1 text-left">K \ DTE</th>{dtes.map((d) => <th key={d} className="px-1 py-1 text-right tabular-nums">{d}d</th>)}</tr></thead>
+          <tbody>{strikes.map((k, ki) => <tr key={k} className="border-t border-border/40"><td className="px-1 py-0.5 tabular-nums">{k.toFixed(0)}</td>{dtes.map((_, di) => <td key={di} className="px-1 py-0.5 text-right tabular-nums">{(grid.grid?.[di]?.[ki] ?? 0).toFixed(2)}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -505,31 +397,23 @@ function HeatMaps({
       <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
         {ohlc.length > 0 && (
           <div className="overflow-hidden rounded border border-border bg-card lg:col-span-1">
-            <ChartZoom title={`${ticker} price`} bodyClassName="min-h-0" expandedHeightClass="h-[min(88vh,900px)]">
-              <PlotlyFill
-                inlineHeight={140}
-                data={[{
-                  type: 'candlestick',
-                  x: ohlc.map((d) => d.date),
-                  open: ohlc.map((d) => d.open),
-                  high: ohlc.map((d) => d.high),
-                  low: ohlc.map((d) => d.low),
-                  close: ohlc.map((d) => d.close),
-                  increasing: { line: { color: CHART_HEX.up } },
-                  decreasing: { line: { color: CHART_HEX.down } },
-                  name: ticker,
-                } as never]}
-                layoutBase={{
-                  ...PLOTLY_LAYOUT_BASE,
-                  font: { ...PLOTLY_LAYOUT_BASE.font, size: 9 },
-                  margin: { l: 40, r: 12, t: 16, b: 28 },
-                  title: { text: `${ticker}`, font: { color: CHART_RESOLVED.foreground, size: 10 }, x: 0.02 },
-                  xaxis: { rangeslider: { visible: false }, gridcolor: PLOTLY_AXIS.gridcolor },
-                  yaxis: { title: { text: 'Px' }, gridcolor: PLOTLY_AXIS.gridcolor },
-                  showlegend: false,
-                }}
-              />
-            </ChartZoom>
+            <div className="p-2">
+              <div className="mb-1 font-mono text-type-2xs font-semibold">{ticker} price — close line (candlestick Plotly removed)</div>
+              <div className="h-[140px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={ohlc.slice(-60).map((d) => ({ date: d.date.slice(5), close: d.close }))} margin={{ top: 2, right: 6, left: 0, bottom: 2 }}>
+                    <CartesianGrid {...chartGridProps} vertical={false} />
+                    <XAxis dataKey="date" tick={{ ...chartAxisTick, fontSize: 8 }} interval="preserveStartEnd" />
+                    <YAxis tick={{ ...chartAxisTick, fontSize: 8 }} width={36} domain={['auto','auto']} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Line type="monotone" dataKey="close" stroke={CHART.series.brand} strokeWidth={1.5} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-1 max-h-[100px] overflow-auto">
+                <table className="w-full font-mono text-type-2xs"><caption className="sr-only">{ticker} OHLC — accessible table fallback</caption><thead><tr><th className="text-left">Date</th><th className="text-right">Close</th></tr></thead><tbody>{ohlc.slice(-10).map((d) => <tr key={d.date} className="border-t border-border/40"><td>{d.date}</td><td className="text-right tabular-nums">{d.close.toFixed(2)}</td></tr>)}</tbody></table>
+              </div>
+            </div>
           </div>
         )}
         <div className={cn('grid grid-cols-1 gap-2 md:grid-cols-2', ohlc.length > 0 ? 'lg:col-span-2' : 'lg:col-span-3')}>

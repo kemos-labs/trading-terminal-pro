@@ -80,7 +80,8 @@ export function buildOptionGrid(
         });
         continue;
       }
-      const mid = q.mid > 0 ? q.mid : blackScholes(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv).price;
+      const midRaw = q.mid != null && q.mid > 0 ? q.mid : blackScholes(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv).price;
+      const mid = midRaw ?? 0;
       const g = blackScholes(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv);
       const omega = mid > 1e-8 ? (g.delta * snap.spot) / mid : null;
       const nd2 = nd2Of(type, snap.spot, K, T, snap.riskFreeRate, snap.dividendYield, q.iv);

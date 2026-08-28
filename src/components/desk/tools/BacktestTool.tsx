@@ -22,6 +22,12 @@ import { DeskChartFrame, deskChartChrome, deskAxisLabel } from '../DeskChart';
 import { DESK_SERIES } from '../seriesGrammar';
 import { chartDayTick, chartSignedTick, tightDomain } from '../../../lib/chartTheme';
 
+/**
+ * P0 Fix: This is a Scenario Monte Carlo (seeded GBM), NOT a historical backtest.
+ * Labelled explicitly. Historical backtest via crypto-backtest-api is a separate
+ * Python service (Binance klines) — see server/routes backtest allowlist.
+ * Do not label this Historical/Observed.
+ */
 export function BacktestTool() {
   const snapshot = useTerminalStore((s) => s.snapshot)!;
   const [weeks, setWeeks] = useState(8);
@@ -89,8 +95,8 @@ export function BacktestTool() {
     <DeskToolShell
       controls={
         <>
-          <span className="self-center font-mono text-type-2xs text-muted-foreground">
-            Local path sim · not Thalex parquet · weekly short straddle Δ-hedged
+          <span className="self-center font-mono text-type-2xs text-amber-600" title="Scenario model with user-controlled vol; not a historical backtest with provenance">
+            Scenario Monte Carlo — synthetic GBM · not Historical Backtest
           </span>
           <DeskField label="Weeks" value={weeks} onChange={setWeeks} step={1} min={1} max={26} />
           <DeskField label="Realized σ" value={rv} onChange={setRv} step={0.01} />
@@ -125,8 +131,8 @@ export function BacktestTool() {
         yTitle="PnL ($)"
         className="min-h-[220px]"
         header={
-          <span className="text-zinc-600">
-            {weeks}w · {pathSim.t.length} steps · 120 paths · local GBM
+          <span className="text-muted-foreground" title="Scenario Monte Carlo — seed 42, not live history">
+            Scenario Monte Carlo · {weeks}w · {pathSim.t.length} steps · 120 paths · GBM(μ=0, σ=user) · seed 42
           </span>
         }
       >

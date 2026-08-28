@@ -167,10 +167,10 @@ function blendQuotes(call: OptionQuote | null, put: OptionQuote | null): OptionQ
     return {
       ...call,
       iv: (call.iv + put.iv) / 2,
-      mid: (call.mid + put.mid) / 2,
-      bid: (call.bid + put.bid) / 2,
-      ask: (call.ask + put.ask) / 2,
-      last: (call.last + put.last) / 2,
+      mid: ((call.mid ?? 0) + (put.mid ?? 0)) / 2,
+      bid: ((call.bid ?? 0) + (put.bid ?? 0)) / 2,
+      ask: ((call.ask ?? 0) + (put.ask ?? 0)) / 2,
+      last: ((call.last ?? 0) + (put.last ?? 0)) / 2,
       delta:
         call.delta != null && put.delta != null
           ? (call.delta + put.delta) / 2

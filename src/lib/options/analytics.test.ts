@@ -644,7 +644,7 @@ describe('dealerExposure stack', () => {
     expect(Math.abs(oi.totalGEX)).toBeGreaterThan(Math.abs(unit.totalGEX));
   });
 
-  it('auto-falls back to volume when openInterest is zero across the chain', () => {
+  it('observed positioning unavailable when OI zero — does not silently fall to volume', () => {
     const noOi: VolSnapshot = {
       ...snap,
       expiries: snap.expiries.map((e) => ({
@@ -654,14 +654,20 @@ describe('dealerExposure stack', () => {
       })),
     };
     const resolved = resolveExposureWeight(noOi, 'oi');
-    expect(resolved.weight).toBe('volume');
+    // P0 Fix: observed (oi) stays oi with fallback flag; volume is separate scenario mode
+    expect(resolved.weight).toBe('oi');
     expect(resolved.fallback).toBe(true);
     const d = dealerExposure(noOi, { weight: 'oi' });
-    expect(d.weight).toBe('volume');
+    expect(d.weight).toBe('oi');
     expect(d.weightFallback).toBe(true);
-    expect(d.points.length).toBeGreaterThan(0);
-    expect(d.totalGEX).not.toBe(0);
-    expect(d.unitNote).toMatch(/volume/i);
+    expect(d.points.length).toBe(0); // no OI ⇒ no observed exposure
+    expect(d.totalGEX).toBe(0);
+    expect(d.unitNote).toMatch(/unavailable|observed/i);
+    // Explicit volume scenario still works when requested
+    const vol = dealerExposure(noOi, { weight: 'volume' });
+    expect(vol.weight).toBe('volume');
+    expect(vol.points.length).toBeGreaterThan(0);
+    expect(vol.totalGEX).not.toBe(0);
   });
 
   it('dealerProfiles cumulates GEX/DEX/charm', () => {

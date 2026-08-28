@@ -270,7 +270,7 @@ export function scannerRows(chain: PremiumChain & { symbol?: string }, filters: 
       const ivPct = finite(q.iv) && q.iv > 0 ? q.iv * 100 : null;
       if (ivMin != null && (ivPct == null || ivPct < ivMin)) continue;
       if (ivMax != null && (ivPct == null || ivPct > ivMax)) continue;
-      if (oiMin != null && !(q.openInterest >= oiMin)) continue;
+      if (oiMin != null && !((q.openInterest ?? 0) >= oiMin)) continue;
       const absDelta = finite(q.delta) ? Math.abs(q.delta) : null;
       if (dMin != null && (absDelta == null || absDelta < dMin)) continue;
       if (dMax != null && (absDelta == null || absDelta > dMax)) continue;

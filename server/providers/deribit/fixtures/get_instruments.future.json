@@ -1,0 +1,49 @@
+{
+  "jsonrpc": "2.0",
+  "usIn": 1735286400000000,
+  "usOut": 1735286400010000,
+  "result": [
+    {
+      "instrument_name": "BTC-PERPETUAL",
+      "kind": "future",
+      "is_active": true,
+      "settlement_period": "perpetual",
+      "expiration_timestamp": 32503680000000,
+      "contract_size": 1,
+      "base_currency": "BTC",
+      "quote_currency": "USD",
+      "settlement_currency": "BTC",
+      "is_inverse": true,
+      "tick_size": 0.5,
+      "creation_timestamp": 1577836800000
+    },
+    {
+      "instrument_name": "BTC-27DEC24",
+      "kind": "future",
+      "is_active": true,
+      "settlement_period": "month",
+      "expiration_timestamp": 1735286400000,
+      "contract_size": 1,
+      "base_currency": "BTC",
+      "quote_currency": "USD",
+      "settlement_currency": "BTC",
+      "is_inverse": true,
+      "tick_size": 0.5,
+      "creation_timestamp": 1728000000000
+    },
+    {
+      "instrument_name": "BTC-28MAR25",
+      "kind": "future",
+      "is_active": true,
+      "settlement_period": "month",
+      "expiration_timestamp": 1743148800000,
+      "contract_size": 1,
+      "base_currency": "BTC",
+      "quote_currency": "USD",
+      "settlement_currency": "BTC",
+      "is_inverse": true,
+      "tick_size": 0.5,
+      "creation_timestamp": 1729000000000
+    }
+  ]
+}

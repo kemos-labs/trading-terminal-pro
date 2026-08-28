@@ -269,10 +269,11 @@ export async function buildServer() {
   registerKsaRoutes(fastify);
   registerOpraRoutes(fastify);
 
-  if (process.env.STRIPE_SECRET_KEY) {
-    await registerStripeBilling(fastify);
-    await registerStripeAuth(fastify);
-  }
+  // Billing/Auth always registered — endpoints fail closed (503/401) when keys absent.
+  // This preserves BILLING_HANDOFF.md invariants: billing exists and is not
+  // conditionally hidden, Stripe RAW parser stays scoped, no Connect.
+  await registerStripeBilling(fastify);
+  await registerStripeAuth(fastify);
 
   // Static
   try {

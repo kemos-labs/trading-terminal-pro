@@ -1,0 +1,36 @@
+{
+  "jsonrpc": "2.0",
+  "usIn": 1735286400000000,
+  "usOut": 1735286400010000,
+  "result": {
+    "trades": [
+      {
+        "instrument_name": "BTC-27DEC24-80000-C",
+        "timestamp": 1735286400000,
+        "price": 0.052,
+        "amount": 2.5,
+        "direction": "buy",
+        "mark_price": 0.0512,
+        "mark_iv": 56.1,
+        "index_price": 60150.0,
+        "block_trade": false,
+        "trade_seq": 123456,
+        "tick_direction": 2
+      },
+      {
+        "instrument_name": "BTC-27DEC24-80000-P",
+        "timestamp": 1735286400001,
+        "price": 0.0494,
+        "amount": 10,
+        "direction": "sell",
+        "mark_price": 0.0491,
+        "mark_iv": 54.9,
+        "index_price": 60150.0,
+        "block_trade": true,
+        "trade_seq": 123457,
+        "tick_direction": 1
+      }
+    ],
+    "has_more": false
+  }
+}

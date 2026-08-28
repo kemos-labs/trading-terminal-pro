@@ -1,17 +1,31 @@
 /**
  * Thin same-origin browser client — knows only normalized schemas, never Deribit raw types.
  *
- * Contract: GET /api/deribit/market/:currency returns DeribitMarketBundle (see server/routes/deribitMarket.ts).
- * Every value is real Deribit data or an explicit null/unavailable — never synthetic.
+ * Contract: GET /api/deribit/market/:currency returns DeribitMarketBundle.
+ * Server and browser share this shape (server/routes/deribitMarket.js).
+ *
+ * Units:
+ *   - IVs (bidIv/askIv/markIv, trade markIv) are DECIMAL (0.55 = 55%). Server converts
+ *     from Deribit percentage points exactly once. Views render ×100 only.
+ *   - openInterest units are native per kind: base currency for options,
+ *     USD notional for inverse perp/futures.
+ *   - funding8h is the native 8h rate (decimal); annualization (×3×365) is done
+ *     via src/lib/math/carry/funding.ts, never inline.
+ *   - Trade premium is premiumNative in the NATIVE settlement currency
+ *     (BTC for inverse options), price × amount × contract_size. NOT quote currency.
+ * Missing fields are null — never plausible defaults.
  */
+
+export type InstrumentKind = 'option' | 'future' | 'perp';
 
 export interface NormalizedTicker {
   instrument: string;
-  baseCurrency: string;
-  quoteCurrency: string;
-  settlementCurrency: string;
-  contractSize: number;
-  kind: 'option' | 'future' | 'perp';
+  baseCurrency: string | null;
+  quoteCurrency: string | null;
+  settlementCurrency: string | null;
+  contractSize: number | null;
+  kind: InstrumentKind;
+  /** ms epoch; null for perp (no expiry) */
   expiryMs: number | null;
   strike: number | null;
   optionType: 'call' | 'put' | null;
@@ -20,27 +34,29 @@ export interface NormalizedTicker {
   askPrice: number | null;
   markPrice: number | null;
   lastPrice: number | null;
+  /** decimal IVs — 0.55 renders as 55% */
   bidIv: number | null;
   askIv: number | null;
   markIv: number | null;
   indexPrice: number | null;
   openInterest: number | null;
   volume: number | null;
-  /** 8h funding rate (decimal) for perps, null for dated */
+  /** native 8h funding rate (decimal) — perp only */
   funding8h: number | null;
   timestamp: number;
+  /** true when a quote was joined for this catalogue row */
+  hasQuote: boolean;
   isStale: boolean;
 }
 
 export interface DeribitMarketBundle {
   currency: string;
   indexPrice: number | null;
-  /** All normalized instruments (options + futures + perp) in one list */
   instruments: NormalizedTicker[];
-  /** Count of instruments present vs expected (0..1) — null when unknown */
+  /** joined-with-quote fraction of the ACTIVE catalogue (0..1), null when catalogue empty */
   coverage: number | null;
-  /** Deribit reported funding for the perp (annualized simple ×3×365), null when unavailable */
-  fundingAnnualized: number | null;
+  /** native 8h perp funding (decimal), null when perp quote missing */
+  funding8h: number | null;
   fetchedAt: number;
   source: 'deribit';
 }
@@ -51,16 +67,21 @@ export async function fetchDeribitMarket(currency: string): Promise<DeribitMarke
   return res.json();
 }
 
-export async function fetchDeribitInstruments(currency: string): Promise<{
-  currency: string;
-  instruments: NormalizedTicker[];
-  coverage: number | null;
-  fetchedAt: number;
-  source: 'deribit';
-}> {
-  const res = await fetch(`/api/deribit/instruments?currency=${encodeURIComponent(currency)}`);
-  if (!res.ok) throw new Error(`Instruments ${res.status}`);
-  return res.json();
+export interface DeribitTrade {
+  instrument: string;
+  timestamp: number | null;
+  price: number;
+  quantity: number;
+  /** taker side */
+  side: 'buy' | 'sell';
+  /** decimal mark IV at trade time */
+  markIv: number | null;
+  /** premium in NATIVE settlement currency (price × amount × contract_size) */
+  premiumNative: number | null;
+  contractSize: number | null;
+  nativeCurrency: string | null;
+  blockTrade: boolean;
+  rfq: boolean;
 }
 
 export async function fetchDeribitTrades(currency: string, hours = 24, count = 500): Promise<{
@@ -76,22 +97,4 @@ export async function fetchDeribitTrades(currency: string, hours = 24, count = 5
   );
   if (!res.ok) throw new Error(`Deribit trades ${res.status}`);
   return res.json();
-}
-
-export interface DeribitTrade {
-  instrument: string;
-  timestamp: number;
-  price: number;
-  quantity: number;
-  /** Taker side: 'buy' = taker bought, 'sell' = taker sold */
-  side: 'buy' | 'sell';
-  /** Mark price at trade time */
-  markPrice: number;
-  /** Mark IV at trade time (decimal), null when unavailable */
-  markIv: number | null;
-  /** Premium in quote currency (price × quantity × contractSize) */
-  premium: number;
-  /** Block trade / RFQ flag when reported by Deribit */
-  blockTrade: boolean;
-  rfq: boolean;
 }

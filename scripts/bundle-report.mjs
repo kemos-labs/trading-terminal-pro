@@ -66,8 +66,13 @@ const initialCandidates = rows.filter(r => r.name.startsWith('index-') || r.name
 let initialGzip = 0;
 for (const r of initialCandidates) initialGzip += r.gz;
 console.log(`\nInitial app JS (index chunk): ${kb(initialGzip)} kB gzip (budget ≤250 kB: ${initialGzip <= budgets.totalInitialJsGzip ? 'PASS' : 'OVER'})`);
-const nonIndexLargest = rows.filter(r => !r.name.startsWith('index-') && r.name !== 'index.js').reduce((max, r) => r.gz > max ? r.gz : max, 0);
-console.log(`Single chunk budget (≤180 kB gzip): largest non-index ${kb(nonIndexLargest)} kB — ${nonIndexLargest <= budgets.singleChunkGzip ? 'PASS' : 'FAIL (over budget)'}`);
+// Single-chunk budget applies to EVERY JavaScript chunk, including the initial index chunk.
+const jsRows = rows.filter(r => r.isJs);
+const overBudget = jsRows.filter(r => r.gz > budgets.singleChunkGzip);
+console.log(`Per-chunk budget (≤180 kB gzip, EVERY chunk incl. index): ${overBudget.length === 0 ? 'PASS' : 'FAIL'} — largest ${kb(largest.gzip)} kB (${largest.name})`);
+for (const r of overBudget) console.log(`  ⚠ OVER: ${r.name} ${kb(r.gz)} kB gzip`);
+
+// Overall dist size
 
 // Overall dist size
 let distTotalRaw = 0;
@@ -81,7 +86,15 @@ function walkDir(d) {
 }
 walkDir(dist);
 console.log(`\nTotal dist size: ${kb(distTotalRaw)} kB raw (${(distTotalRaw/1024/1024).toFixed(2)} MB)`);
-console.log(`\nNote: Plotly and OrbitControls removed in Phase 9. Initial chunk (230 kB gzip) under 250 kB budget.\n`);
+
+// Enforced gate summary — exit nonzero when any budget fails.
+const failures = [];
+if (initialGzip > budgets.totalInitialJsGzip) failures.push(`initial JS ${kb(initialGzip)} kB gzip > ${kb(budgets.totalInitialJsGzip)} kB`);
+if (overBudget.length > 0) failures.push(`${overBudget.length} chunk(s) over ${kb(budgets.singleChunkGzip)} kB gzip`);
+const gate = failures.length === 0 ? 'PASS' : 'FAIL';
+console.log(`\nBundle gate: ${gate}`);
+for (const f of failures) console.log(`  ✗ ${f}`);
+console.log('');
 
 // Optional JSON output for CI
 if (process.argv.includes('--json')) {
@@ -95,8 +108,13 @@ if (process.argv.includes('--json')) {
       budgets,
       largest,
       initialGzip,
+      gate,
+      failures,
     };
     writeFileSync(outPath, JSON.stringify(json, null, 2));
     console.log(`JSON written to ${outPath}`);
   }
 }
+
+// Nonzero exit when any enforced budget fails (CI / orchestrator gates).
+if (failures.length > 0) process.exit(1);

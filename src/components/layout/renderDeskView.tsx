@@ -7,8 +7,8 @@ import { Lock } from 'lucide-react';
 import { useAccountStore } from '../../store/accountStore';
 import { DeskView } from '../views/DeskView';
 import { AcademyView } from '../views/AcademyView';
-import { KsaMarketView } from '../views/KsaMarketView';
 
+const KsaMarketView = lazy(() => import('../views/KsaMarketView').then(m => ({ default: m.KsaMarketView })));
 const RatesView = lazy(() => import('../views/RatesView').then(m => ({ default: m.RatesView })));
 import { DeskLoading } from '../common/Skeleton';
 import type { ActiveTab } from '../../lib/options/types';

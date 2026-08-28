@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "usIn": 1735286400000000,
+  "usOut": 1735286400010000,
+  "result": [
+    {
+      "instrument_name": "BTC-27DEC24",
+      "mark_price": 61250.5,
+      "bid_price": 61248.0,
+      "ask_price": 61253.0,
+      "last_price": 61251.0,
+      "open_interest": 1542.75,
+      "volume": 320.5,
+      "volume_usd": 19611250000,
+      "underlying_price": 60150.5,
+      "timestamp": 1735286400000
+    }
+  ]
+}

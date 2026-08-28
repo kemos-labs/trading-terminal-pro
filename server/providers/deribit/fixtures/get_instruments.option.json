@@ -1,0 +1,55 @@
+{
+  "jsonrpc": "2.0",
+  "usIn": 1735286400000000,
+  "usOut": 1735286400010000,
+  "result": [
+    {
+      "instrument_name": "BTC-27DEC24-80000-C",
+      "kind": "option",
+      "is_active": true,
+      "strike": 80000,
+      "expiration_timestamp": 1735286400000,
+      "option_type": "call",
+      "contract_size": 1,
+      "base_currency": "BTC",
+      "quote_currency": "USD",
+      "settlement_currency": "BTC",
+      "is_inverse": true,
+      "tick_size": 0.0005,
+      "settlement_period": "month",
+      "creation_timestamp": 1728000000000
+    },
+    {
+      "instrument_name": "BTC-27DEC24-80000-P",
+      "kind": "option",
+      "is_active": true,
+      "strike": 80000,
+      "expiration_timestamp": 1735286400000,
+      "option_type": "put",
+      "contract_size": 1,
+      "base_currency": "BTC",
+      "quote_currency": "USD",
+      "settlement_currency": "BTC",
+      "is_inverse": true,
+      "tick_size": 0.0005,
+      "settlement_period": "month",
+      "creation_timestamp": 1728000000000
+    },
+    {
+      "instrument_name": "BTC-28MAR25-60000-C",
+      "kind": "option",
+      "is_active": true,
+      "strike": 60000,
+      "expiration_timestamp": 1743148800000,
+      "option_type": "call",
+      "contract_size": 1,
+      "base_currency": "BTC",
+      "quote_currency": "USD",
+      "settlement_currency": "BTC",
+      "is_inverse": true,
+      "tick_size": 0.0005,
+      "settlement_period": "month",
+      "creation_timestamp": 1729000000000
+    }
+  ]
+}

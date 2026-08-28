@@ -1,7 +1,7 @@
 /**
  * SSE spot stream — pushes FMP quote ticks to the browser.
  * Backpressure-aware: respects write() return value, drains on 'drain' event,
- * bounded queue, disconnect cleanup.
+ * bounded queue (oldest drop), disconnect cleanup.
  */
 import { fetchFmpQuoteShared } from '../../api/_shared.js';
 import { validateSymbol } from '../validation.js';
@@ -40,11 +40,18 @@ export async function registerSseRoutes(fastify) {
     let consecutiveFailures = 0;
     let draining = false;
     let queue = [];
+    let timer = null;
+    let retune = null;
+    let watchdog = null;
 
     const cleanup = () => {
       if (closed) return;
       closed = true;
       queue = [];
+      if (timer) clearInterval(timer);
+      if (retune) clearInterval(retune);
+      if (watchdog) clearInterval(watchdog);
+      try { reply.raw.removeAllListeners('drain'); } catch { /* ignore */ }
       try { reply.raw.end(); } catch { /* ignore */ }
     };
 
@@ -52,19 +59,24 @@ export async function registerSseRoutes(fastify) {
       if (closed) return;
       if (draining) {
         if (queue.length < QUEUE_MAX) queue.push(data);
-        else queue.shift(); // drop oldest — bounded
+        else { queue.shift(); queue.push(data); } // drop oldest — bounded
         return;
       }
       const ok = reply.raw.write(data);
       if (!ok) {
+        // write() false means the current event was already accepted into the
+        // stream buffer — do NOT queue it again or it will duplicate after drain.
         draining = true;
-        if (queue.length < QUEUE_MAX) queue.push(data);
         const onDrain = () => {
           draining = false;
           while (queue.length > 0 && !draining) {
             const next = queue.shift();
             const ok2 = reply.raw.write(next);
-            if (!ok2) { draining = true; break; }
+            if (!ok2) {
+              draining = true;
+              reply.raw.once('drain', onDrain);
+              break;
+            }
           }
         };
         reply.raw.once('drain', onDrain);
@@ -131,9 +143,9 @@ export async function registerSseRoutes(fastify) {
       return mins >= 9 * 60 + 30 && mins < 16 * 60 ? openMs : closedMs;
     };
 
-    let timer = setInterval(writeTick, pickInterval());
-    const retune = setInterval(() => { clearInterval(timer); timer = setInterval(writeTick, pickInterval()); }, 60_000);
-    const watchdog = setInterval(() => {
+    timer = setInterval(writeTick, pickInterval());
+    retune = setInterval(() => { clearInterval(timer); timer = setInterval(writeTick, pickInterval()); }, 60_000);
+    watchdog = setInterval(() => {
       if (closed) return;
       if (lastGoodTickAt > 0 && Date.now() - lastGoodTickAt > STALE_MS) {
         try { send(`data: ${JSON.stringify({ error: 'stream_stale', timestamp: Date.now() })}\n\n`); } catch { /* ignore */ }
@@ -141,7 +153,7 @@ export async function registerSseRoutes(fastify) {
       }
     }, 15_000);
 
-    request.raw.on('close', () => { clearInterval(timer); clearInterval(retune); clearInterval(watchdog); cleanup(); });
-    request.raw.on('error', () => { clearInterval(timer); clearInterval(retune); clearInterval(watchdog); cleanup(); });
+    request.raw.on('close', cleanup);
+    request.raw.on('error', cleanup);
   });
 }

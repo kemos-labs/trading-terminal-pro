@@ -23,19 +23,19 @@ import { inventoryByExpiry, portfolioGreeks } from '../../lib/options/analytics'
 import { DeskLoading } from '../common/Skeleton';
 import { consumeDeskJumpOnMount } from '../../lib/market/deskJump';
 import { resolveTradeModeSection } from '../../config/deskSections';
-import { SimTool } from '../desk/tools/SimTool';
-import { ComboGreeksTool } from '../desk/tools/ComboGreeksTool';
-import { GridTool } from '../desk/tools/GridTool';
-import { BreakEvenTool } from '../desk/tools/BreakEvenTool';
-import { SubjectiveTool } from '../desk/tools/SubjectiveTool';
-import { ComboPnlTool } from '../desk/tools/ComboPnlTool';
-import { OptionPnlTool } from '../desk/tools/OptionPnlTool';
-import { StraddleTool } from '../desk/tools/StraddleTool';
-import { HedgeTool } from '../desk/tools/HedgeTool';
-import { DFollowTool } from '../desk/tools/DFollowTool';
-import { BacktestTool } from '../desk/tools/BacktestTool';
-import { BasisTool } from '../desk/tools/BasisTool';
-import { RollTool } from '../desk/tools/RollTool';
+const SimTool = lazy(() => import('../desk/tools/SimTool').then(m => ({ default: m.SimTool })));
+const ComboGreeksTool = lazy(() => import('../desk/tools/ComboGreeksTool').then(m => ({ default: m.ComboGreeksTool })));
+const GridTool = lazy(() => import('../desk/tools/GridTool').then(m => ({ default: m.GridTool })));
+const BreakEvenTool = lazy(() => import('../desk/tools/BreakEvenTool').then(m => ({ default: m.BreakEvenTool })));
+const SubjectiveTool = lazy(() => import('../desk/tools/SubjectiveTool').then(m => ({ default: m.SubjectiveTool })));
+const ComboPnlTool = lazy(() => import('../desk/tools/ComboPnlTool').then(m => ({ default: m.ComboPnlTool })));
+const OptionPnlTool = lazy(() => import('../desk/tools/OptionPnlTool').then(m => ({ default: m.OptionPnlTool })));
+const StraddleTool = lazy(() => import('../desk/tools/StraddleTool').then(m => ({ default: m.StraddleTool })));
+const HedgeTool = lazy(() => import('../desk/tools/HedgeTool').then(m => ({ default: m.HedgeTool })));
+const DFollowTool = lazy(() => import('../desk/tools/DFollowTool').then(m => ({ default: m.DFollowTool })));
+const BacktestTool = lazy(() => import('../desk/tools/BacktestTool').then(m => ({ default: m.BacktestTool })));
+const BasisTool = lazy(() => import('../desk/tools/BasisTool').then(m => ({ default: m.BasisTool })));
+const RollTool = lazy(() => import('../desk/tools/RollTool').then(m => ({ default: m.RollTool })));
 
 const GreeksView = lazy(() =>
   import('./GreeksView').then((m) => ({ default: m.GreeksView })),

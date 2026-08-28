@@ -3,7 +3,7 @@
  * Verifies: write false does NOT duplicate the current event after drain,
  * bounded queue (oldest drop), cleanup on disconnect/max failures.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 
 vi.mock('../../api/_shared.js', () => ({
@@ -133,7 +133,7 @@ describe('SSE backpressure', () => {
     const handler = fastify._getHandler();
     const req = createMockRequest('SPY');
     const reply = createMockReply();
-    const drainListenersBefore = reply.raw.listenerCount('drain');
+    const _drainListenersBefore = reply.raw.listenerCount('drain');
     const promise = handler(req, reply);
     await new Promise(r => setTimeout(r, 30));
     // Force backpressure to add a drain listener

@@ -1,6 +1,6 @@
 # Route Inventory — Phase 1 Baseline
 
-Generated: 2026-08-27T22:36:55Z
+Generated: 2026-08-28T00:40:16Z
 
 Source scan: server.js, server/app.js, api/authRoutes.js, api/stripeBilling.js, server/routes/deribitMarket.js, api/health.js, api/ksaFeeds.js, api/deskFeeds.js, api/_shared.js plus api/** (excluding tests).
 Total routes: 28
@@ -23,11 +23,11 @@ Classification: `public` | `credential-public` | `authenticated` | `entitled` | 
 | GET | `/api/billing/status` | `api/stripeBilling.js:348` | authenticated | global (600/min) but route-specific override may apply |  |
 | GET | `/api/boot/briefing` | `server/app.js:193` | public (health) | global (600/min) but route-specific override may apply |  |
 | GET | `/api/cache/status` | `server/app.js:259` | public (market data) | global (600/min) but route-specific override may apply |  |
-| GET | `/api/deribit/funding-history` | `server/routes/deribitMarket.js:162` | public (market data) | upstream (120/min) |  |
-| GET | `/api/deribit/index/:name` | `server/routes/deribitMarket.js:153` | public (market data) | upstream (120/min) |  |
-| GET | `/api/deribit/instruments` | `server/routes/deribitMarket.js:115` | public (market data) | upstream (120/min) |  |
-| GET | `/api/deribit/market/:currency` | `server/routes/deribitMarket.js:89` | public (market data) | upstream (120/min) |  |
-| GET | `/api/deribit/trades/:currency` | `server/routes/deribitMarket.js:124` | public (market data) | upstream (120/min) |  |
+| GET | `/api/deribit/funding-history` | `server/routes/deribitMarket.js:159` | public (market data) | upstream (120/min) |  |
+| GET | `/api/deribit/index/:name` | `server/routes/deribitMarket.js:144` | public (market data) | upstream (120/min) |  |
+| GET | `/api/deribit/instruments` | `server/routes/deribitMarket.js:102` | public (market data) | upstream (120/min) |  |
+| GET | `/api/deribit/market/:currency` | `server/routes/deribitMarket.js:73` | public (market data) | upstream (120/min) |  |
+| GET | `/api/deribit/trades/:currency` | `server/routes/deribitMarket.js:117` | public (market data) | upstream (120/min) |  |
 | GET | `/api/flashalpha/exposure/:type/:symbol` | `server/app.js:109` | public (market data) | upstream (120/min) |  |
 | GET | `/api/fmp/stable/*` | `server/app.js:78` | public (market data) | upstream (120/min) |  |
 | GET | `/api/health` | `server/app.js:258` | public (health) | global (600/min) but route-specific override may apply |  |

@@ -112,6 +112,14 @@ export function TerminalLayout() {
     void import('../views/GreeksView');
   }, []);
 
+  // Sync ?desk= URL param to activeTab on mount (enables deep-linking / e2e)
+  useEffect(() => {
+    const desk = new URLSearchParams(window.location.search).get('desk') as string | null;
+    if (desk && TABS.some((t) => t.id === desk)) {
+      setActiveTab(desk as never);
+    }
+  }, [setActiveTab]);
+
   // Migrate stale tab ids (e.g. old "home"/"macro" → Vol, the default desk)
   useEffect(() => {
     const id = activeTab as string;

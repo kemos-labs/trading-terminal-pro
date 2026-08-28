@@ -8,7 +8,6 @@ import {
   normalizeCatalogueEntry,
   normalizeQuote,
   joinCatalogueWithQuotes,
-  ivPctToDecimal,
   normalizeTrade,
 } from './normalize.js';
 import { DeribitStream } from './stream.js';

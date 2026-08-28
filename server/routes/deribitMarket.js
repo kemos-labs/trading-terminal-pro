@@ -22,8 +22,8 @@ import {
 import { getOrFetch } from '../../api/upstreamCache.js';
 
 const CATALOGUE_TTL_MS = 5 * 60_000; // listings change ~daily
-const QUOTES_TTL_MS = 20_000;
-const TRADES_TTL_MS = 5_000;
+const _QUOTES_TTL_MS = 20_000;
+const _TRADES_TTL_MS = 5_000;
 
 function parseCurrency(currency) {
   const c = String(currency || '').trim().toUpperCase();

@@ -54,7 +54,7 @@ export function ShapeSection({
                   : 'bg-warn/15 text-warn'
             }`}
           >
-            {shape.regime.toUpperCase()}
+            {(shape.regime ?? 'unknown').toUpperCase()}
           </span>
           {shape.imply && <ImplyChip imply={shape.imply} onOpen={onOpenImply} />}
           <span className="hidden text-type-xs text-muted-foreground xl:inline">{shape.regime_note}</span>

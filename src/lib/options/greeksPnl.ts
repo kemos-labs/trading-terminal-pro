@@ -49,15 +49,18 @@ export interface GreeksPnlBar {
 
 export interface GreeksPnlSeries {
   bars: GreeksPnlBar[];
-  terminalPnl: number;
-  totalDelta: number;
-  totalGamma: number;
-  totalTheta: number;
-  totalVega: number;
-  totalResidual: number;
+  /** Discriminated: false = unavailable (do not render zero as valid). */
+  available: boolean;
+  reason?: string;
+  terminalPnl: number | null;
+  totalDelta: number | null;
+  totalGamma: number | null;
+  totalTheta: number | null;
+  totalVega: number | null;
+  totalResidual: number | null;
   /** How marks were produced — scenario vs historical. */
   method: 'bs-sticky-iv' | 'scenario-synthetic-gbm-sticky-iv';
-  /** Provenance label for UI */
+  /** Provenance label for UI — observed underlying replay vs scenario */
   provenance: 'observed-history' | 'scenario-synthetic';
   /** Vega attribution note: sticky IV ⇒ 0 vol move */
   vegaNote: string;
@@ -195,16 +198,20 @@ export function comboGreeksPnl(
   });
   if (hasMissingLeg) {
     return {
-      bars: [], terminalPnl: 0, totalDelta: 0, totalGamma: 0,
-      totalTheta: 0, totalVega: 0, totalResidual: 0, method: pathProvenance === 'scenario-synthetic' ? 'scenario-synthetic-gbm-sticky-iv' : 'bs-sticky-iv',
+      bars: [], available: false, reason: 'missing-expiry-or-iv-or-entryPrice',
+      terminalPnl: null, totalDelta: null, totalGamma: null,
+      totalTheta: null, totalVega: null, totalResidual: null,
+      method: pathProvenance === 'scenario-synthetic' ? 'scenario-synthetic-gbm-sticky-iv' : 'bs-sticky-iv',
       provenance: pathProvenance,
       vegaNote: 'Unavailable — missing expiry/IV/entryPrice (fail-closed)',
     };
   }
   if (!path.length || !legs.length) {
     return {
-      bars: [], terminalPnl: 0, totalDelta: 0, totalGamma: 0,
-      totalTheta: 0, totalVega: 0, totalResidual: 0, method: pathProvenance === 'scenario-synthetic' ? 'scenario-synthetic-gbm-sticky-iv' : 'bs-sticky-iv',
+      bars: [], available: false, reason: !legs.length ? 'no-legs' : 'no-history',
+      terminalPnl: null, totalDelta: null, totalGamma: null,
+      totalTheta: null, totalVega: null, totalResidual: null,
+      method: pathProvenance === 'scenario-synthetic' ? 'scenario-synthetic-gbm-sticky-iv' : 'bs-sticky-iv',
       provenance: pathProvenance, vegaNote: pathProvenance === 'scenario-synthetic' ? 'Scenario synthetic GBM — sticky IV, vega 0' : 'Sticky IV — 0 vol move by construction',
     };
   }
@@ -321,6 +328,7 @@ export function comboGreeksPnl(
   const isSynthetic = pathProvenance === 'scenario-synthetic';
   return {
     bars,
+    available: true,
     terminalPnl: last.pnl,
     totalDelta: cumDelta,
     totalGamma: cumGamma,

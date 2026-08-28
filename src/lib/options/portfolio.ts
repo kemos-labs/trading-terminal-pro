@@ -19,8 +19,10 @@ export interface PortfolioLeg {
   qty: number;
   strike?: number;
   expiry?: string;
-  /** Entry premium (per unit) for options; entry price for spot/future — null if unavailable (never 0) */
+  /** Entry premium: long→ask, short→bid; null if that side unavailable (never mid/last fallback) */
   entryPrice: number | null;
+  /** How entryPrice was sourced — ask for long, bid for short, mid separate valuation basis */
+  entryBasis?: 'ask' | 'bid' | 'mid' | 'last' | 'user' | null;
   /** Override IV (decimal); else taken from snapshot */
   iv?: number;
 }
@@ -260,41 +262,54 @@ export function templateLegs(
   ) ?? otmPut;
 
   const id = () => Math.random().toString(36).slice(2, 9);
+  const execPrice = (q: import('./types').OptionQuote, side: LegSide): { price: number | null; basis: 'ask' | 'bid' | null } => {
+    if (side === 'long') return q.ask != null && q.ask > 0 && isFinite(q.ask) ? { price: q.ask, basis: 'ask' } : { price: null, basis: null };
+    return q.bid != null && q.bid > 0 && isFinite(q.bid) ? { price: q.bid, basis: 'bid' } : { price: null, basis: null };
+  };
   switch (name) {
-    case 'long_straddle':
+    case 'long_straddle': {
+      const c = execPrice(atm, 'long'); const p = execPrice(atmPut, 'long');
       return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? null },
-        { id: id(), kind: 'put', side: 'long', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? null },
+        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: c.price, entryBasis: c.basis },
+        { id: id(), kind: 'put', side: 'long', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: p.price, entryBasis: p.basis },
       ];
-    case 'short_straddle':
+    }
+    case 'short_straddle': {
+      const c = execPrice(atm, 'short'); const p = execPrice(atmPut, 'short');
       return [
-        { id: id(), kind: 'call', side: 'short', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? null },
-        { id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? null },
+        { id: id(), kind: 'call', side: 'short', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: c.price, entryBasis: c.basis },
+        { id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: p.price, entryBasis: p.basis },
       ];
-    case 'long_call':
+    }
+    case 'long_call': {
+      const c = execPrice(atm, 'long');
+      return [{ id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: c.price, entryBasis: c.basis }];
+    }
+    case 'short_put': {
+      const p = execPrice(atmPut, 'short');
+      return [{ id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: p.price, entryBasis: p.basis }];
+    }
+    case 'risk_reversal': {
+      const c = execPrice(otmCall, 'long'); const p = execPrice(otmPut, 'short');
       return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? null },
+        { id: id(), kind: 'call', side: 'long', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: c.price, entryBasis: c.basis },
+        { id: id(), kind: 'put', side: 'short', qty: 1, strike: otmPut.strike, expiry: slice.expiry, entryPrice: p.price, entryBasis: p.basis },
       ];
-    case 'short_put':
+    }
+    case 'call_spread': {
+      const a = execPrice(atm, 'long'); const b = execPrice(otmCall, 'short');
       return [
-        { id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? null },
+        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: a.price, entryBasis: a.basis },
+        { id: id(), kind: 'call', side: 'short', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: b.price, entryBasis: b.basis },
       ];
-    case 'risk_reversal':
+    }
+    case 'collar': {
+      const p = execPrice(d25Put, 'long'); const c = execPrice(d25Call, 'short');
       return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: otmCall.mid ?? otmCall.last ?? null },
-        { id: id(), kind: 'put', side: 'short', qty: 1, strike: otmPut.strike, expiry: slice.expiry, entryPrice: otmPut.mid ?? otmPut.last ?? null },
+        { id: id(), kind: 'put', side: 'long', qty: 1, strike: d25Put.strike, expiry: slice.expiry, entryPrice: p.price, entryBasis: p.basis },
+        { id: id(), kind: 'call', side: 'short', qty: 1, strike: d25Call.strike, expiry: slice.expiry, entryPrice: c.price, entryBasis: c.basis },
       ];
-    case 'call_spread':
-      return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? null },
-        { id: id(), kind: 'call', side: 'short', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: otmCall.mid ?? otmCall.last ?? null },
-      ];
-    case 'collar':
-      // Long ~25Δ put + short ~25Δ call (pair with long underlier offline)
-      return [
-        { id: id(), kind: 'put', side: 'long', qty: 1, strike: d25Put.strike, expiry: slice.expiry, entryPrice: d25Put.mid ?? d25Put.last ?? null },
-        { id: id(), kind: 'call', side: 'short', qty: 1, strike: d25Call.strike, expiry: slice.expiry, entryPrice: d25Call.mid ?? d25Call.last ?? null },
-      ];
+    }
     default:
       return [];
   }

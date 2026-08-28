@@ -51,7 +51,7 @@ export function RatesPanel({
   // Core FRED pack only — STIR never blocks Funding/UST first paint.
   if (loading) {
     return (
-      <div className="p-1">
+      <div className="p-1" data-testid="rates-panel">
         <EmptyState kind="loading" title="Loading rates…" body="FRED · NYFed (shared cache)" compact />
         <SectionSkeleton rows={2} className="mt-1" />
       </div>

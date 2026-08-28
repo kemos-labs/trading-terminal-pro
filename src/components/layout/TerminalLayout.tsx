@@ -22,6 +22,7 @@ import { ThreeVolStrip } from '../common/ThreeVolStrip';
 import { sanitizeSymbol } from '../../lib/validation';
 import { TABS } from '../terminal/tabs';
 import { findSectionMeta, jumpDeskSection, sectionsForTab } from '../../config/deskNav';
+import { setDeskJump } from '../../lib/market/deskJump';
 import type { ActiveTab } from '../../lib/options/types';
 import { cn } from '../../lib/utils';
 import {
@@ -125,11 +126,19 @@ export function TerminalLayout() {
     }
   }, []);
 
-  // Sync ?desk= URL param to activeTab on mount (enables deep-linking / e2e)
+  // Sync ?desk= / ?sec= URL params to activeTab/deskSectionId on mount (enables deep-linking / e2e)
   useEffect(() => {
-    const desk = new URLSearchParams(window.location.search).get('desk') as string | null;
+    const params = new URLSearchParams(window.location.search);
+    const desk = params.get('desk') as string | null;
     if (desk && TABS.some((t) => t.id === desk)) {
       setActiveTab(desk as never);
+    }
+    const sec = params.get('sec') as string | null;
+    if (sec) {
+      const { setDeskSection, setDeskContext } = useTerminalStore.getState();
+      setDeskSection(sec);
+      try { setDeskContext({ id: sec, label: sec, apis: [] }); } catch { /* ignore */ }
+      try { setDeskJump(sec); } catch { /* ignore */ }
     }
   }, [setActiveTab]);
 

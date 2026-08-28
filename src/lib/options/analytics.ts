@@ -847,21 +847,25 @@ export function scanParityEdges(
 /** Listed inventory by expiry (MM scan — not a position book). */
 export function inventoryByExpiry(snap: VolSnapshot) {
   return snap.expiries.map((slice) => {
-    let delta = 0, gamma = 0, vega = 0, theta = 0, callOI = 0, putOI = 0;
+    let delta = 0, gamma = 0, vega = 0, theta = 0;
+    let callOI: number | null = 0, putOI: number | null = 0;
+    let callMissing = false, putMissing = false;
     for (const q of slice.calls) {
       delta += q.delta ?? 0;
       gamma += q.gamma ?? 0;
       vega += q.vega ?? 0;
       theta += q.theta ?? 0;
-      callOI += q.openInterest ?? 0;
+      if (q.openInterest == null) callMissing = true; else (callOI as number) += q.openInterest;
     }
     for (const q of slice.puts) {
       delta += q.delta ?? 0;
       gamma += q.gamma ?? 0;
       vega += q.vega ?? 0;
       theta += q.theta ?? 0;
-      putOI += q.openInterest ?? 0;
+      if (q.openInterest == null) putMissing = true; else (putOI as number) += q.openInterest;
     }
+    if (callMissing) callOI = null;
+    if (putMissing) putOI = null;
     return {
       expiry: slice.expiry,
       dte: slice.dte,
@@ -872,7 +876,8 @@ export function inventoryByExpiry(snap: VolSnapshot) {
       theta,
       callOI,
       putOI,
-      pcr: callOI > 0 ? putOI / callOI : null,
+      pcr: callOI != null && callOI > 0 && putOI != null ? putOI / callOI : null,
+      oiState: callMissing || putMissing ? (callMissing && putMissing && slice.calls.every((q) => q.openInterest == null) && slice.puts.every((q) => q.openInterest == null) ? 'missing' : 'partial') : 'observed',
     };
   });
 }

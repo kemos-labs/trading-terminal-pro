@@ -100,7 +100,7 @@ export function VolStructureView() {
   }
   if (!snapshot) {
     return (
-      <div className="flex h-full items-center justify-center p-4">
+      <div className="flex h-full items-center justify-center p-4" data-testid="vol-structure-view">
         <EmptyState
           kind="no-data"
           title="No live surface"

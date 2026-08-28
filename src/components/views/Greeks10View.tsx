@@ -150,7 +150,7 @@ export function Greeks10View() {
   void (selectedGreek as GreekKey);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden" data-testid="vol-greeks10-view">
       <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-2 py-1">
         <span className="text-type-xs font-mono font-semibold text-foreground">{ticker}</span>
         <span className="text-type-2xs font-mono text-muted-foreground">

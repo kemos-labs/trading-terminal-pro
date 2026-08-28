@@ -131,43 +131,26 @@ export function SmileView() {
   const chartData = useMemo(() => {
     if (!snapshot) return [];
     return snapshot.expiries.slice(0, 6).map((slice, i) => {
-      const calls: DataPoint[] = slice.calls
+      const T = yearFractionFromSlice(slice);
+      const F = slice.forward ?? snapshot.spot * Math.exp((snapshot.riskFreeRate - snapshot.dividendYield) * T);
+      const mapQuote = (q: OptionQuote, type: 'call' | 'put'): (DataPoint & { bidIv?: number; askIv?: number }) => ({
+        x: xMode === 'moneyness' ? Math.log(q.strike / F) * 100 : xMode === 'delta' ? (q.delta ?? 0) : q.strike,
+        iv: (q.midIv ?? q.iv!) * 100,
+        bidIv: showBidAsk && hasBidAskIv && q.bidIv != null ? q.bidIv * 100 : undefined,
+        askIv: showBidAsk && hasBidAskIv && q.askIv != null ? q.askIv * 100 : undefined,
+        type,
+        strike: q.strike,
+        bid: q.bid ?? undefined,
+        ask: q.ask ?? undefined,
+      });
+      const calls: (DataPoint & { bidIv?: number; askIv?: number })[] = slice.calls
         .filter((q) => (q.midIv ?? q.iv) != null && (q.midIv ?? q.iv!) > 0)
         .sort((a, b) => a.strike - b.strike)
-        .map((q) => ({
-          x:
-            xMode === 'moneyness'
-              ? Math.log(q.strike / snapshot.spot) * 100
-              : xMode === 'delta'
-                ? (q.delta ?? 0)
-                : q.strike,
-          iv: (q.midIv ?? q.iv!) * 100,
-          // Independently inverted bid/ask IV — never proxy, null when not invertible
-          bidIv: showBidAsk && hasBidAskIv && q.bidIv != null ? q.bidIv * 100 : undefined,
-          askIv: showBidAsk && hasBidAskIv && q.askIv != null ? q.askIv * 100 : undefined,
-          type: 'call' as const,
-          strike: q.strike,
-          bid: q.bid ?? undefined,
-          ask: q.ask ?? undefined,
-        } as DataPoint & { bidIv?: number; askIv?: number }));
-      const puts: DataPoint[] = slice.puts
+        .map((q) => mapQuote(q, 'call'));
+      const puts: (DataPoint & { bidIv?: number; askIv?: number })[] = slice.puts
         .filter((q) => (q.midIv ?? q.iv) != null && (q.midIv ?? q.iv!) > 0)
         .sort((a, b) => a.strike - b.strike)
-        .map((q) => ({
-          x:
-            xMode === 'moneyness'
-              ? Math.log(q.strike / snapshot.spot) * 100
-              : xMode === 'delta'
-                ? (q.delta ?? 0)
-                : q.strike,
-          iv: (q.midIv ?? q.iv!) * 100,
-          bidIv: showBidAsk && hasBidAskIv && q.bidIv != null ? q.bidIv * 100 : undefined,
-          askIv: showBidAsk && hasBidAskIv && q.askIv != null ? q.askIv * 100 : undefined,
-          type: 'put' as const,
-          strike: q.strike,
-          bid: q.bid ?? undefined,
-          ask: q.ask ?? undefined,
-        } as DataPoint & { bidIv?: number; askIv?: number }));
+        .map((q) => mapQuote(q, 'put'));
       return {
         expiry: slice.expiry,
         dte: slice.dte,
@@ -188,10 +171,12 @@ export function SmileView() {
     const dte = surface.dtes[expiryIdx] ?? 30;
     const expiry = surface.expiries[expiryIdx] ?? snapshot.expiries[expiryIdx]?.expiry ?? '';
     const T = yearFractionFromSlice({ expiry, dte });
-    const fit = fitSVI(surface.strikes, row, snapshot.spot, T);
+    const slice = snapshot.expiries[expiryIdx];
+    const F = slice?.forward ?? snapshot.spot * Math.exp((snapshot.riskFreeRate - snapshot.dividendYield) * T);
+    const fit = fitSVI(surface.strikes, row, F, T);
     if (!fit) return null;
 
-    const kStrikes = surface.strikes.map((s) => Math.log(s / snapshot.spot));
+    const kStrikes = surface.strikes.map((s) => Math.log(s / F));
     const minK = Math.min(...kStrikes);
     const maxK = Math.max(...kStrikes);
     const points: SVICurvePoint[] = [];
@@ -200,12 +185,12 @@ export function SmileView() {
       const k = minK + (maxK - minK) * (i / n);
       const w = svi(fit.params, k);
       const iv = Math.sqrt(Math.max(0, w / T));
-      const strike = snapshot.spot * Math.exp(k);
+      const strike = F * Math.exp(k);
       let x: number;
       if (xMode === 'moneyness') {
         x = k * 100;
       } else if (xMode === 'delta') {
-        const d1 = (k + T * 0.5 * iv * iv) / (iv * Math.sqrt(T));
+        const d1 = (Math.log(F / strike) + T * 0.5 * iv * iv) / (iv * Math.sqrt(T));
         const nd = 0.5 * (1 + (d1 / Math.sqrt(2)) * (1 - (d1 * d1) / 6));
         x = nd * 2 - 1;
       } else {
@@ -223,7 +208,7 @@ export function SmileView() {
 
   if (!snapshot) {
     return (
-      <Panel title="IV Smile / Skew" className="h-full">
+      <Panel title="IV Smile / Skew" className="h-full" data-testid="vol-smile-view">
         <div className="flex h-full items-center justify-center font-mono text-xs text-muted-foreground">
           No data
         </div>
@@ -384,7 +369,7 @@ export function SmileView() {
                         }
                       : false
                   }
-                  name={`${slice.label} Calls`}
+                  name={`${slice.label} Calls — derived midpoint`}
                   connectNulls
                   isAnimationActive={false}
                 />
@@ -412,10 +397,16 @@ export function SmileView() {
                         }
                       : false
                   }
-                  name={`${slice.label} Puts`}
+                  name={`${slice.label} Puts — derived midpoint`}
                   connectNulls
                   isAnimationActive={false}
                 />
+              ))}
+              {showBidAsk && hasBidAskIv && chartData.map((slice, i) => i === selectedExpiryIdx && (
+                <Line key={`bid-${slice.expiry}`} data={[...slice.calls, ...slice.puts].filter((d) => (d as unknown as { bidIv?: number }).bidIv != null)} type="monotone" dataKey="bidIv" stroke={CHART.series.muted} strokeWidth={1} strokeDasharray="2 2" dot={false} name={`${slice.label} Bid IV (observed)`} connectNulls isAnimationActive={false} />
+              ))}
+              {showBidAsk && hasBidAskIv && chartData.map((slice, i) => i === selectedExpiryIdx && (
+                <Line key={`ask-${slice.expiry}`} data={[...slice.calls, ...slice.puts].filter((d) => (d as unknown as { askIv?: number }).askIv != null)} type="monotone" dataKey="askIv" stroke={CHART.series.muted} strokeWidth={1} strokeDasharray="4 1" dot={false} name={`${slice.label} Ask IV (observed)`} connectNulls isAnimationActive={false} />
               ))}
 
               {sviCurve && (

@@ -19,24 +19,26 @@ export function SurfaceMatrixView() {
     };
   }, [snapshot]);
 
+  // OTM/ATM convention: K < F → OTM put, K ≥ F → OTM call; missing side → unavailable (null), never substitute.
   const grid = useMemo(() => {
     if (!snapshot) return null;
     const expiries = snapshot.expiries.slice(0, 8);
     const strikeSet = new Set<number>();
-    for (const e of expiries) {
-      for (const q of [...e.calls, ...e.puts]) strikeSet.add(q.strike);
-    }
+    for (const e of expiries) for (const q of [...e.calls, ...e.puts]) strikeSet.add(q.strike);
     const strikes = [...strikeSet].sort((a, b) => a - b).filter((k) => Math.abs(k - snapshot.spot) / snapshot.spot < 0.18).slice(0, 40);
-    const values: (number | null)[][] = expiries.map((e) =>
-      strikes.map((k) => {
-        const q = [...e.calls, ...e.puts].find((x) => x.strike === k);
+    const values: (number | null)[][] = expiries.map((e) => {
+      const T = Math.max(1e-9, e.dte / 365);
+      const F = (e as unknown as { forward?: number }).forward ?? snapshot.spot * Math.exp((snapshot.riskFreeRate - snapshot.dividendYield) * T);
+      return strikes.map((k) => {
+        const wantPut = k < F;
+        const q = wantPut ? e.puts.find((x) => x.strike === k) : e.calls.find((x) => x.strike === k);
         if (!q) return null;
         if (side === 'mid') return q.midIv != null ? q.midIv * 100 : (q.iv != null ? q.iv * 100 : null);
         if (side === 'bid') return q.bidIv != null ? q.bidIv * 100 : null;
         if (side === 'ask') return q.askIv != null ? q.askIv * 100 : null;
         return null;
-      })
-    );
+      });
+    });
     let min = Infinity, max = -Infinity;
     for (const row of values) for (const v of row) if (v != null) { if (v < min) min = v; if (v > max) max = v; }
     if (!isFinite(min)) { min = 0; max = 40; }
@@ -44,7 +46,7 @@ export function SurfaceMatrixView() {
   }, [snapshot, side]);
 
   if (!snapshot || !grid) {
-    return <Panel title="IV Surface — strike × expiry"><div className="p-4 text-xs text-muted-foreground">No surface</div></Panel>;
+    return <Panel title="IV Surface — strike × expiry" data-testid="vol-surface-matrix"><div className="p-4 text-xs text-muted-foreground">No surface</div></Panel>;
   }
 
   // Ensure side stays valid when availability changes
@@ -76,7 +78,7 @@ export function SurfaceMatrixView() {
           <span className="ml-auto font-mono text-type-2xs text-muted-foreground">{snapshot.symbol} · {snapshot.spot.toFixed(2)} · {grid.expiries.length}×{grid.strikes.length}</span>
         </div>
         <div className="p-2">
-          <div className="text-type-2xs text-muted-foreground mb-1">IV % — {effectiveSide === 'mid' ? 'solved mid IV (executable mid)' : effectiveSide === 'bid' ? 'solved bid IV (observed bid price)' : 'solved ask IV (observed ask price)'} · separate feed/mid/bid/ask/model layers</div>
+          <div className="text-type-2xs text-muted-foreground mb-1">IV % — {effectiveSide === 'mid' ? 'derived two-sided midpoint IV (mid-price, not executable)' : effectiveSide === 'bid' ? 'observed bid IV (bid-price)' : 'observed ask IV (ask-price)'} · unavailable sides remain — (null) · OTM: K&lt;F→put, K≥F→call</div>
           <MatrixHeatmap
             data={grid.values}
             xLabels={grid.strikes}

@@ -65,7 +65,7 @@ const proxyTrust = resolveProxyTrust();
 const RL_GLOBAL = 600, RL_UPSTREAM = 120, RL_SCARCE = 30;
 function rateLimitClassForUrl(url) {
   if (url.startsWith('/api/alphavantage') || url.startsWith('/api/tradingview')) return 'scarce';
-  if (url.startsWith('/api/fmp') || url.startsWith('/api/finnhub') || url.startsWith('/api/massive') || url.startsWith('/api/flashalpha') || url.startsWith('/api/desk') || url.startsWith('/api/macrovol') || url.startsWith('/api/backtest') || url.startsWith('/api/options') || url.startsWith('/api/yf') || url.startsWith('/api/deribit') || url.startsWith('/api/ksa') || url.startsWith('/api/history')) return 'upstream';
+  if (url.startsWith('/api/fmp') || url.startsWith('/api/finnhub') || url.startsWith('/api/massive') || url.startsWith('/api/flashalpha') || url.startsWith('/api/desk') || url.startsWith('/api/macrovol') || url.startsWith('/api/options') || url.startsWith('/api/yf') || url.startsWith('/api/deribit') || url.startsWith('/api/ksa') || url.startsWith('/api/history')) return 'upstream';
   return 'global';
 }
 function rateLimitMaxForUrl(url) {
@@ -132,59 +132,7 @@ function registerFlashalphaRoutes(fastify) {
   });
 }
 
-// ── Backtest proxy ──────────────────────────────────────────
-// P0 Fix: explicit allowlist, loopback-only, bounded timeouts (25s), response contracts. Ownership: Node is SAAS billing/auth shell; Python is private compute worker (not public API).
-const ALLOWED_BACKTEST = [
-  { method: ['GET'], re: /^\/(status)?\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/status\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/binance\/exchange-info\/?(\?.*)?$/ },
-  { method: ['POST', 'GET'], re: /^\/run\/?(\?.*)?$/ },
-  { method: ['POST'], re: /^\/scan\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/baseline\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/placebo\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/tail-risk\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/equity-curve\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/walkforward\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/sweep\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/health\/?$/ },
-];
-function isBacktestAllowed(suffix, method) {
-  const path = (suffix.split('?')[0] || '').replace(/\/$/, '') || '/';
-  const clean = path.startsWith('/') ? path : `/${path}`;
-  for (const rule of ALLOWED_BACKTEST) {
-    if (!rule.method.includes(method)) continue;
-    if (rule.re.test(clean) || rule.re.test(suffix.split('?')[0] || '')) return true;
-  }
-  return false;
-}
-function registerBacktestRoutes(fastify) {
-  const rawBase = (process.env.BACKTEST_API_URL || 'http://127.0.0.1:8766').replace(/\/$/, '');
-  // loopback-only
-  let BACKTEST_BASE = rawBase;
-  try { const u = new URL(rawBase); if (u.hostname !== '127.0.0.1' && u.hostname !== 'localhost') BACKTEST_BASE = 'http://127.0.0.1:8766'; } catch { BACKTEST_BASE = 'http://127.0.0.1:8766'; }
-  fastify.route({
-    method: ['GET', 'POST', 'OPTIONS'],
-    url: '/api/backtest/*',
-    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-    handler: async (request, reply) => {
-      const suffix = (request.url || '').replace(/^\/api\/backtest/, '') || '/';
-      if (!isBacktestAllowed(suffix, request.method)) { reply.code(404); return { error: 'Endpoint not allowed', hint: 'Allowlisted /api/backtest paths only' }; }
-      // Block path traversal / encoding tricks
-      if (suffix.toLowerCase().includes('%2e') || suffix.includes('..')) { reply.code(404); return { error: 'Not found' }; }
-      const target = `${BACKTEST_BASE}/api/backtest${suffix.startsWith('/') ? suffix : `/${suffix}`}`;
-      try {
-        const res = await fetch(target, { method: request.method === 'OPTIONS' ? 'GET' : request.method, headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(25_000) });
-        const ct = res.headers.get('content-type') || '';
-        const text = await res.text();
-        if (text.length > 1_000_000) { reply.code(502); return { error: 'Upstream response too large' }; }
-        let body; try { body = JSON.parse(text); } catch { body = { error: 'Invalid JSON from backtest pipe', raw: text.slice(0, 300) }; }
-        if (!ct.includes('application/json') && res.ok) { reply.code(502); return { error: 'Upstream non-JSON', raw: text.slice(0, 200) }; }
-        reply.code(res.status);
-        return body;
-      } catch (err) { reply.code(502); return { error: 'Crypto backtest pipe unavailable', detail: err.message }; }
-    },
-  });
-}
+// ── Backtest proxy removed — service deleted per FINAL recovery (no consumer, zero tests). See REPLICA_DELETION_MAP.md.
 
 // ── KSA routes ──────────────────────────────────────────────
 function registerKsaRoutes(fastify) {
@@ -297,7 +245,6 @@ export async function buildServer() {
   registerSseRoutes(fastify);
   await registerDeribitMarketRoutes(fastify);
   await registerMacrovolRoutes(fastify);
-  registerBacktestRoutes(fastify);
   registerFlashalphaRoutes(fastify);
   registerKsaRoutes(fastify);
   registerOpraRoutes(fastify);

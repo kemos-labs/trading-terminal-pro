@@ -55,36 +55,107 @@ function isMacroAllowed(suffix, method) {
   return false;
 }
 
-/** Validate query params are bounded — prevent unbounded cache keys */
+/** Per-route allowed query keys — unknown keys rejected (prevents cache-cardinality abuse). */
+const ROUTE_QUERY_ALLOW = [
+  { re: /^\/health\/?$/, allow: new Set() },
+  { re: /^\/api\/rates\/sofr\/?$/, allow: new Set() },
+  { re: /^\/api\/rates\/summary\/?$/, allow: new Set() },
+  { re: /^\/api\/rates\/curve\/?$/, allow: new Set(['ticker','symbol']) },
+  { re: /^\/api\/rates\/shape\/?$/, allow: new Set(['history']) },
+  { re: /^\/api\/rates\/term-structure\/?$/, allow: new Set(['T']) },
+  { re: /^\/api\/rates\/plumbing\/?$/, allow: new Set() },
+  { re: /^\/api\/rates\/basis\/?$/, allow: new Set() },
+  { re: /^\/api\/rates\/basis-history\/?$/, allow: new Set(['limit']) },
+  { re: /^\/api\/rates\/curve-history\/?$/, allow: new Set(['periods','period']) },
+  { re: /^\/api\/rates\/correlations\/?$/, allow: new Set(['window','period']) },
+  { re: /^\/api\/rates\/jgb-curve\/?$/, allow: new Set(['compare_days']) },
+  { re: /^\/api\/rates\/fx\/?$/, allow: new Set() },
+  { re: /^\/api\/rates\/auctions\/?$/, allow: new Set(['limit']) },
+  { re: /^\/api\/rates\/global-yields\/?$/, allow: new Set() },
+  { re: /^\/api\/rates\/global-yields\/[^/]+\/?$/, allow: new Set() },
+  { re: /^\/api\/crypto\/spot\/?$/, allow: new Set(['symbol','ticker']) },
+  { re: /^\/api\/perp\/basis\/?$/, allow: new Set(['symbol']) },
+  { re: /^\/api\/sec\/context\/[^/]+\/?$/, allow: new Set(['limit','symbol']) },
+  { re: /^\/api\/macro\/summary\/?$/, allow: new Set() },
+  { re: /^\/api\/macro\/series\/[^/]+\/?$/, allow: new Set(['limit']) },
+  { re: /^\/api\/macro\/stress\/?$/, allow: new Set() },
+  { re: /^\/api\/macro\/primary\/?$/, allow: new Set() },
+  { re: /^\/api\/stir\/strip\/?$/, allow: new Set(['period']) },
+  { re: /^\/api\/feed\/[^/]+\/?$/, allow: new Set() },
+  { re: /^\/api\/surface\/[^/]+\/?$/, allow: new Set(['ticker','symbol','r','q','strike_range']) },
+  { re: /^\/api\/surface\/[^/]+\/preview\/?$/, allow: new Set(['ticker','symbol','r','q','strike_range']) },
+  { re: /^\/api\/greeks\/[^/]+\/?$/, allow: new Set(['ticker','r','q','strike_range']) },
+  { re: /^\/api\/greeks\/history\/[^/]+\/?$/, allow: new Set(['period']) },
+];
+function allowedKeysForPath(path) {
+  const clean = (path.split('?')[0] || '').replace(/\/$/, '') || '/';
+  const full = clean.startsWith('/api') ? clean : `/api${clean}`;
+  for (const { re, allow } of ROUTE_QUERY_ALLOW) if (re.test(clean) || re.test(full)) return allow;
+  return null;
+}
+/** Validate query params are bounded — prevent unbounded cache keys. Returns null on ok, or { error, normalized } */
 function validateMacroQuery(suffix) {
   const qIdx = suffix.indexOf('?');
-  if (qIdx === -1) return null;
+  if (qIdx === -1) return { error: null, normalized: suffix };
+  const path = suffix.slice(0, qIdx);
   const qs = suffix.slice(qIdx + 1);
+  const allow = allowedKeysForPath(path);
+  if (allow === null) return { error: 'unknown route', normalized: null };
+  // Duplicate-key detection: raw string search before URLSearchParams dedupes
+  const rawPairs = qs.split('&').filter(Boolean);
+  const seen = new Set();
+  for (const pair of rawPairs) {
+    const k = decodeURIComponent(pair.split('=')[0] || '').trim();
+    if (!k) continue;
+    if (seen.has(k)) return { error: `duplicate param ${k}`, normalized: null };
+    seen.add(k);
+    if (!allow.has(k)) return { error: `unknown param ${k}`, normalized: null };
+  }
   const params = new URLSearchParams(qs);
-  // Bound common params: ticker 1-16 alnum, period enum, limit 1-50, history 10-260, etc.
   for (const [k, v] of params) {
-    if (v.length > 32) return `param ${k} too long`;
+    if (v.length > 32) return { error: `param ${k} too long`, normalized: null };
     if (k === 'ticker' || k === 'symbol') {
-      if (!/^[A-Za-z0-9.\-=^]{1,16}$/.test(v)) return `invalid ticker ${v}`;
+      if (!/^[A-Za-z0-9.\-=^]{1,16}$/.test(v)) return { error: `invalid ticker ${v}`, normalized: null };
     }
     if (k === 'limit') {
       const n = Number(v);
-      if (!Number.isInteger(n) || n < 1 || n > 2000) return `limit out of bounds`;
+      if (!Number.isInteger(n) || n < 1 || n > 2000) return { error: 'limit out of bounds', normalized: null };
     }
     if (k === 'history') {
       const n = Number(v);
-      if (!Number.isInteger(n) || n < 10 || n > 260) return `history out of bounds`;
+      if (!Number.isInteger(n) || n < 10 || n > 260) return { error: 'history out of bounds', normalized: null };
     }
     if (k === 'strike_range') {
       const n = Number(v);
-      if (!isFinite(n) || n <= 0 || n > 1) return `strike_range out of bounds`;
+      if (!isFinite(n) || n <= 0 || n > 1) return { error: 'strike_range out of bounds', normalized: null };
     }
     if (k === 'r' || k === 'q') {
       const n = Number(v);
-      if (!isFinite(n) || n < -0.5 || n > 2) return `rate out of bounds`;
+      if (!isFinite(n) || n < -0.5 || n > 2) return { error: 'rate out of bounds', normalized: null };
+    }
+    if (k === 'T') {
+      const n = Number(v);
+      if (!isFinite(n) || n < 0.01 || n > 40) return { error: 'T out of bounds', normalized: null };
+    }
+    if (k === 'window') {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 5 || n > 252) return { error: 'window out of bounds', normalized: null };
+    }
+    if (k === 'compare_days') {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 30 || n > 800) return { error: 'compare_days out of bounds', normalized: null };
+    }
+    if (k === 'period' || k === 'periods') {
+      if (!/^(1mo|3mo|6mo|1y|2y|5y|10y|ytd|\d+[dmy])$/i.test(v) && !/^(1Y|6M|1M|3M)$/.test(v)) {
+        if (v.length > 8) return { error: `invalid period ${v}`, normalized: null };
+      }
     }
   }
-  return null;
+  // Normalize: sort keys alphabetically for stable cache key (prevents cardinality abuse via ordering)
+  const sorted = [...params.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const normalizedQs = new URLSearchParams(sorted).toString();
+  const normalized = normalizedQs ? `${path}?${normalizedQs}` : path;
+  return { error: null, normalized };
 }
 
 function isMacroLightPath(suffix) {
@@ -117,10 +188,11 @@ export async function registerMacrovolRoutes(fastify) {
     url: '/api/macrovol/*',
     handler: async (request, reply) => {
       const raw = request.url || '';
-      const suffix = raw.replace(/^\/api\/macrovol/, '') || '/';
-      if (isMacroDebugPath(suffix)) { reply.code(404); return { error: 'Not found' }; }
-      const qErr = validateMacroQuery(suffix);
-      if (qErr) { reply.code(400); return { error: 'Bad query', detail: qErr }; }
+      const rawSuffix = raw.replace(/^\/api\/macrovol/, '') || '/';
+      if (isMacroDebugPath(rawSuffix)) { reply.code(404); return { error: 'Not found' }; }
+      const v = validateMacroQuery(rawSuffix);
+      if (v.error) { reply.code(400); return { error: 'Bad query', detail: v.error }; }
+      const suffix = v.normalized || rawSuffix;
       if (!isMacroAllowed(suffix, request.method)) {
         reply.code(404);
         return { error: 'Endpoint not allowed', hint: 'Allowlisted /api/macrovol paths only' };

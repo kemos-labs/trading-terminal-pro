@@ -48,7 +48,7 @@ export function TermView() {
 
   if (!snapshot || snapshot.expiries.length === 0) {
     return (
-      <Panel title="Term Structure" className="h-full">
+      <Panel title="Term Structure" className="h-full" data-testid="vol-term-view">
         <div className="flex h-full items-center justify-center font-mono text-xs text-muted-foreground">
           No data
         </div>

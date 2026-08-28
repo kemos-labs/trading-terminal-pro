@@ -297,15 +297,21 @@ export function PositioningView() {
   const oiByExpiry = useMemo(() => {
     if (!snapshot) return [];
     return snapshot.expiries.map((e) => {
-      const callOI = e.calls.reduce((s, q) => s + (q.openInterest ?? 0), 0);
-      const putOI = e.puts.reduce((s, q) => s + (q.openInterest ?? 0), 0);
-      return {
-        label: `${e.dte}d`,
-        callOI,
-        putOI,
-        total: callOI + putOI,
-        pcr: callOI > 0 ? putOI / callOI : null,
-      };
+      const callVals = e.calls.map((q) => q.openInterest);
+      const putVals = e.puts.map((q) => q.openInterest);
+      const callMissing = callVals.some((v) => v == null);
+      const putMissing = putVals.some((v) => v == null);
+      const callAllZero = callVals.length > 0 && callVals.every((v) => v === 0);
+      const putAllZero = putVals.length > 0 && putVals.every((v) => v === 0);
+      const callOI = callMissing ? null : callVals.reduce<number>((s, v) => s + (v ?? 0), 0);
+      const putOI = putMissing ? null : putVals.reduce<number>((s, v) => s + (v ?? 0), 0);
+      const total = callOI == null || putOI == null ? null : callOI + putOI;
+      const pcr = callOI != null && callOI > 0 && putOI != null ? putOI / callOI : null;
+      const state: 'observed' | 'observed-zero' | 'partial' | 'missing' =
+        callMissing || putMissing ? (callVals.every((v) => v == null) && putVals.every((v) => v == null) ? 'missing' : 'partial')
+        : callAllZero && putAllZero ? 'observed-zero'
+        : 'observed';
+      return { label: `${e.dte}d`, callOI, putOI, total, pcr, state };
     });
   }, [snapshot]);
 
@@ -364,7 +370,7 @@ export function PositioningView() {
           <div className="flex h-full min-h-0 flex-col lg:flex-row">
             <div className="min-h-0 min-w-0 flex-1 border-b border-border lg:border-b-0 lg:border-r">
         <SectionErrorBoundary name="Chain">
-            <Panel title="Option Chain" className="h-full">
+            <Panel title="Option Chain" className="h-full" data-testid="positioning-view">
               <div className="flex h-full flex-col">
                 <DiagnosticsStrip sviReadout={sviReadout} arbResult={arbResult} />
                 <div className="min-h-0 flex-1">
@@ -426,11 +432,11 @@ export function PositioningView() {
                       items={[
                         {
                           id: 'oi',
-                          label: dealer.weightFallback && weight === 'oi' ? 'OI·auto' : 'OI',
-                          title: 'Open interest (auto→volume if OI missing)',
+                          label: 'OI',
+                          title: 'Observed open interest only — missing stays null (no auto fallback)',
                         },
-                        { id: 'volume', label: 'Vol', title: 'Session volume weight' },
-                        { id: 'unit', label: 'Unit', title: '1 per listed contract' },
+                        { id: 'volume', label: 'Vol (scenario)', title: 'Volume-weighted scenario — explicit proxy, not observed OI' },
+                        { id: 'unit', label: 'Unit (scenario)', title: 'Unit weight scenario — structure only, not size' },
                       ]}
                       activeId={
                         weight === 'oi' || weight === 'volume' || weight === 'unit'

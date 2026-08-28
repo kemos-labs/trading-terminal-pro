@@ -45,7 +45,7 @@ export function GreeksView() {
   }, []);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden" data-testid="vol-greeks-view">
       <SectionErrorBoundary name="Greeks">
         <Suspense fallback={<DeskLoading message={UI_COPY.load.greeks} />}>
           <Greeks10View />

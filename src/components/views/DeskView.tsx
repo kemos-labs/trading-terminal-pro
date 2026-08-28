@@ -51,11 +51,6 @@ const SECTION_TO_TOOL: Record<string, ToolId> = {
   'desk-ws-roll': 'risk',
 };
 
-const TOOL_TO_SECTION: Record<ToolId, string> = {
-  structure: 'trade-sub-structure',
-  pnl: 'trade-sub-pnl',
-  risk: 'trade-sub-risk',
-};
 
 /** 3 canonical Trade workflows — sole presentation shells. Engines live in src/lib/options. */
 const TOOLS: { id: ToolId; label: string; blurb: string; mode: string }[] = [
@@ -96,11 +91,7 @@ function apiBadge(
   return { label: 'SYNTH', detail: 'Synthetic surface fallback' };
 }
 
-export function DeskView({
-  chrome = 'trade',
-}: {
-  chrome?: 'trade';
-}) {
+export function DeskView() {
   const snapshot = useTerminalStore(s => s.snapshot);
   const source = useTerminalStore(s => s.source);
   const chainUsed = useTerminalStore(s => s.chainUsed);

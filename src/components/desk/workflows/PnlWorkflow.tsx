@@ -148,14 +148,14 @@ export function PnlWorkflow() {
           <DeskSelect label="Strike" value={String(oStrike)} onChange={(v) => setOStrike(+v)} options={oStrikes.map((k) => ({ value: String(k), label: fmtPrice(k, k > 1000 ? 0 : 2) }))} />
           <DeskSelect label="Side" value={oSide} onChange={setOSide} options={[{ value: 'long', label: 'Long' }, { value: 'short', label: 'Short' }]} />
         </>}
-        print={<PrintStrip items={oSeries ? [
-          { label: 'Term PnL', value: fmtSigned(oSeries.terminalPnl), tone: oSeries.terminalPnl >= 0 ? 'up' : 'down' },
-          { label: 'Σ Δ', value: fmtSigned(oSeries.totalDelta) },
-          { label: 'Σ Γ', value: fmtSigned(oSeries.totalGamma) },
-          { label: 'Σ Θ', value: fmtSigned(oSeries.totalTheta) },
+        print={<PrintStrip items={oSeries?.available ? [
+          { label: 'Term PnL', value: fmtSigned(oSeries.terminalPnl!), tone: (oSeries.terminalPnl ?? 0) >= 0 ? 'up' : 'down' },
+          { label: 'Σ Δ', value: fmtSigned(oSeries.totalDelta!) },
+          { label: 'Σ Γ', value: fmtSigned(oSeries.totalGamma!) },
+          { label: 'Σ Θ', value: fmtSigned(oSeries.totalTheta!) },
           { label: 'Path', value: pathSrc, tone: 'muted' },
           { label: 'Marks', value: 'BS sticky-IV', tone: 'muted' },
-        ] : [{ label: 'Path', value: pathSrc, tone: 'muted' }, { label: 'Marks', value: 'BS sticky-IV', tone: 'muted' }]} />}
+        ] : oSeries && !oSeries.available ? [{ label: 'Term PnL', value: '—', tone: 'muted' as const }, { label: 'Reason', value: oSeries.reason ?? 'unavailable', tone: 'muted' as const }, { label: 'Path', value: pathSrc, tone: 'muted' as const }] : [{ label: 'Path', value: pathSrc, tone: 'muted' as const }, { label: 'Marks', value: 'BS sticky-IV', tone: 'muted' as const }]} />}
       >
         <DeskChartFrame {...xTitleDate} className="min-h-[220px]" header={<span className="text-muted-foreground">Single option — observed spot history (Historical label from path source)</span>}>
           <ResponsiveContainer width="100%" height="100%">
@@ -182,12 +182,12 @@ export function PnlWorkflow() {
           ]} />
           <DeskSelect label="Expiry" value={String(cExpiryIdx)} onChange={(v) => setCExpiryIdx(+v)} options={snapshot.expiries.map((e, i) => ({ value: String(i), label: `${e.expiry} (${e.dte}d)` }))} />
         </>}
-        print={<PrintStrip items={[
-          { label: 'Term PnL', value: fmtSigned(cSeries.terminalPnl), tone: cSeries.terminalPnl >= 0 ? 'up' : 'down' },
-          { label: 'Σ Δ', value: fmtSigned(cSeries.totalDelta) }, { label: 'Σ Γ', value: fmtSigned(cSeries.totalGamma) },
-          { label: 'Σ Θ', value: fmtSigned(cSeries.totalTheta) }, { label: 'Residual', value: fmtSigned(cSeries.totalResidual) },
+        print={<PrintStrip items={cSeries.available ? [
+          { label: 'Term PnL', value: fmtSigned(cSeries.terminalPnl!), tone: (cSeries.terminalPnl ?? 0) >= 0 ? 'up' : 'down' },
+          { label: 'Σ Δ', value: fmtSigned(cSeries.totalDelta!) }, { label: 'Σ Γ', value: fmtSigned(cSeries.totalGamma!) },
+          { label: 'Σ Θ', value: fmtSigned(cSeries.totalTheta!) }, { label: 'Residual', value: fmtSigned(cSeries.totalResidual!) },
           { label: 'Path', value: pathSrc, tone: 'muted' }, { label: 'Marks', value: 'BS sticky-IV', tone: 'muted' },
-        ]} />}
+        ] : [{ label: 'Term PnL', value: '—', tone: 'muted' as const }, { label: 'Reason', value: cSeries.reason ?? 'unavailable', tone: 'muted' as const }, { label: 'Path', value: pathSrc, tone: 'muted' as const }]} />}
       >
         <DeskChartFrame {...xTitleDate} className="min-h-[220px]" header={<span className="text-muted-foreground">Combo — observed spot history (Historical) · greeks attribution sticky-IV</span>}>
           <ResponsiveContainer width="100%" height="100%">

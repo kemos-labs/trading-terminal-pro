@@ -112,7 +112,7 @@ function MoverTable({
   onPick: (sym: string) => void;
 }) {
   return (
-    <Panel title={title} className="min-h-0 flex-1">
+    <Panel title={title} className="min-h-0 flex-1" data-testid="ksa-view">
       <div className="max-h-[220px] overflow-auto">
         <table className="w-full font-mono text-type-xs">
           <thead className="sticky top-0 bg-card text-muted-foreground">

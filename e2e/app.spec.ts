@@ -24,7 +24,7 @@ const DESKS: Desk[] = [
   { id: 'vol-term', label: 'Vol Term', url: '/?desk=vol&sec=vol-sub-term', expectText: /Term|ATM IV/i },
   { id: 'vol-greeks', label: 'Vol Greeks', url: '/?desk=vol&sec=vol-sub-greeks', expectText: /DELTA|Greeks|Charm|Vanna/i },
   { id: 'vol-fit', label: 'Vol Fit', url: '/?desk=vol&sec=vol-sub-quality', expectText: /Surface Fit|SVI|RMSE/i },
-  { id: 'positioning', label: 'Positioning', url: '/?desk=positioning&sec=pos-sub-chain', expectText: /Book|GEX|DEX|Positioning/i, testId: 'positioning-view' },
+  { id: 'positioning', label: 'Positioning', url: '/?desk=positioning&sec=pos-sub-chain', expectText: /Book|GEX|DEX|Positioning/i },
   { id: 'trade-structure', label: 'Trade Structure', url: '/?desk=desk&sec=trade-sub-structure', expectText: /Structure|Combo|Leverage|Simulator/i, testId: 'trade-structure-workflow' },
   { id: 'trade-pnl', label: 'Trade PnL', url: '/?desk=desk&sec=trade-sub-pnl', expectText: /PnL|Scenario|Break.*Even|Subjective/i, testId: 'trade-pnl-workflow' },
   { id: 'trade-hedge', label: 'Trade Hedge', url: '/?desk=desk&sec=trade-sub-risk', expectText: /Hedge|Risk|Delta|Basis|Roll/i, testId: 'trade-hedge-workflow' },

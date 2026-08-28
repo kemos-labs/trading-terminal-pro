@@ -34,6 +34,13 @@ export const KSA_MEGA_CAPS = ['2222', '1120', '1180', '2010', '7010'];
 /** Board pack size (must match loader call count). */
 export const KSA_BOARD_UPSTREAM_CALLS = 6;
 
+/** Helper: null-safe finite number — guards null/blank before Number() (Number(null)=0 would fake 0) */
+function finiteNum(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 /** Serialize concurrent budget checks. */
 let budgetChain = Promise.resolve();
 
@@ -235,11 +242,10 @@ export function pushBoardHistory(board) {
   if (!isUsableBoard(board)) return;
   const tasi = board.tasi || {};
   const nomu = board.nomu || {};
-  // P0: keep null when missing, not 0.
   const advRaw = tasi.advancing, decRaw = tasi.declining, uncRaw = tasi.unchanged;
-  const adv = Number.isFinite(Number(advRaw)) ? Number(advRaw) : null;
-  const dec = Number.isFinite(Number(decRaw)) ? Number(decRaw) : null;
-  const unc = Number.isFinite(Number(uncRaw)) ? Number(uncRaw) : null;
+  const adv = finiteNum(advRaw);
+  const dec = finiteNum(decRaw);
+  const unc = finiteNum(uncRaw);
   const sectors = Array.isArray(board.sectors) ? board.sectors : [];
   const ranked = [...sectors]
     .filter((s) => s && Number.isFinite(Number(s.change_percent)))
@@ -250,15 +256,11 @@ export function pushBoardHistory(board) {
   const point = {
     t: board.fetched_at || new Date().toISOString(),
     ts: Date.now(),
-    tasi: Number(tasi.index_value),
-    tasiChgPct: Number.isFinite(Number(tasi.index_change_percent))
-      ? Number(tasi.index_change_percent)
-      : null,
-    nomu: Number.isFinite(Number(nomu.index_value)) ? Number(nomu.index_value) : null,
-    nomuChgPct: Number.isFinite(Number(nomu.index_change_percent))
-      ? Number(nomu.index_change_percent)
-      : null,
-    volume: Number.isFinite(Number(tasi.total_volume)) ? Number(tasi.total_volume) : null,
+    tasi: finiteNum(tasi.index_value) ?? 0,
+    tasiChgPct: finiteNum(tasi.index_change_percent),
+    nomu: finiteNum(nomu.index_value),
+    nomuChgPct: finiteNum(nomu.index_change_percent),
+    volume: finiteNum(tasi.total_volume),
     adv,
     dec,
     unc,
@@ -296,19 +298,19 @@ export function deriveBoardDepth(board) {
   const advRaw = tasi.advancing;
   const decRaw = tasi.declining;
   const uncRaw = tasi.unchanged;
-  const adv = Number.isFinite(Number(advRaw)) ? Number(advRaw) : null;
-  const dec = Number.isFinite(Number(decRaw)) ? Number(decRaw) : null;
-  const unc = Number.isFinite(Number(uncRaw)) ? Number(uncRaw) : null;
+  const adv = finiteNum(advRaw);
+  const dec = finiteNum(decRaw);
+  const unc = finiteNum(uncRaw);
   const hasBreadth = adv != null && dec != null && unc != null;
   const total = hasBreadth ? (adv + dec + unc) : null;
   const sectors = Array.isArray(board.sectors) ? board.sectors : [];
   const sectorBars = [...sectors]
-    .filter((s) => s && Number.isFinite(Number(s.change_percent)))
+    .filter((s) => s && finiteNum(s.change_percent) != null)
     .map((s) => ({
       name: String(s.sector_name || s.sector_name_ar || '?').slice(0, 18),
-      pct: Number(s.change_percent),
-      volume: Number.isFinite(Number(s.volume)) ? Number(s.volume) : null,
-      n: Number.isFinite(Number(s.num_stocks)) ? Number(s.num_stocks) : null,
+      pct: finiteNum(s.change_percent) ?? 0,
+      volume: finiteNum(s.volume),
+      n: finiteNum(s.num_stocks),
     }))
     .sort((a, b) => b.pct - a.pct);
 
@@ -317,24 +319,24 @@ export function deriveBoardDepth(board) {
     ...(board.losers || []).map((m) => ({ ...m, side: 'down' })),
   ];
   const moverBars = movers
-    .filter((m) => m && Number.isFinite(Number(m.change_percent)))
+    .filter((m) => m && finiteNum(m.change_percent) != null)
     .slice(0, 20)
     .map((m) => ({
       symbol: String(m.symbol),
       name: m.name_en || m.name || m.symbol,
-      pct: Number(m.change_percent),
+      pct: finiteNum(m.change_percent) ?? 0,
       side: m.side,
     }))
     .sort((a, b) => b.pct - a.pct);
 
   const volLeaders = (board.volumeLeaders || [])
-    .filter((m) => m && Number.isFinite(Number(m.volume)))
+    .filter((m) => m && finiteNum(m.volume) != null)
     .slice(0, 12)
     .map((m) => ({
       symbol: String(m.symbol),
       name: m.name_en || m.name || m.symbol,
-      volume: Number(m.volume),
-      pct: Number.isFinite(Number(m.change_percent)) ? Number(m.change_percent) : null,
+      volume: finiteNum(m.volume) ?? 0,
+      pct: finiteNum(m.change_percent),
     }));
 
   return {

@@ -267,9 +267,10 @@ export function Greeks10View() {
                                 <caption className="sr-only">{greek.label} by strike — accessible table fallback for Canvas</caption>
                                 <thead><tr><th className="text-left">Strike</th><th className="text-right">{greek.label}</th></tr></thead>
                                 <tbody>
-                                  {surfaceData.K_vals.slice(0, 20).map((k, i) => (
-                                    <tr key={k} className="border-t border-border/40"><td className="py-0.5 tabular-nums">{k.toFixed(0)}</td><td className="py-0.5 text-right tabular-nums">{(surfaceData.grid?.[0]?.[i] ?? 0).toFixed(4)}</td></tr>
-                                  ))}
+                                  {surfaceData.K_vals.slice(0, 20).map((k, i) => {
+                                    const v = surfaceData.grid?.[0]?.[i];
+                                    return <tr key={k} className="border-t border-border/40"><td className="py-0.5 tabular-nums">{k.toFixed(0)}</td><td className="py-0.5 text-right tabular-nums">{v != null && isFinite(v) ? v.toFixed(4) : '—'}</td></tr>;
+                                  })}
                                 </tbody>
                               </table>
                             </div>
@@ -283,8 +284,15 @@ export function Greeks10View() {
                                 <thead><tr><th className="text-left">DTE</th><th className="text-right">{greek.label}</th></tr></thead>
                                 <tbody>
                                   {surfaceData.T_vals.slice(0, 12).map((t, ti) => {
-                                    const atmIdx = Math.floor(surfaceData.K_vals.length/2);
-                                    return <tr key={t} className="border-t border-border/40"><td className="py-0.5 tabular-nums">{Math.round(t*365)}d</td><td className="py-0.5 text-right tabular-nums">{(surfaceData.grid?.[ti]?.[atmIdx] ?? 0).toFixed(4)}</td></tr>;
+                                    // ATM is strike nearest spot, not middle column
+                                    let atmIdx = 0;
+                                    let bestDist = Infinity;
+                                    for (let j=0;j<surfaceData.K_vals.length;j++) {
+                                      const d = Math.abs((surfaceData.K_vals[j] as number) - (data.spot ?? 0));
+                                      if (d < bestDist) { bestDist = d; atmIdx = j; }
+                                    }
+                                    const v = surfaceData.grid?.[ti]?.[atmIdx];
+                                    return <tr key={t} className="border-t border-border/40"><td className="py-0.5 tabular-nums">{Math.round(t*365)}d</td><td className="py-0.5 text-right tabular-nums">{v != null && isFinite(v) ? v.toFixed(4) : '—'}</td></tr>;
                                   })}
                                 </tbody>
                               </table>
@@ -373,7 +381,7 @@ function HeatmapPlot({
         <table className="w-full font-mono text-type-2xs">
           <caption className="sr-only">{label} by DTE and strike — accessible table fallback</caption>
           <thead><tr><th className="px-1 py-1 text-left">K \ DTE</th>{dtes.map((d) => <th key={d} className="px-1 py-1 text-right tabular-nums">{d}d</th>)}</tr></thead>
-          <tbody>{strikes.map((k, ki) => <tr key={k} className="border-t border-border/40"><td className="px-1 py-0.5 tabular-nums">{k.toFixed(0)}</td>{dtes.map((_, di) => <td key={di} className="px-1 py-0.5 text-right tabular-nums">{(grid.grid?.[di]?.[ki] ?? 0).toFixed(2)}</td>)}</tr>)}</tbody>
+          <tbody>{strikes.map((k, ki) => <tr key={k} className="border-t border-border/40"><td className="px-1 py-0.5 tabular-nums">{k.toFixed(0)}</td>{dtes.map((_, di) => { const v = grid.grid?.[di]?.[ki]; return <td key={di} className="px-1 py-0.5 text-right tabular-nums">{v != null && isFinite(v) ? v.toFixed(2) : '—'}</td>; })}</tr>)}</tbody>
         </table>
       </div>
     </div>

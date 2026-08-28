@@ -18,7 +18,6 @@ import {
   type CurveComparePoint,
   type CurveCompareWindowId,
 } from './YieldCurveCompare';
-import { AuctionCard } from './AuctionCard';
 
 export type CurvePoint = { label: string; yield: number | null };
 export type StirPathPoint = {
@@ -255,9 +254,6 @@ export function CurvesBoard({
         }
         className="mt-1.5"
       />
-
-      {/* Supply narrative under the UST curve (Phase 2 free API) */}
-      <AuctionCard />
     </CollapsibleSection>
   );
 }

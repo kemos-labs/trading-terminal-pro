@@ -1,6 +1,7 @@
 import type { VolSnapshot, ExpirySlice, OptionQuote } from './types';
-import { computeGreeks } from './greeks';
-import { impliedVol } from './ivSolver';
+import { solveImpliedVol } from '../math/impliedVol';
+import { greeksEuropean } from '../math/greeks';
+import { asDecimalRate, asDecimalVol, asYearFraction, thetaPerDay, vegaPerVolPoint } from '../math/units';
 import { fitSVI, sviIv } from './svi';
 import { DATA_CONFIG, VALIDATION_CONFIG } from '../../config/constants';
 import { yearFractionToExpiry, calendarDte } from './time';
@@ -79,19 +80,22 @@ function intrinsic(
   return Math.max(strike * Math.exp(-r * T) - spot * Math.exp(-q * T), 0);
 }
 
-function solveIV(
+/** Canonical IV solve — no tolerance, no proxy, uses exact bounds */
+function solveCanonicalIV(
   type: 'call' | 'put',
-  mid: number,
+  price: number,
   spot: number,
   strike: number,
   T: number,
   r: number,
   q: number,
 ): number | null {
-  let iv = impliedVol(type, mid, spot, strike, T, r, q);
-  if (iv == null || iv <= 0 || !isFinite(iv)) {
-    iv = null;
-  }
+  if (!(price > 0) || !(T > 0) || !(spot > 0) || !(strike > 0)) return null;
+  const res = solveImpliedVol(type, spot, strike, asYearFraction(T), asDecimalRate(r), asDecimalRate(q), price);
+  if (!res.ok) return null;
+  const iv = res.sigma as unknown as number;
+  if (!isFinite(iv) || iv <= 0) return null;
+  if (iv < MIN_IV || iv > MAX_IV) return null;
   return iv;
 }
 
@@ -103,28 +107,54 @@ function buildOptionQuote(
   T: number,
   r: number,
   q: number,
-  iv: number,
-  extra?: { priceBasis: 'mid' | 'last' | 'bid' | 'ask' | 'none'; observedIv?: number | null; modelIv?: number | null },
+  midIv: number | null,
+  extra: { feedIv: number | null; bidIv: number | null; askIv: number | null; modelIv: number | null },
 ): OptionQuote {
-  const g = computeGreeks(raw.type, spot, raw.strike, T, r, q, iv);
+  // Use midIv as primary for Greeks; if missing, skip Greeks (null) — never fabricate.
+  let delta: number | null = null, gamma: number | null = null, theta: number | null = null, vega: number | null = null;
+  let vanna: number | null = null, charm: number | null = null;
+  if (midIv != null && midIv > 0 && T > 0) {
+    const rawG = greeksEuropean(raw.type, spot, raw.strike, asYearFraction(T), asDecimalRate(r), asDecimalRate(q), asDecimalVol(midIv));
+    delta = rawG.delta;
+    gamma = rawG.gamma;
+    // Units: raw per year/per 1 vol → display per day/per vol point via branded adapters
+    theta = (thetaPerDay(rawG.theta as unknown as import('../math/units').RawThetaPerYear) as unknown as number);
+    vega = (vegaPerVolPoint(rawG.vega as unknown as import('../math/units').RawVegaPerVol) as unknown as number);
+    // vanna/charm adapters
+    vanna = (rawG.vanna * 0.01) as unknown as number;
+    charm = (rawG.charm as unknown as number) / 365;
+  }
   const mid = pickMid(raw);
-  const hasMid = mid != null;
+  const hasMid = mid != null && midIv != null;
   return {
     strike: raw.strike, expiry, type: raw.type,
     bid: raw.bid ?? null, ask: raw.ask ?? null, last: raw.last ?? null,
     mid: mid,
     provenance: hasMid ? 'derived' : 'unavailable',
-    priceBasis: extra?.priceBasis ?? (hasMid ? 'mid' : 'none'),
-    observedIv: extra?.observedIv ?? raw.iv ?? null,
-    modelIv: extra?.modelIv ?? null,
-    iv, delta: g.delta, gamma: g.gamma, theta: g.theta, vega: g.vega,
-    vanna: g.vanna, charm: g.charm, volga: g.volga, speed: g.speed,
-    rho: g.rho, veta: g.veta, color: g.color, zomma: g.zomma, ultima: g.ultima,
+    priceBasis: hasMid ? 'mid' : 'none',
+    feedIv: extra.feedIv,
+    observedIv: extra.feedIv,
+    midIv: midIv,
+    bidIv: extra.bidIv,
+    askIv: extra.askIv,
+    modelIv: extra.modelIv,
+    iv: midIv,
+    delta, gamma, theta, vega,
+    vanna, charm, volga: null, speed: null, rho: null, veta: null, color: null, zomma: null, ultima: null,
     openInterest: raw.openInterest ?? null, volume: raw.volume ?? null,
   };
 }
 
 type RawWithMid = YahooRawOption & { mid: number };
+
+function normalizeFeedIv(rawIv: number | null): number | null {
+  if (rawIv == null || !isFinite(rawIv)) return null;
+  let v = rawIv;
+  if (v > 1.5) v = v / 100; // percent → decimal, once
+  if (!isFinite(v) || v <= 0) return null;
+  if (v < MIN_IV || v > MAX_IV) return null;
+  return v;
+}
 
 function filterArbFreeQuotes(
   type: 'call' | 'put',
@@ -143,10 +173,18 @@ function filterArbFreeQuotes(
     if (hasBid && hasAsk && (raw.bid as number) > (raw.ask as number)) continue;
     if (isPoorLiquidity(raw, mid)) continue;
     const intr = intrinsic(type, spot, raw.strike, T, r, q);
-    if (mid < intr * 0.99) continue;
+    // Canonical: no 0.99 tolerance — strict below intrinsic fails (solver will also fail)
+    if (mid < intr - 1e-12) continue;
     valid.push({ ...raw, mid });
   }
   return valid;
+}
+
+interface ComputedIVs {
+  midIv: number | null;
+  bidIv: number | null;
+  askIv: number | null;
+  feedIv: number | null;
 }
 
 function computeIVs(
@@ -156,26 +194,25 @@ function computeIVs(
   T: number,
   r: number,
   q: number,
-): (RawWithMid & { iv: number })[] {
-  const out: (RawWithMid & { iv: number })[] = [];
+): (RawWithMid & ComputedIVs)[] {
+  const out: (RawWithMid & ComputedIVs)[] = [];
   for (const raw of quotes) {
-    // Always invert mid when liquid — Yahoo IVs are often junk on wings.
-    // Keep feed IV only as a seed/fallback when the solver fails.
-    let iv = solveIV(type, raw.mid, spot, raw.strike, T, r, q);
-    if (iv == null || iv < MIN_IV || iv > MAX_IV) {
-      let feed = raw.iv;
-      // yfinance sometimes emits percent (e.g. 25.0) instead of decimal (0.25).
-      if (feed != null && feed > 1.5) feed = feed / 100;
-      if (feed != null && feed >= MIN_IV && feed <= MAX_IV && isFinite(feed)) {
-        iv = feed;
-      } else {
-        continue;
-      }
+    const feedIv = normalizeFeedIv(raw.iv);
+    // Independently invert each valid price — never estimate bid/ask from mid
+    const midIv = solveCanonicalIV(type, raw.mid, spot, raw.strike, T, r, q);
+    const bidIv = raw.bid != null && raw.bid > 0 ? solveCanonicalIV(type, raw.bid, spot, raw.strike, T, r, q) : null;
+    const askIv = raw.ask != null && raw.ask > 0 ? solveCanonicalIV(type, raw.ask, spot, raw.strike, T, r, q) : null;
+    // Primary IV is midIv; if missing, do NOT silently fall back to feedIv as solved — keep feed separate
+    // Only keep raw if midIv exists; otherwise skip (no 0.99 fallback)
+    if (midIv == null) {
+      // Do not use feedIv as solved — mark as unavailable, keep feed for display only
+      // Still allow row if feedIv exists? No — for Greeks we need solved midIv, so skip
+      continue;
     }
-    // Reject pathological wing IVs far from ATM (solver on near-zero mids).
+    // Reject pathological wing IVs far from ATM
     const moneyness = Math.abs(Math.log(raw.strike / spot));
-    if (moneyness > 0.35 && iv > 1.2) continue;
-    out.push({ ...raw, iv });
+    if (moneyness > 0.35 && midIv > 1.2) continue;
+    out.push({ ...raw, midIv, bidIv, askIv, feedIv, iv: midIv });
   }
   return out;
 }
@@ -234,7 +271,7 @@ export function computeAtmIV(
 
 function smoothWings(
   _type: 'call' | 'put',
-  quotes: (RawWithMid & { iv: number })[],
+  quotes: (RawWithMid & ComputedIVs)[],
   spot: number,
   T: number,
   r: number,
@@ -243,33 +280,24 @@ function smoothWings(
   dte: number,
 ): OptionQuote[] {
   if (quotes.length === 0) return [];
-
+  // Use forward moneyness k=ln(K/F) for SVI (canonical) — not spot
+  const forward = spot * Math.exp((r - q) * T);
   const strikes = quotes.map((q) => q.strike);
-  const ivs = quotes.map((q) => q.iv);
-  // Fit SVI on total variance w = IV²·T for this expiry.
-  const fit = fitSVI(strikes, ivs, spot, T);
-
+  const ivs = quotes.map((q) => q.midIv as number);
+  // Fit SVI on total variance w = IV²·T using forward
+  const fit = fitSVI(strikes, ivs, forward, T);
   const out: OptionQuote[] = [];
   for (const raw of quotes) {
-    let iv = raw.iv;
     let modelIv: number | null = null;
-    const k = Math.abs(Math.log(raw.strike / spot));
-    const isWing = k > 0.15;
-    if (fit && isWing) {
-      const fitted = sviIv(fit.params, Math.log(raw.strike / spot), T);
+    if (fit) {
+      const k = Math.log(raw.strike / forward);
+      const fitted = sviIv(fit.params, k, T);
       if (isFinite(fitted) && fitted > 0) {
         modelIv = Math.max(MIN_IV, Math.min(MAX_IV, fitted));
-        const lo = Math.max(MIN_IV, fitted * 0.5);
-        const hi = Math.min(MAX_IV, Math.max(fitted * 2, fitted + 0.15));
-        // Keep solved IV as observed; do not silently overwrite with model unless pathological.
-        // Record modelIv separately; only use fitted when observed is extreme.
-        if (iv < lo || iv > hi || iv > 1.0) {
-          // Use model as fallback but preserve provenance via modelIv field
-          iv = modelIv;
-        }
       }
     }
-    out.push(buildOptionQuote(raw, expiry, dte, spot, T, r, q, iv, { priceBasis: 'mid', observedIv: raw.iv, modelIv }));
+    // Never overwrite solved midIv with model — keep separate
+    out.push(buildOptionQuote(raw, expiry, dte, spot, T, r, q, raw.midIv ?? null, { feedIv: raw.feedIv ?? null, bidIv: raw.bidIv ?? null, askIv: raw.askIv ?? null, modelIv }));
   }
   return out;
 }
@@ -351,7 +379,11 @@ export function buildYahooSnapshot(
     const puts = smoothWings('put', putIVs, data.spot, T, rT, qEff, expiry, dte);
 
     if (calls.length > 0 || puts.length > 0) {
-      const atmIV = computeAtmIV(callIVs, putIVs, data.spot);
+      const atmIV = computeAtmIV(
+        callIVs.map((c) => ({ strike: c.strike, iv: c.midIv as number })),
+        putIVs.map((p) => ({ strike: p.strike, iv: p.midIv as number })),
+        data.spot,
+      );
       // No silent 20% ATM — skip tenor if we cannot estimate from market IVs.
       if (atmIV == null || !(atmIV > 0) || !Number.isFinite(atmIV)) continue;
       slices.push({

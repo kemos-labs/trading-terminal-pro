@@ -123,12 +123,16 @@ export function SmileView() {
   const [xMode, setXMode] = useState<XMode>('moneyness');
   const [showBidAsk, setShowBidAsk] = useState(false);
   const [selectedExpiryIdx, setSelectedExpiryIdx] = useState<number>(0);
+  const hasBidAskIv = useMemo(() => {
+    if (!snapshot) return false;
+    return snapshot.expiries.some((e) => [...e.calls, ...e.puts].some((q) => q.bidIv != null || q.askIv != null));
+  }, [snapshot]);
 
   const chartData = useMemo(() => {
     if (!snapshot) return [];
     return snapshot.expiries.slice(0, 6).map((slice, i) => {
       const calls: DataPoint[] = slice.calls
-        .filter((q) => q.iv != null && q.iv > 0)
+        .filter((q) => (q.midIv ?? q.iv) != null && (q.midIv ?? q.iv!) > 0)
         .sort((a, b) => a.strike - b.strike)
         .map((q) => ({
           x:
@@ -137,17 +141,17 @@ export function SmileView() {
               : xMode === 'delta'
                 ? (q.delta ?? 0)
                 : q.strike,
-          iv: q.iv! * 100,
-          // P0: bid/ask toggle affects displayed IV via spread proxy — not decorative
-          bidIv: showBidAsk && q.bid != null && q.ask != null ? (q.iv! - 0.005) * 100 : undefined,
-          askIv: showBidAsk && q.bid != null && q.ask != null ? (q.iv! + 0.005) * 100 : undefined,
+          iv: (q.midIv ?? q.iv!) * 100,
+          // Independently inverted bid/ask IV — never proxy, null when not invertible
+          bidIv: showBidAsk && hasBidAskIv && q.bidIv != null ? q.bidIv * 100 : undefined,
+          askIv: showBidAsk && hasBidAskIv && q.askIv != null ? q.askIv * 100 : undefined,
           type: 'call' as const,
           strike: q.strike,
           bid: q.bid ?? undefined,
           ask: q.ask ?? undefined,
         } as DataPoint & { bidIv?: number; askIv?: number }));
       const puts: DataPoint[] = slice.puts
-        .filter((q) => q.iv != null && q.iv > 0)
+        .filter((q) => (q.midIv ?? q.iv) != null && (q.midIv ?? q.iv!) > 0)
         .sort((a, b) => a.strike - b.strike)
         .map((q) => ({
           x:
@@ -156,9 +160,9 @@ export function SmileView() {
               : xMode === 'delta'
                 ? (q.delta ?? 0)
                 : q.strike,
-          iv: q.iv! * 100,
-          bidIv: showBidAsk && q.bid != null && q.ask != null ? (q.iv! - 0.005) * 100 : undefined,
-          askIv: showBidAsk && q.bid != null && q.ask != null ? (q.iv! + 0.005) * 100 : undefined,
+          iv: (q.midIv ?? q.iv!) * 100,
+          bidIv: showBidAsk && hasBidAskIv && q.bidIv != null ? q.bidIv * 100 : undefined,
+          askIv: showBidAsk && hasBidAskIv && q.askIv != null ? q.askIv * 100 : undefined,
           type: 'put' as const,
           strike: q.strike,
           bid: q.bid ?? undefined,
@@ -295,8 +299,11 @@ export function SmileView() {
           />
           <button
             type="button"
-            onClick={() => setShowBidAsk((s) => !s)}
-            className={deskModeChipClass(showBidAsk)}
+            onClick={() => hasBidAskIv && setShowBidAsk((s) => !s)}
+            disabled={!hasBidAskIv}
+            title={hasBidAskIv ? 'Show independently inverted bid/ask IV (no proxy)' : 'Bid/Ask IV unavailable for this chain'}
+            className={deskModeChipClass(showBidAsk) + (!hasBidAskIv ? ' opacity-40 cursor-not-allowed' : '')}
+            aria-disabled={!hasBidAskIv}
           >
             Bid-Ask
           </button>

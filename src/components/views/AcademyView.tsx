@@ -103,7 +103,7 @@ export function AcademyView() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/docs/index.json?v=2')
+    fetch('/docs/index.json?v=3')
       .then((r) => {
         if (!r.ok) throw new Error(String(r.status));
         return r.json();

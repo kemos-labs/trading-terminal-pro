@@ -122,4 +122,3 @@ Primary sources preferred. Each section records the correctness decision that fo
 - Tadawul trading calendar; SAHMK developer docs (header `X-API-Key`, week Sun–Thu ~10:00–15:20 Asia/Riyadh)
 - CFTC COT explanatory notes; Cboe 0DTE GEX analysis; Menthor Q GEX guide
 - WCAG 2.2 A/AA; Playwright + axe-core patterns
-

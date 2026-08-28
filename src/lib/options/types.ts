@@ -6,14 +6,22 @@ export interface OptionQuote {
   ask: number | null;
   last: number | null;
   mid: number | null;
-  /** Provenance per quote row: observed = exchange bid/ask/last; derived = solved mid IV; model = SVI-fitted; unavailable = missing */
+  /** Per-field provenance — never conflate observed/solved/model */
   provenance?: 'observed' | 'derived' | 'model' | 'unavailable';
-  /** Which price was used for IV inversion: 'mid' | 'last' | 'bid' | 'ask' | 'none' */
   priceBasis?: 'mid' | 'last' | 'bid' | 'ask' | 'none';
-  /** Observed venue IV (bid/ask/mark) when supplied, separate from solved IV */
+  /** Venue/feed IV as observed (percent vs decimal normalized once, null if missing/invalid) */
+  feedIv?: number | null;
+  /** @deprecated alias for feedIv */
   observedIv?: number | null;
-  /** SVI model IV when fitted, separate from solved IV */
+  /** Solved IV from executable mid (null if no valid mid or solver fails) */
+  midIv?: number | null;
+  /** Solved IV from bid price (null if no valid bid) */
+  bidIv?: number | null;
+  /** Solved IV from ask price (null if no valid ask) */
+  askIv?: number | null;
+  /** SVI model IV (never overwrites solved fields) */
   modelIv?: number | null;
+  /** Primary IV for display — alias to midIv (solved mid) for legacy */
   iv: number | null;
   delta: number | null;
   gamma: number | null;

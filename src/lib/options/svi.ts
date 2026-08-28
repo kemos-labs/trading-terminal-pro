@@ -1,7 +1,10 @@
 import type { SVIParams, SVIFit } from './types';
+import { sviTotalVariance, sviImpliedVol } from '../math/surface/svi';
+import type { SviParams } from '../math/surface/svi';
 
 /**
- * Pure SVI total implied variance evaluation (Gatheral raw SVI).
+ * Pure SVI total implied variance evaluation (Gatheral raw SVI) — now delegates to canonical.
+
  *
  *   w(k) = a + b * (rho * (k - m) + sqrt((k - m)^2 + sigma^2))
  *
@@ -9,17 +12,12 @@ import type { SVIParams, SVIFit } from './types';
  * Convert to IV with: σ = sqrt(w / T)  (see sviIv).
  */
 export function svi(param: SVIParams, k: number): number {
-  const { a, b, rho, m, sigma } = param;
-  const term = rho * (k - m) + Math.sqrt((k - m) * (k - m) + sigma * sigma);
-  return a + b * term;
+  return sviTotalVariance(k, param as unknown as SviParams);
 }
 
 /** Implied vol from SVI total variance: σ = √(max(w,0) / T). */
 export function sviIv(param: SVIParams, k: number, T: number): number {
-  const w = svi(param, k);
-  const t = Math.max(T, 1e-12);
-  if (!(w > 0) || !isFinite(w)) return 0;
-  return Math.sqrt(w / t);
+  return sviImpliedVol(k, T, param as unknown as SviParams);
 }
 
 const NO_ARB_EPS = 1e-9;

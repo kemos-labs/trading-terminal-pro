@@ -18,8 +18,8 @@ export interface PortfolioLeg {
   qty: number;
   strike?: number;
   expiry?: string;
-  /** Entry premium (per unit) for options; entry price for spot/future */
-  entryPrice: number;
+  /** Entry premium (per unit) for options; entry price for spot/future — null if unavailable (never 0) */
+  entryPrice: number | null;
   /** Override IV (decimal); else taken from snapshot */
   iv?: number;
 }
@@ -40,6 +40,9 @@ export interface ComboMark {
   mark: number;
   pnl: number;
   greeks: ComboGreeks;
+  /** True when any leg has missing expiry/IV/entryPrice — result is unavailable, not partial */
+  unavailable?: boolean;
+  unavailableReason?: string;
 }
 
 const ZERO: ComboGreeks = {
@@ -71,9 +74,9 @@ function findQuote(
   return best;
 }
 
-function dteYears(snap: VolSnapshot, expiry: string): number {
+function dteYears(snap: VolSnapshot, expiry: string): number | null {
   const slice = snap.expiries.find(e => e.expiry === expiry);
-  if (!slice) return yearFractionFromSlice({ expiry, dte: 30 });
+  if (!slice) return null;
   return yearFractionFromSlice(slice);
 }
 
@@ -93,10 +96,18 @@ export function evaluateCombo(
   const q = snap.dividendYield;
   const acc = { ...ZERO };
   let entryCost = 0;
+  let hasMissing = false;
+  let missingReason = '';
 
   for (const leg of legs) {
     const sgn = signOf(leg.side) * leg.qty;
-    entryCost += sgn * leg.entryPrice;
+    const ep = leg.entryPrice as unknown as number | null;
+    if (ep == null || !isFinite(ep)) {
+      hasMissing = true;
+      missingReason = 'missing entryPrice';
+      continue;
+    }
+    entryCost += sgn * ep;
 
     if (leg.kind === 'spot' || leg.kind === 'future') {
       const mark = S;
@@ -105,15 +116,25 @@ export function evaluateCombo(
       continue;
     }
 
-    if (leg.strike == null || !leg.expiry) continue;
+    if (leg.strike == null || !leg.expiry) {
+      hasMissing = true;
+      missingReason = 'missing strike/expiry';
+      continue;
+    }
     const T0 = dteYears(snap, leg.expiry);
+    if (T0 == null) {
+      hasMissing = true;
+      missingReason = 'expiry not in snapshot';
+      continue;
+    }
     const T = Math.max(1e-8, T0 - daysElapsed / 365);
     const qte = findQuote(snap, leg.kind, leg.strike, leg.expiry);
-    let vol = leg.iv ?? qte?.iv ?? null;
+    // Use midIv (solved) not generic iv; no silent 0.25 fallback
+    let vol: number | null = leg.iv ?? qte?.midIv ?? qte?.iv ?? null;
     if (vol == null || vol <= 0) {
-      // Fallback: nearest ATM IV on that expiry
-      const slice = snap.expiries.find(e => e.expiry === leg.expiry);
-      vol = slice?.atmIV ?? 0.25;
+      hasMissing = true;
+      missingReason = 'missing IV';
+      continue;
     }
     vol = Math.max(0.01, vol + volShock);
 
@@ -139,6 +160,15 @@ export function evaluateCombo(
     acc.charm += sgn * g.charm;
   }
 
+  if (hasMissing) {
+    return {
+      mark: NaN,
+      pnl: NaN,
+      greeks: acc,
+      unavailable: true,
+      unavailableReason: missingReason,
+    };
+  }
   return {
     mark: acc.price,
     pnl: acc.price - entryCost,
@@ -232,37 +262,37 @@ export function templateLegs(
   switch (name) {
     case 'long_straddle':
       return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? 0 },
-        { id: id(), kind: 'put', side: 'long', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? 0 },
+        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? null },
+        { id: id(), kind: 'put', side: 'long', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? null },
       ];
     case 'short_straddle':
       return [
-        { id: id(), kind: 'call', side: 'short', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? 0 },
-        { id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? 0 },
+        { id: id(), kind: 'call', side: 'short', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? null },
+        { id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? null },
       ];
     case 'long_call':
       return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? 0 },
+        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? null },
       ];
     case 'short_put':
       return [
-        { id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? 0 },
+        { id: id(), kind: 'put', side: 'short', qty: 1, strike: atmPut.strike, expiry: slice.expiry, entryPrice: atmPut.mid ?? atmPut.last ?? null },
       ];
     case 'risk_reversal':
       return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: otmCall.mid ?? otmCall.last ?? 0 },
-        { id: id(), kind: 'put', side: 'short', qty: 1, strike: otmPut.strike, expiry: slice.expiry, entryPrice: otmPut.mid ?? otmPut.last ?? 0 },
+        { id: id(), kind: 'call', side: 'long', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: otmCall.mid ?? otmCall.last ?? null },
+        { id: id(), kind: 'put', side: 'short', qty: 1, strike: otmPut.strike, expiry: slice.expiry, entryPrice: otmPut.mid ?? otmPut.last ?? null },
       ];
     case 'call_spread':
       return [
-        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? 0 },
-        { id: id(), kind: 'call', side: 'short', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: otmCall.mid ?? otmCall.last ?? 0 },
+        { id: id(), kind: 'call', side: 'long', qty: 1, strike: atm.strike, expiry: slice.expiry, entryPrice: atm.mid ?? atm.last ?? null },
+        { id: id(), kind: 'call', side: 'short', qty: 1, strike: otmCall.strike, expiry: slice.expiry, entryPrice: otmCall.mid ?? otmCall.last ?? null },
       ];
     case 'collar':
       // Long ~25Δ put + short ~25Δ call (pair with long underlier offline)
       return [
-        { id: id(), kind: 'put', side: 'long', qty: 1, strike: d25Put.strike, expiry: slice.expiry, entryPrice: d25Put.mid ?? d25Put.last ?? 0 },
-        { id: id(), kind: 'call', side: 'short', qty: 1, strike: d25Call.strike, expiry: slice.expiry, entryPrice: d25Call.mid ?? d25Call.last ?? 0 },
+        { id: id(), kind: 'put', side: 'long', qty: 1, strike: d25Put.strike, expiry: slice.expiry, entryPrice: d25Put.mid ?? d25Put.last ?? null },
+        { id: id(), kind: 'call', side: 'short', qty: 1, strike: d25Call.strike, expiry: slice.expiry, entryPrice: d25Call.mid ?? d25Call.last ?? null },
       ];
     default:
       return [];
@@ -274,15 +304,20 @@ export function comboPayoffAtExpiry(legs: PortfolioLeg[], S: number): number {
   let pnl = 0;
   for (const leg of legs) {
     const sgn = signOf(leg.side) * leg.qty;
+    const ep = leg.entryPrice as unknown as number | null;
+    if (ep == null || !isFinite(ep)) {
+      // Missing entryPrice → unavailable, not free
+      return NaN;
+    }
     if (leg.kind === 'spot' || leg.kind === 'future') {
-      pnl += sgn * (S - leg.entryPrice);
+      pnl += sgn * (S - ep);
       continue;
     }
     if (leg.strike == null) continue;
     const intrinsic = leg.kind === 'call'
       ? Math.max(0, S - leg.strike)
       : Math.max(0, leg.strike - S);
-    pnl += sgn * (intrinsic - leg.entryPrice);
+    pnl += sgn * (intrinsic - ep);
   }
   return pnl;
 }

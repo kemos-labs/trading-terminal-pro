@@ -30,6 +30,7 @@ import {
   setDisplayStripEnabled,
 } from '../../lib/market/shellPrefs';
 import { DeskViewGate } from './renderDeskView';
+import { LaunchpadGrid } from '../terminal/LaunchpadGrid';
 import { useAccountStore } from '../../store/accountStore';
 
 /**
@@ -103,20 +104,25 @@ export function TerminalLayout() {
   useSpotStream(symbol, source === 'live');
 
   // Always boot into LIVE so desks never start on synthetic/demo market data.
-  // Only kick chain load once — StrictMode remount must not abort an in-flight fetch.
+  // Only kick chain load for chain-dependent desks (vol/positioning) — independent desks never trigger equity chain.
   useEffect(() => {
     const s = useTerminalStore.getState();
     if (s.source !== 'live') {
       void s.setSource('live');
     }
-    if (!s.snapshot && s.lastChainUpdate === 0) {
+    const tab = s.activeTab as string;
+    const chainDependent = ['vol', 'positioning'].includes(tab);
+    if (chainDependent && !s.snapshot && s.lastChainUpdate === 0) {
       void setSymbol(s.symbol || 'SPY');
     }
   }, [setSymbol]);
 
-  // Preload heavy Vol chunks during boot so Greeks is not a cold lazy hit after Enter.
+  // Preload heavy Vol chunks during boot so Greeks is not a cold lazy hit after Enter — only for chain-dependent desks.
   useEffect(() => {
-    void import('../views/GreeksView');
+    const tab = useTerminalStore.getState().activeTab as string;
+    if (['vol', 'positioning'].includes(tab)) {
+      void import('../views/GreeksView');
+    }
   }, []);
 
   // Sync ?desk= URL param to activeTab on mount (enables deep-linking / e2e)
@@ -127,13 +133,11 @@ export function TerminalLayout() {
     }
   }, [setActiveTab]);
 
-  // Migrate stale tab ids — NOT silently to Vol. Home semantics: show launchpad notice. Macro → Rates with notice.
+  // Migrate stale tab ids — Home is real Launchpad (not silent Vol); Macro → Rates with notice.
   useEffect(() => {
-    const id = activeTab as string;
+    const id = activeTab as unknown as string;
     if (id === 'home') {
-      // P0 Fix: do not silently redirect Home→Volatility. Home is launchpad/function codes.
-      toast.message('Home desk retired', { description: 'Use LPAD, function codes, or the Vol desk. Redirected to Vol.' });
-      setActiveTab('vol');
+      // Home is Launchpad — keep as home, render launchpad (do not redirect)
       return;
     }
     if (id === 'macro') {
@@ -141,8 +145,7 @@ export function TerminalLayout() {
       setActiveTab('rates');
       return;
     }
-    if (!TABS.some((t) => t.id === activeTab)) {
-      // Unknown tab — fail to Vol but with notice (not silent)
+    if (!TABS.some((t) => t.id === activeTab) && id !== 'home') {
       toast.error('Unknown desk', { description: `"${id}" not found — opened Vol` });
       setActiveTab('vol');
     }
@@ -278,10 +281,20 @@ export function TerminalLayout() {
           activeTab === 'academy' && 'academy-shell',
         )}
         role="main"
-        aria-label={activeTab === 'academy' ? 'Academy publication' : 'Function area'}
+        aria-label={(activeTab as unknown as string) === 'academy' ? 'Academy publication' : (activeTab as unknown as string) === 'home' ? 'Home launchpad' : 'Function area'}
         id={`panel-${activeTab}`}
       >
-        <DeskViewGate tab={activeTab} loading={loading} />
+        {(activeTab as unknown as string) === 'home' ? (
+          <div className="h-full overflow-auto p-3">
+            <div className="mx-auto max-w-5xl">
+              <h1 className="mb-1 font-mono text-sm font-bold uppercase tracking-wider">Home — Launchpad</h1>
+              <p className="mb-3 font-mono text-type-2xs text-muted-foreground">Function codes · desks · no synthetic market data. Use LPAD or Cmd+K.</p>
+              <LaunchpadGrid />
+            </div>
+          </div>
+        ) : (
+          <DeskViewGate tab={activeTab as never} loading={loading} />
+        )}
       </main>
 
       {displayStripOn && <SidePanel />}

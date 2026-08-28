@@ -10,6 +10,15 @@ export function SurfaceMatrixView() {
   const snapshot = useTerminalStore((s) => s.snapshot);
   const [side, setSide] = useState<QuoteSide>('mid');
 
+  const availability = useMemo(() => {
+    if (!snapshot) return { hasBidIv: false, hasAskIv: false };
+    const expiries = snapshot.expiries.slice(0, 8);
+    return {
+      hasBidIv: expiries.some((e) => [...e.calls, ...e.puts].some((q) => q.bidIv != null)),
+      hasAskIv: expiries.some((e) => [...e.calls, ...e.puts].some((q) => q.askIv != null)),
+    };
+  }, [snapshot]);
+
   const grid = useMemo(() => {
     if (!snapshot) return null;
     const expiries = snapshot.expiries.slice(0, 8);
@@ -21,20 +30,11 @@ export function SurfaceMatrixView() {
     const values: (number | null)[][] = expiries.map((e) =>
       strikes.map((k) => {
         const q = [...e.calls, ...e.puts].find((x) => x.strike === k);
-        if (!q || q.iv == null) return null;
-        // Bid/Ask IV not stored per quote in equity chain (only solved mid IV); proxy via spread when toggle used.
-        // When side is bid/ask, we show mid ± half-spread proxy to demonstrate control affects data.
-        if (side === 'mid') return q.iv * 100;
-        if (side === 'bid') {
-          const spread = q.ask != null && q.bid != null && q.ask > q.bid ? (q.ask - q.bid) / 2 : 0;
-          // approximate bid IV slightly lower when spread: use raw mid IV minus spread impact stub
-          return (q.iv - spread * 0.01) * 100;
-        }
-        if (side === 'ask') {
-          const spread = q.ask != null && q.bid != null && q.ask > q.bid ? (q.ask - q.bid) / 2 : 0;
-          return (q.iv + spread * 0.01) * 100;
-        }
-        return q.iv * 100;
+        if (!q) return null;
+        if (side === 'mid') return q.midIv != null ? q.midIv * 100 : (q.iv != null ? q.iv * 100 : null);
+        if (side === 'bid') return q.bidIv != null ? q.bidIv * 100 : null;
+        if (side === 'ask') return q.askIv != null ? q.askIv * 100 : null;
+        return null;
       })
     );
     let min = Infinity, max = -Infinity;
@@ -47,22 +47,36 @@ export function SurfaceMatrixView() {
     return <Panel title="IV Surface — strike × expiry"><div className="p-4 text-xs text-muted-foreground">No surface</div></Panel>;
   }
 
+  // Ensure side stays valid when availability changes
+  if (side === 'bid' && !availability.hasBidIv) {
+    // keep showing mid when bid unavailable — control hidden
+  }
+  if (side === 'ask' && !availability.hasAskIv) {
+    // keep showing mid when ask unavailable
+  }
+  const modeItems = [
+    { id: 'mid', label: 'Mid' },
+    ...(availability.hasBidIv ? [{ id: 'bid', label: 'Bid' }] : []),
+    ...(availability.hasAskIv ? [{ id: 'ask', label: 'Ask' }] : []),
+  ] as const;
+  const effectiveSide = (side === 'bid' && !availability.hasBidIv) || (side === 'ask' && !availability.hasAskIv) ? 'mid' as const : side;
+
   return (
     <Panel title="IV Surface — strike × expiry matrix">
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2 px-2 py-1 border-b border-border">
           <DeskModeBar
-            items={[{ id: 'mid', label: 'Mid' }, { id: 'bid', label: 'Bid' }, { id: 'ask', label: 'Ask' }] as const}
-            activeId={side}
+            items={modeItems as unknown as { id: string; label: string }[]}
+            activeId={effectiveSide}
             onSelect={(id) => setSide(id as QuoteSide)}
           />
-          <span className="text-type-2xs text-muted-foreground" title="Bid/Ask toggle must affect displayed data per P0">
-            Bid/Ask control affects matrix values (spread proxy) — not decorative
+          <span className="text-type-2xs text-muted-foreground" title="Bid/Ask IV independently inverted from observed bid/ask prices via canonical solver; null when not invertible; never proxy">
+            {availability.hasBidIv || availability.hasAskIv ? 'Bid/Ask IV independently inverted — no proxy' : 'Bid/Ask IV unavailable for this chain'}
           </span>
           <span className="ml-auto font-mono text-type-2xs text-muted-foreground">{snapshot.symbol} · {snapshot.spot.toFixed(2)} · {grid.expiries.length}×{grid.strikes.length}</span>
         </div>
         <div className="p-2">
-          <div className="text-type-2xs text-muted-foreground mb-1">IV % — {side === 'mid' ? 'executable mid (bid+ask)/2' : side === 'bid' ? 'bid-side (mid minus spread proxy)' : 'ask-side (mid plus spread proxy)'} · separate observed vs model layers</div>
+          <div className="text-type-2xs text-muted-foreground mb-1">IV % — {effectiveSide === 'mid' ? 'solved mid IV (executable mid)' : effectiveSide === 'bid' ? 'solved bid IV (observed bid price)' : 'solved ask IV (observed ask price)'} · separate feed/mid/bid/ask/model layers</div>
           <MatrixHeatmap
             data={grid.values}
             xLabels={grid.strikes}

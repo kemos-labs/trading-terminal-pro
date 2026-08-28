@@ -28,7 +28,6 @@ import { fmtCompact, fmtPrice, fmtSigned } from '../../lib/format';
 import { cn } from '../../lib/utils';
 import {
   fetchKsaBoardClient,
-  fetchKsaQuoteClient,
   KSA_BOARD_POLL_MS,
   type KsaBoard,
   type KsaMover,
@@ -477,29 +476,14 @@ export function KsaMarketView() {
     return () => window.clearInterval(id);
   }, [load]);
 
-  // Focus from shared board only (free tier — no per-symbol SAHMK /quote).
+  // Focus from shared board only (free tier — no per-symbol SAHMK /quote on free path).
   useEffect(() => {
-    let cancelled = false;
     const fromBoard = findFocusOnBoard(board, focusSym);
     if (fromBoard) {
       setFocusQuote(fromBoard as KsaQuote);
-      return () => {
-        cancelled = true;
-      };
+    } else {
+      setFocusQuote(null);
     }
-    void (async () => {
-      try {
-        const res = await fetchKsaQuoteClient(focusSym);
-        if (cancelled) return;
-        if (res.quote) setFocusQuote(res.quote);
-        else setFocusQuote(null);
-      } catch {
-        if (!cancelled) setFocusQuote(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, [board, focusSym]);
 
   const session = board?.session ?? localSession;

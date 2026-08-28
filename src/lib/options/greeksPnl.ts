@@ -67,10 +67,7 @@ function legVol(snap: VolSnapshot, leg: PortfolioLeg): number | null {
   if (leg.iv != null && leg.iv > 0) return leg.iv;
   if (leg.kind === 'spot' || leg.kind === 'future' || !leg.expiry) return null;
   const slice = snap.expiries.find(e => e.expiry === leg.expiry);
-  if (!slice) {
-    const fallback = snap.expiries[0]?.atmIV;
-    return fallback != null && fallback > 0 ? fallback : null;
-  }
+  if (!slice) return null;
   const list = leg.kind === 'call' ? slice.calls : slice.puts;
   if (leg.strike != null) {
     const q = list.reduce((b, x) =>
@@ -78,14 +75,16 @@ function legVol(snap: VolSnapshot, leg: PortfolioLeg): number | null {
     , list[0]!);
     if (q?.iv != null && q.iv > 0) return q.iv;
   }
+  // No silent 25% — use slice atmIV only if explicitly observed
   return slice.atmIV > 0 ? slice.atmIV : null;
 }
 
-function legT0(snap: VolSnapshot, leg: PortfolioLeg): number {
-  if (!leg.expiry) return yearFractionFromSlice({ expiry: '2099-01-01', dte: 30 });
+function legT0(snap: VolSnapshot, leg: PortfolioLeg): number | null {
+  if (!leg.expiry) return null;
   const slice = snap.expiries.find(e => e.expiry === leg.expiry);
   if (slice) return yearFractionFromSlice(slice);
-  return yearFractionFromSlice({ expiry: leg.expiry, dte: 30 });
+  // No dummy 2099 or 30d — unavailable if expiry not in snapshot
+  return null;
 }
 
 /**
@@ -156,6 +155,7 @@ export function optionGreeksPnl(
     qty?: number;
     side?: 'long' | 'short';
     path: SpotBar[];
+    pathProvenance?: 'observed-history' | 'scenario-synthetic';
     /** Override IV; else surface */
     iv?: number;
   },
@@ -170,7 +170,7 @@ export function optionGreeksPnl(
     entryPrice: 0,
     iv: opts.iv,
   };
-  return comboGreeksPnl([leg], snap, opts.path);
+  return comboGreeksPnl([leg], snap, opts.path, opts.pathProvenance);
 }
 
 /**
@@ -180,12 +180,32 @@ export function comboGreeksPnl(
   legs: PortfolioLeg[],
   snap: VolSnapshot,
   path: SpotBar[],
+  pathProvenance: 'observed-history' | 'scenario-synthetic' = 'observed-history',
 ): GreeksPnlSeries {
+  // Fail-closed: missing legs/expiry/IV/entryPrice → unavailable, do not silently price with defaults
+  const hasMissingLeg = legs.some((l) => {
+    if (l.kind === 'spot' || l.kind === 'future') return false;
+    if (l.strike == null || !l.expiry) return true;
+    if (l.entryPrice == null || !isFinite(l.entryPrice as number)) return true;
+    const T0 = legT0(snap, l);
+    if (T0 == null) return true;
+    const v = legVol(snap, l);
+    if (v == null) return true;
+    return false;
+  });
+  if (hasMissingLeg) {
+    return {
+      bars: [], terminalPnl: 0, totalDelta: 0, totalGamma: 0,
+      totalTheta: 0, totalVega: 0, totalResidual: 0, method: pathProvenance === 'scenario-synthetic' ? 'scenario-synthetic-gbm-sticky-iv' : 'bs-sticky-iv',
+      provenance: pathProvenance,
+      vegaNote: 'Unavailable — missing expiry/IV/entryPrice (fail-closed)',
+    };
+  }
   if (!path.length || !legs.length) {
     return {
       bars: [], terminalPnl: 0, totalDelta: 0, totalGamma: 0,
-      totalTheta: 0, totalVega: 0, totalResidual: 0, method: 'bs-sticky-iv',
-      provenance: 'observed-history', vegaNote: 'Sticky IV — 0 vol move by construction',
+      totalTheta: 0, totalVega: 0, totalResidual: 0, method: pathProvenance === 'scenario-synthetic' ? 'scenario-synthetic-gbm-sticky-iv' : 'bs-sticky-iv',
+      provenance: pathProvenance, vegaNote: pathProvenance === 'scenario-synthetic' ? 'Scenario synthetic GBM — sticky IV, vega 0' : 'Sticky IV — 0 vol move by construction',
     };
   }
 
@@ -218,6 +238,7 @@ export function comboGreeksPnl(
       }
       if (leg.strike == null || !leg.expiry) continue;
       const T0 = legT0(snap, leg);
+      if (T0 == null) continue;
       const T = Math.max(1e-8, T0 - daysElapsed / 365);
       const volRaw = legVol(snap, leg);
       if (volRaw == null || !(volRaw > 0)) continue; // P0: no silent 25% fallback — unavailable IV skips leg
@@ -297,6 +318,7 @@ export function comboGreeksPnl(
   }
 
   const last = bars[bars.length - 1]!;
+  const isSynthetic = pathProvenance === 'scenario-synthetic';
   return {
     bars,
     terminalPnl: last.pnl,
@@ -305,9 +327,9 @@ export function comboGreeksPnl(
     totalTheta: cumTheta,
     totalVega: cumVega,
     totalResidual: cumResidual,
-    method: 'bs-sticky-iv',
-    provenance: 'observed-history',
-    vegaNote: 'Sticky IV — 0 vol move by construction (vega = 0). Not a live vol PnL.',
+    method: isSynthetic ? 'scenario-synthetic-gbm-sticky-iv' : 'bs-sticky-iv',
+    provenance: pathProvenance,
+    vegaNote: isSynthetic ? 'Scenario synthetic GBM — sticky IV, vega 0 (model-repriced)' : 'Historical underlying replay with model-repriced options — sticky IV, vega 0',
   };
 
 }

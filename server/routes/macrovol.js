@@ -14,49 +14,77 @@ const MACRO_LIGHT_PREFIXES = [
 
 // P0 Fix: explicit allowlisted endpoints — no wildcard forwarding. Ownership: Greeks/surface/stir are computed in Python as private workers; Node is thin proxy with schema-bounded cache.
 const ALLOWED_MACROVOL = [
-  { method: ['GET'], re: /^\/health\/?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/sofr\/?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/summary\/?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/curve\/?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/shape\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/term-structure\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/plumbing\/?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/basis\/?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/basis-history\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/curve-history\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/correlations\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/jgb-curve\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/fx\/?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/auctions\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/global-yields\/?$/ },
-  { method: ['GET'], re: /^\/api\/rates\/global-yields\/[^\/]+\/?$/ },
-  { method: ['GET'], re: /^\/api\/crypto\/spot\/?$/ },
-  { method: ['GET'], re: /^\/api\/perp\/basis\/?$/ },
-  { method: ['GET'], re: /^\/api\/sec\/context\/[^\/]+\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/macro\/summary\/?$/ },
-  { method: ['GET'], re: /^\/api\/macro\/series\/[^\/]+\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/macro\/stress\/?$/ },
-  { method: ['GET'], re: /^\/api\/macro\/primary\/?$/ },
-  { method: ['GET'], re: /^\/api\/stir\/strip\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/feed\/[^\/]+\/?$/ },
-  { method: ['GET'], re: /^\/api\/surface\/[^\/]+\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/surface\/[^\/]+\/preview\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/greeks\/[^\/]+\/?(\?.*)?$/ },
-  { method: ['GET'], re: /^\/api\/greeks\/history\/[^\/]+\/?(\?.*)?$/ },
+  { method: ['GET'], re: new RegExp('^/health/?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/sofr/?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/summary/?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/curve/?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/shape/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/term-structure/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/plumbing/?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/basis/?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/basis-history/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/curve-history/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/correlations/?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/jgb-curve/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/fx/?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/auctions/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/global-yields/?$') },
+  { method: ['GET'], re: new RegExp('^/api/rates/global-yields/[^/]+/?$') },
+  { method: ['GET'], re: new RegExp('^/api/crypto/spot/?$') },
+  { method: ['GET'], re: new RegExp('^/api/perp/basis/?$') },
+  { method: ['GET'], re: new RegExp('^/api/sec/context/[^/]+/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/macro/summary/?$') },
+  { method: ['GET'], re: new RegExp('^/api/macro/series/[^/]+/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/macro/stress/?$') },
+  { method: ['GET'], re: new RegExp('^/api/macro/primary/?$') },
+  { method: ['GET'], re: new RegExp('^/api/stir/strip/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/feed/[^/]+/?$') },
+  { method: ['GET'], re: new RegExp('^/api/surface/[^/]+/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/surface/[^/]+/preview/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/greeks/[^/]+/?(\\?.*)?$') },
+  { method: ['GET'], re: new RegExp('^/api/greeks/history/[^/]+/?(\\?.*)?$') },
 ];
 
 function isMacroAllowed(suffix, method) {
-  const path = (suffix.split('?')[0] || '').replace(/\/$/, '') || '/';
-  // Allow with or without /api prefix already stripped? suffix includes /api/... after replace
-  const full = path.startsWith('/api') ? path : `/api${path}`;
-  // Normalize: suffix already includes /api/... because we do `/api${suffix}`
-  const check = suffix.split('?')[0] || '';
-  // Try both forms
+  const check = (suffix.split('?')[0] || '').replace(/\/$/, '') || '/';
+  const pathForFull = check.startsWith('/api') ? check : `/api${check}`;
   for (const rule of ALLOWED_MACROVOL) {
-    if (!rule.method.includes(method) && !rule.method.includes('GET') && method !== 'GET') continue;
-    if (rule.re.test(check) || rule.re.test(full)) return true;
+    if (!rule.method.includes(method)) continue;
+    if (rule.re.test(check) || rule.re.test(pathForFull)) return true;
   }
   return false;
+}
+
+/** Validate query params are bounded — prevent unbounded cache keys */
+function validateMacroQuery(suffix) {
+  const qIdx = suffix.indexOf('?');
+  if (qIdx === -1) return null;
+  const qs = suffix.slice(qIdx + 1);
+  const params = new URLSearchParams(qs);
+  // Bound common params: ticker 1-16 alnum, period enum, limit 1-50, history 10-260, etc.
+  for (const [k, v] of params) {
+    if (v.length > 32) return `param ${k} too long`;
+    if (k === 'ticker' || k === 'symbol') {
+      if (!/^[A-Za-z0-9.\-=^]{1,16}$/.test(v)) return `invalid ticker ${v}`;
+    }
+    if (k === 'limit') {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 1 || n > 2000) return `limit out of bounds`;
+    }
+    if (k === 'history') {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 10 || n > 260) return `history out of bounds`;
+    }
+    if (k === 'strike_range') {
+      const n = Number(v);
+      if (!isFinite(n) || n <= 0 || n > 1) return `strike_range out of bounds`;
+    }
+    if (k === 'r' || k === 'q') {
+      const n = Number(v);
+      if (!isFinite(n) || n < -0.5 || n > 2) return `rate out of bounds`;
+    }
+  }
+  return null;
 }
 
 function isMacroLightPath(suffix) {
@@ -91,12 +119,16 @@ export async function registerMacrovolRoutes(fastify) {
       const raw = request.url || '';
       const suffix = raw.replace(/^\/api\/macrovol/, '') || '/';
       if (isMacroDebugPath(suffix)) { reply.code(404); return { error: 'Not found' }; }
-      // P0 Fix: explicit allowlist, no wildcard. Reject unknown suffixes with 404.
+      const qErr = validateMacroQuery(suffix);
+      if (qErr) { reply.code(400); return { error: 'Bad query', detail: qErr }; }
       if (!isMacroAllowed(suffix, request.method)) {
         reply.code(404);
         return { error: 'Endpoint not allowed', hint: 'Allowlisted /api/macrovol paths only' };
       }
-      const target = `${MACROVOL_API_URL}/api${suffix.startsWith('/') ? suffix : `/${suffix}`}`;
+      const isHealth = (suffix.split('?')[0] || '').replace(/\/$/, '') === '/health';
+      const target = isHealth
+        ? `${MACROVOL_API_URL}/health`
+        : `${MACROVOL_API_URL}/api${suffix.startsWith('/') ? suffix : `/${suffix}`}`;
       const light = request.method === 'GET' && isMacroLightPath(suffix);
       const greeksPath = (suffix.split('?')[0] || '').replace(/\/$/, '');
       const greeksHeavy = request.method === 'GET' && (greeksPath.startsWith('/greeks/') || greeksPath.startsWith('/surface/'));

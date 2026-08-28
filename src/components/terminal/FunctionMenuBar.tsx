@@ -100,7 +100,7 @@ export function FunctionMenuBar({
           ? 'border-b border-[#20282b] bg-[#050708] font-mono text-type-2xs text-white'
           : 'term-fn-bar-red',
       )}
-      role="menubar"
+      role="toolbar"
       aria-label="Main desks and sections"
     >
       {/* LEFT — main desks, each with a hover tree */}
@@ -117,7 +117,7 @@ export function FunctionMenuBar({
             >
               <button
                 type="button"
-                role="menuitem"
+                role="button"
                 aria-current={on ? 'page' : undefined}
                 aria-expanded={openTree === t.id}
                 title={`${t.label} (${t.hotkey})`}
@@ -191,7 +191,7 @@ export function FunctionMenuBar({
               <button
                 key={s.id}
                 type="button"
-                role="menuitem"
+                role="button"
                 onClick={() => goSection(s.id)}
                 className={cn(
                   'shrink-0 border-r border-white/10 px-1.5 py-0 uppercase tracking-wide transition-colors',

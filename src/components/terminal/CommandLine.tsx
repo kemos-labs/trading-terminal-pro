@@ -200,7 +200,7 @@ export function CommandLine({
           ? 'h-full w-[min(14rem,32vw)] min-w-[9.5rem] max-w-[16rem] border-l border-white/25 bg-black/50'
           : 'h-6 border-b border-border bg-[#060a10]',
       )}
-      role="search"
+      role="group"
       aria-label="Command line"
     >
       {/* Yellow ▶ on black — BBG GO / play */}
@@ -236,6 +236,7 @@ export function CommandLine({
         )}
         autoComplete="off"
         spellCheck={false}
+        role="combobox"
         aria-autocomplete="list"
         aria-controls="cmd-line-list"
         aria-expanded={open && rows.length > 0}

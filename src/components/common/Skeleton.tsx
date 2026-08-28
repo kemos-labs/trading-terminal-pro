@@ -73,7 +73,7 @@ export function DeskLoading({
       aria-live="polite"
     >
       <Skeleton className="h-2 w-40" label={message} />
-      <p className="font-mono text-type-xs text-muted-foreground">{message}</p>
+      <p className="font-mono text-type-xs text-foreground">{message}</p>
     </div>
   );
 }

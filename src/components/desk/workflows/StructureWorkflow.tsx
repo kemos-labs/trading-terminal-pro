@@ -185,7 +185,7 @@ export function StructureWorkflow() {
                       const nearZero = v == null || intensity < 0.08;
                       const tone = nearZero ? 'text-muted-foreground' : v! > 0 ? 'text-up' : 'text-down';
                       return (
-                        <td key={ei} className={cn('px-1 py-0.5 text-right tabular-nums', tone)} style={nearZero ? undefined : { opacity: 0.45 + intensity * 0.55 }}>
+                        <td key={ei} className={cn('px-1 py-0.5 text-right tabular-nums', tone)}>
                           {v == null ? '·' : metric === 'nd2' ? (v * 100).toFixed(0) : v.toFixed(1)}
                         </td>
                       );

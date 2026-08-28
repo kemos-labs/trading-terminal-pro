@@ -38,11 +38,10 @@ export function breakEvenTable(
   const list = [
     ...(type !== 'put' ? slice.calls : []),
     ...(type !== 'call' ? slice.puts : []),
-  ].filter(qt => qt.iv != null && qt.iv > 0 && ((qt.mid != null && qt.mid > 0) || (qt.last != null && qt.last > 0)));
+  ].filter(qt => qt.iv != null && qt.iv > 0 && qt.mid != null && qt.mid > 0 && Number.isFinite(qt.mid));
 
   return list.map(qt => {
-    const midRaw = (qt.mid != null && qt.mid > 0 ? qt.mid : qt.last) as number | null;
-    const mid = midRaw ?? 0;
+    const mid = qt.mid as number;
     const beLong = qt.type === 'call' ? qt.strike + mid : qt.strike - mid;
     const beShort = beLong; // same strike-crossing for single-leg
     const g = priceGreeksMarket(qt.type, S, qt.strike, T, r, div, qt.iv!);
@@ -63,9 +62,11 @@ export function breakEvenTable(
 }
 
 export interface ComboBeAnalysis {
+  available: boolean;
+  reason?: string;
   breakEvens: number[];
-  payoffCurve: { spot: number; pnl: number }[];
-  maxLoss: number;
+  payoffCurve: { spot: number; pnl: number | null }[];
+  maxLoss: number | null;
   maxGain: number | null;
 }
 
@@ -75,23 +76,34 @@ export function analyzeComboBreakEven(
   pct = 0.25,
   n = 120,
 ): ComboBeAnalysis {
+  if (legs.some(l => l.entryPrice == null || !Number.isFinite(l.entryPrice as number))) {
+    return { available: false, reason: 'missing entryPrice', breakEvens: [], payoffCurve: [], maxLoss: null, maxGain: null };
+  }
+  if (!Number.isFinite(spot) || spot <= 0) return { available: false, reason: 'invalid spot', breakEvens: [], payoffCurve: [], maxLoss: null, maxGain: null };
   const lo = spot * (1 - pct);
   const hi = spot * (1 + pct);
-  const payoffCurve: { spot: number; pnl: number }[] = [];
-  let maxLoss = 0;
-  let maxGain = -Infinity;
+  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return { available: false, reason: 'invalid range', breakEvens: [], payoffCurve: [], maxLoss: null, maxGain: null };
+  const payoffCurve: { spot: number; pnl: number | null }[] = [];
+  let maxLoss: number | null = null;
+  let maxGain: number | null = null;
   for (let i = 0; i <= n; i++) {
     const S = lo + (hi - lo) * (i / n);
     const pnl = comboPayoffAtExpiry(legs, S);
     payoffCurve.push({ spot: S, pnl });
-    maxLoss = Math.min(maxLoss, pnl);
-    maxGain = Math.max(maxGain, pnl);
+    if (pnl != null && Number.isFinite(pnl)) {
+      maxLoss = maxLoss == null ? Math.min(0, pnl) : Math.min(maxLoss, pnl);
+      maxGain = maxGain == null ? pnl : Math.max(maxGain, pnl);
+    }
   }
-  const breakEvens = breakEvenSpots(legs, spot, 1 - pct, 1 + pct, 400);
+  const beRes = breakEvenSpots(legs, spot, 1 - pct, 1 + pct, 400);
+  if (!beRes.available) return { available: false, reason: beRes.reason, breakEvens: [], payoffCurve: [], maxLoss: null, maxGain: null };
+  // Filter out any non-finite from curve (shouldn't happen)
+  const cleanCurve = payoffCurve.filter(p => p.pnl == null || Number.isFinite(p.pnl as number));
   return {
-    breakEvens,
-    payoffCurve,
+    available: true,
+    breakEvens: beRes.breakEvens,
+    payoffCurve: cleanCurve,
     maxLoss,
-    maxGain: Number.isFinite(maxGain) ? maxGain : null,
+    maxGain: maxGain != null && Number.isFinite(maxGain) ? maxGain : null,
   };
 }

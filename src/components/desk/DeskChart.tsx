@@ -61,14 +61,14 @@ export function DeskChartFrame({
       style={height != null ? { height, minHeight: height } : undefined}
     >
       {(header || yTitle) && (
-        <div className="flex shrink-0 items-center justify-between gap-2 px-2 pt-1 font-mono text-type-2xs text-zinc-500">
+        <div className="flex shrink-0 items-center justify-between gap-2 px-2 pt-1 font-mono text-type-2xs text-zinc-400">
           <span>{yTitle}</span>
           {header}
         </div>
       )}
       <div className="min-h-0 flex-1 px-0.5 pb-0.5">{children}</div>
       {xTitle && (
-        <div className="shrink-0 pb-1 text-center font-mono text-type-2xs text-zinc-500">{xTitle}</div>
+        <div className="shrink-0 pb-1 text-center font-mono text-type-2xs text-zinc-400">{xTitle}</div>
       )}
     </div>
   );

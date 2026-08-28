@@ -45,9 +45,9 @@ export function CryptoOverviewView() {
         <span className="rounded bg-muted px-2 py-1">Index {spot != null ? spot.toFixed(1) : '—'}</span>
         <span className="rounded bg-muted px-2 py-1">Funding (ann. run-rate) {fundingAnn != null ? `${(fundingAnn * 100).toFixed(2)}%` : '—'}</span>
         {stale
-          ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-700">Stale</span>
+          ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Stale</span>
           : (bundle.coverage ?? 0) < 0.5
-            ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-700" title={`Quotes joined for ${Math.round((bundle.coverage ?? 0) * 100)}% of active catalogue`}>Partial</span>
+            ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400" title={`Quotes joined for ${Math.round((bundle.coverage ?? 0) * 100)}% of active catalogue`}>Partial</span>
             : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-700" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()} — quotes joined for ${Math.round((bundle.coverage ?? 0) * 100)}% of active catalogue`}>Observed</span>}
       </div>
       <div className="grid grid-cols-2 gap-3">

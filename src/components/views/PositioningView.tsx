@@ -321,7 +321,7 @@ export function PositioningView() {
   const aboveFlip = flip != null && snapshot ? snapshot.spot >= flip : null;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden" data-testid="positioning-view">
       {/* Sticky GEX walls + regime + session path (Phase 2.5 / 3) */}
       <GexLevelsStrip className="bg-card/50" showSpark />
 

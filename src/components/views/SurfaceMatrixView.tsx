@@ -72,13 +72,13 @@ export function SurfaceMatrixView() {
             activeId={effectiveSide}
             onSelect={(id) => setSide(id as QuoteSide)}
           />
-          <span className="text-type-2xs text-muted-foreground" title="Bid/Ask IV independently inverted from observed bid/ask prices via canonical solver; null when not invertible; never proxy">
-            {availability.hasBidIv || availability.hasAskIv ? 'Bid/Ask IV independently inverted — no proxy' : 'Bid/Ask IV unavailable for this chain'}
+          <span className="text-type-2xs text-muted-foreground" title="Bid/ask IV derived by independent inversion of observed bid/ask prices via canonical solver; null when not invertible; feed IV when present is observed; SVI is model; never proxy">
+            {availability.hasBidIv || availability.hasAskIv ? 'Bid/Ask IV derived (inverted) — no proxy · Feed IV observed · SVI model' : 'Bid/Ask IV unavailable for this chain — derived when invertible'}
           </span>
           <span className="ml-auto font-mono text-type-2xs text-muted-foreground">{snapshot.symbol} · {snapshot.spot.toFixed(2)} · {grid.expiries.length}×{grid.strikes.length}</span>
         </div>
         <div className="p-2">
-          <div className="text-type-2xs text-muted-foreground mb-1">IV % — {effectiveSide === 'mid' ? 'derived two-sided midpoint IV (mid-price, not executable)' : effectiveSide === 'bid' ? 'observed bid IV (bid-price)' : 'observed ask IV (ask-price)'} · unavailable sides remain — (null) · OTM: K&lt;F→put, K≥F→call</div>
+          <div className="text-type-2xs text-muted-foreground mb-1">IV % — {effectiveSide === 'mid' ? 'derived two-sided midpoint IV (mid-price inversion, not executable)' : effectiveSide === 'bid' ? 'derived bid IV (inverted from observed bid, not observed IV)' : 'derived ask IV (inverted from observed ask, not observed IV)'} · feed IV: observed when supplied · SVI: model · unavailable sides remain — (null) · OTM: K&lt;F→put, K≥F→call</div>
           <MatrixHeatmap
             data={grid.values}
             xLabels={grid.strikes}

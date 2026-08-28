@@ -77,7 +77,7 @@ export function CollapsibleSection({
           <h3 id={`${id}-title`} className="text-type-xs font-semibold text-foreground">
             {title}
           </h3>
-          <span className="ml-auto shrink-0 text-type-2xs uppercase tracking-wider text-muted-foreground/60">
+          <span className="ml-auto shrink-0 text-type-2xs uppercase tracking-wider text-muted-foreground">
             {open ? 'hide' : 'show'}
           </span>
         </button>

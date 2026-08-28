@@ -12,7 +12,6 @@ function rateLimitClassForUrl(url) {
     u.startsWith('/api/flashalpha') ||
     u.startsWith('/api/desk') ||
     u.startsWith('/api/macrovol') ||
-    u.startsWith('/api/backtest') ||
     u.startsWith('/api/options') ||
     u.startsWith('/api/yf') ||
     u.startsWith('/api/deribit') ||

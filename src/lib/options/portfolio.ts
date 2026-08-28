@@ -315,47 +315,66 @@ export function templateLegs(
   }
 }
 
-/** Intrinsic at expiry for BE analysis. */
-export function comboPayoffAtExpiry(legs: PortfolioLeg[], S: number): number {
+/** Intrinsic at expiry for BE analysis — discriminated, never NaN/Infinity. */
+export function comboPayoffAtExpiry(legs: PortfolioLeg[], S: number): number | null {
   let pnl = 0;
   for (const leg of legs) {
     const sgn = signOf(leg.side) * leg.qty;
     const ep = leg.entryPrice as unknown as number | null;
-    if (ep == null || !isFinite(ep)) {
-      // Missing entryPrice → unavailable, not free
-      return NaN;
+    if (ep == null || !Number.isFinite(ep)) {
+      // Missing entryPrice → unavailable, not free — return null not NaN
+      return null;
     }
     if (leg.kind === 'spot' || leg.kind === 'future') {
-      pnl += sgn * (S - ep);
+      const v = S - ep;
+      if (!Number.isFinite(v)) return null;
+      pnl += sgn * v;
       continue;
     }
-    if (leg.strike == null) continue;
+    if (leg.strike == null) return null;
     const intrinsic = leg.kind === 'call'
       ? Math.max(0, S - leg.strike)
       : Math.max(0, leg.strike - S);
-    pnl += sgn * (intrinsic - ep);
+    const legPnl = intrinsic - ep;
+    if (!Number.isFinite(legPnl)) return null;
+    pnl += sgn * legPnl;
   }
-  return pnl;
+  return Number.isFinite(pnl) ? pnl : null;
 }
 
-export function breakEvenSpots(legs: PortfolioLeg[], spot: number, loMult = 0.5, hiMult = 1.5, n = 400): number[] {
+export interface BreakEvenResult {
+  available: boolean;
+  breakEvens: number[];
+  reason?: string;
+}
+
+export function breakEvenSpots(legs: PortfolioLeg[], spot: number, loMult = 0.5, hiMult = 1.5, n = 400): BreakEvenResult {
+  // Fail-closed: any missing executable entry price → unavailable
+  if (legs.some(l => l.entryPrice == null || !Number.isFinite(l.entryPrice as number))) {
+    return { available: false, breakEvens: [], reason: 'missing entryPrice' };
+  }
+  if (!Number.isFinite(spot) || spot <= 0) return { available: false, breakEvens: [], reason: 'invalid spot' };
   const lo = spot * loMult;
   const hi = spot * hiMult;
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo <= 0 || hi <= 0) return { available: false, breakEvens: [], reason: 'invalid range' };
   const bes: number[] = [];
   let prev = comboPayoffAtExpiry(legs, lo);
+  if (prev == null) return { available: false, breakEvens: [], reason: 'unavailable payoff' };
   for (let i = 1; i <= n; i++) {
     const S = lo + (hi - lo) * (i / n);
     const v = comboPayoffAtExpiry(legs, S);
+    if (v == null || prev == null) return { available: false, breakEvens: [], reason: 'unavailable payoff' };
     if (prev === 0) bes.push(lo + (hi - lo) * ((i - 1) / n));
     else if (prev * v < 0) {
-      // Linear interpolate zero
       const S0 = lo + (hi - lo) * ((i - 1) / n);
-      const t = Math.abs(prev) / (Math.abs(prev) + Math.abs(v) || 1);
-      bes.push(S0 + t * (S - S0));
+      const denom = Math.abs(prev) + Math.abs(v) || 1;
+      const t = Math.abs(prev) / denom;
+      const be = S0 + t * (S - S0);
+      if (Number.isFinite(be)) bes.push(be);
     }
     prev = v;
   }
-  return bes;
+  return { available: true, breakEvens: bes.filter(Number.isFinite) };
 }
 
 /** BS mid for a single option (utility). */

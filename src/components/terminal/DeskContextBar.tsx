@@ -39,7 +39,7 @@ export function DeskContextBar() {
       <span className="font-semibold text-primary">{desk}</span>
       {sectionLabel && (
         <>
-          <span className="text-muted-foreground/50" aria-hidden>
+          <span className="text-muted-foreground" aria-hidden>
             ›
           </span>
           <span className="font-semibold text-foreground/90">{sectionLabel}</span>
@@ -61,7 +61,7 @@ export function DeskContextBar() {
         </span>
       )}
       {spotProv && activeTab !== 'rates' && (
-        <span className="hidden text-muted-foreground/50 lg:inline">
+        <span className="hidden text-muted-foreground lg:inline">
           · spot:{spotProv}
           {chainProv ? ` · ${chainProv}` : ''}
         </span>
@@ -69,17 +69,17 @@ export function DeskContextBar() {
       <span className="ml-auto hidden items-center gap-2 sm:flex">
         {hasSections && (
           <>
-            <span className="text-muted-foreground/50" title="Jump sections with [ and ]">
+            <span className="text-muted-foreground" title="Jump sections with [ and ]">
               [ ] section
             </span>
             <span className="text-muted-foreground/40">·</span>
           </>
         )}
-        <span className="text-muted-foreground/50" title="Board focus: j/k · y copy · Esc clear">
+        <span className="text-muted-foreground" title="Board focus: j/k · y copy · Esc clear">
           j/k focus
         </span>
         <span className="text-muted-foreground/40">·</span>
-        <span className="uppercase tracking-wider text-muted-foreground/60">
+        <span className="uppercase tracking-wider text-muted-foreground">
           {density}
         </span>
       </span>

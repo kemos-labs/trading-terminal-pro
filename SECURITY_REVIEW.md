@@ -29,13 +29,12 @@ configured instance). Everything below was **found AND fixed** unless marked res
 - **Internal docs served publicly**: `/docs/engineering/BILLING_HANDOFF.md` etc. were reachable. Now only `/docs/index.json` + `/docs/academy/*`.
 - **Key-presence regressions**: `/api/desk/pack` fell back to exposing all vendor-key booleans; `/api/cache/status` listed live cache keys (users' symbols). Both gated behind `EXPOSE_KEY_STATUS=1`.
 - **Finnhub budget never enforced** + free-form `from/to` minting unlimited cache keys/upstream calls: date format validated, soft budget enforced.
-- **Backtest relay SSRF config**: `BACKTEST_API_URL` now forced localhost like MacroVol.
 - **Macrovol debug-block traversal**: `/rates/../../debug/fred` bypassed the literal-prefix check; dot segments rejected.
 - **`.data/` baked into Docker builds**: added to `.dockerignore` (session-secret footgun).
 - **Sensitive files 0644→0600**: users/sessions/reset-tokens/entitlements writes carry mode 600.
 
 ### Fixed — Low (continued, follow-up pass)
-MacroVol yfinance endpoints validate ticker charset + period enum (`/api/greeks/*`, `/api/surface/*` — blocks cache-key/upstream hammering); MacroVol Python cache size-capped at 2000 entries with eviction; backtest figures endpoint has `resolve().parent` containment; Python services CORS configurable via `MACROVOL_CORS_ORIGIN` / `BACKTEST_CORS_ORIGIN` (wildcard only when unset); macrovol dev `__main__` binds loopback by default; `/api/backtest/*` POSTs capped at 20/min; AcademyNews anchors only render http(s) URLs from third-party feeds.
+MacroVol yfinance endpoints validate ticker charset + period enum (`/api/greeks/*`, `/api/surface/*` — blocks cache-key/upstream hammering); MacroVol Python cache size-capped at 2000 entries with eviction; Python service CORS configurable via `MACROVOL_CORS_ORIGIN` (wildcard only when unset); macrovol dev `__main__` binds loopback by default; AcademyNews anchors only render http(s) URLs from third-party feeds.
 
 Login timing oracle equalized with dummy scrypt; register response unchanged (product choice); Secure cookie flag set on Render/Railway even without NODE_ENV; gated KSA responses send `Cache-Control: private, no-store` + `Vary: Cookie`; `/api/ksa/session` gated like its siblings.
 

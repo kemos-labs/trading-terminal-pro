@@ -253,7 +253,7 @@ export function Greeks10View() {
                         {data.q != null ? ` · q=${(data.q * 100).toFixed(2)}%` : ''}
                       </span>
                     )}
-                    <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-700">2D Fallback — Plotly/3D removed</span>
+                    <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-400">2D Fallback — Plotly/3D removed</span>
                   </p>
                   <div className="overflow-hidden rounded-xl border border-border bg-card">
                     {surfaceData && surfaceData.T_vals?.length > 0 ? (
@@ -375,7 +375,7 @@ function HeatmapPlot({
   return (
     <div className="rounded border border-border bg-card p-2">
       <div className="mb-1 flex items-center gap-2">
-        <span className="font-mono text-type-xs font-semibold">{label} heatmap</span><span className="rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-type-2xs text-amber-700">2D Fallback</span><span className="text-type-2xs text-muted-foreground">spot {spot.toFixed(0)} dashed</span>
+        <span className="font-mono text-type-xs font-semibold">{label} heatmap</span><span className="rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-type-2xs text-amber-400">2D Fallback</span><span className="text-type-2xs text-muted-foreground">spot {spot.toFixed(0)} dashed</span>
       </div>
       <div className="overflow-auto">
         <table className="w-full font-mono text-type-2xs">

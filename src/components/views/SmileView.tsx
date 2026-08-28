@@ -403,10 +403,10 @@ export function SmileView() {
                 />
               ))}
               {showBidAsk && hasBidAskIv && chartData.map((slice, i) => i === selectedExpiryIdx && (
-                <Line key={`bid-${slice.expiry}`} data={[...slice.calls, ...slice.puts].filter((d) => (d as unknown as { bidIv?: number }).bidIv != null)} type="monotone" dataKey="bidIv" stroke={CHART.series.muted} strokeWidth={1} strokeDasharray="2 2" dot={false} name={`${slice.label} Bid IV (observed)`} connectNulls isAnimationActive={false} />
+                <Line key={`bid-${slice.expiry}`} data={[...slice.calls, ...slice.puts].filter((d) => (d as unknown as { bidIv?: number }).bidIv != null)} type="monotone" dataKey="bidIv" stroke={CHART.series.muted} strokeWidth={1} strokeDasharray="2 2" dot={false} name={`${slice.label} Bid IV (derived)`} connectNulls isAnimationActive={false} />
               ))}
               {showBidAsk && hasBidAskIv && chartData.map((slice, i) => i === selectedExpiryIdx && (
-                <Line key={`ask-${slice.expiry}`} data={[...slice.calls, ...slice.puts].filter((d) => (d as unknown as { askIv?: number }).askIv != null)} type="monotone" dataKey="askIv" stroke={CHART.series.muted} strokeWidth={1} strokeDasharray="4 1" dot={false} name={`${slice.label} Ask IV (observed)`} connectNulls isAnimationActive={false} />
+                <Line key={`ask-${slice.expiry}`} data={[...slice.calls, ...slice.puts].filter((d) => (d as unknown as { askIv?: number }).askIv != null)} type="monotone" dataKey="askIv" stroke={CHART.series.muted} strokeWidth={1} strokeDasharray="4 1" dot={false} name={`${slice.label} Ask IV (derived)`} connectNulls isAnimationActive={false} />
               ))}
 
               {sviCurve && (

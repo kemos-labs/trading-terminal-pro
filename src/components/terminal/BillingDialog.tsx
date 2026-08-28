@@ -288,7 +288,7 @@ export function BillingDialog() {
               <button
                 type="submit"
                 disabled={busy || !email.trim() || (authMode !== 'forgot' && (!password || (authMode === 'forgot-confirm' && !resetToken.trim())))}
-                className="mt-1.5 w-full rounded border border-primary/40 bg-secondary py-1 transition-colors hover:border-primary hover:bg-accent disabled:opacity-50"
+                className="mt-1.5 w-full rounded border border-primary/40 bg-secondary py-1 transition-colors hover:border-primary hover:bg-accent disabled:opacity-80"
               >
                 {authMode === 'register'
                   ? 'Register & continue'
@@ -353,7 +353,7 @@ export function BillingDialog() {
                             key={iv}
                             onClick={() => subscribe(tier, iv)}
                             disabled={busy}
-                            className="rounded border border-primary/40 bg-secondary px-2.5 py-1 transition-colors hover:border-primary hover:bg-accent disabled:opacity-50"
+                            className="rounded border border-primary/40 bg-secondary px-2.5 py-1 transition-colors hover:border-primary hover:bg-accent disabled:opacity-80"
                           >
                             Subscribe · {INTERVAL_LABEL[iv] ? `${iv}${INTERVAL_LABEL[iv]}` : iv}
                           </button>
@@ -383,7 +383,7 @@ export function BillingDialog() {
                   <button
                     onClick={lookupStatus}
                     disabled={busy}
-                    className="rounded border border-border px-2.5 py-1 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                    className="rounded border border-border px-2.5 py-1 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-80"
                   >
                     Check status by email
                   </button>

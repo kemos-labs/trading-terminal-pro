@@ -118,7 +118,7 @@ export function PlumbingBarometer({
         <span className="mr-1 text-type-2xs text-muted-foreground">Hierarchy</span>
         {hierarchy.map((h, i) => (
           <span key={h.label} className="flex items-center gap-1">
-            {i > 0 && <span className="text-muted-foreground/50">→</span>}
+            {i > 0 && <span className="text-muted-foreground">→</span>}
             <span
               className="rounded border border-border/60 bg-background/40 px-1.5 py-0.5 text-type-2xs"
               title={h.hint}

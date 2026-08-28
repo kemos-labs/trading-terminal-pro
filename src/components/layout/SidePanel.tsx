@@ -89,7 +89,7 @@ export function SidePanel() {
                 {slice.dte}d
                 <span className="ml-0.5 opacity-70">{slice.expiry.slice(5)}</span>
                 {slice.atmIV > 0 && (
-                  <span className="ml-1 opacity-60">{fmtPct(slice.atmIV, 0)}</span>
+                  <span className="ml-1 opacity-80">{fmtPct(slice.atmIV, 0)}</span>
                 )}
               </button>
             ))}

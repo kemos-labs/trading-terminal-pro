@@ -55,36 +55,36 @@ function isMacroAllowed(suffix, method) {
   return false;
 }
 
-/** Per-route allowed query keys — unknown keys rejected (prevents cache-cardinality abuse). */
+/** Per-route allowed query keys — exactly matching FastAPI handlers (prevents cache-cardinality abuse). */
 const ROUTE_QUERY_ALLOW = [
   { re: /^\/health\/?$/, allow: new Set() },
   { re: /^\/api\/rates\/sofr\/?$/, allow: new Set() },
   { re: /^\/api\/rates\/summary\/?$/, allow: new Set() },
-  { re: /^\/api\/rates\/curve\/?$/, allow: new Set(['ticker','symbol']) },
+  { re: /^\/api\/rates\/curve\/?$/, allow: new Set() },
   { re: /^\/api\/rates\/shape\/?$/, allow: new Set(['history']) },
   { re: /^\/api\/rates\/term-structure\/?$/, allow: new Set(['T']) },
   { re: /^\/api\/rates\/plumbing\/?$/, allow: new Set() },
   { re: /^\/api\/rates\/basis\/?$/, allow: new Set() },
   { re: /^\/api\/rates\/basis-history\/?$/, allow: new Set(['limit']) },
-  { re: /^\/api\/rates\/curve-history\/?$/, allow: new Set(['periods','period']) },
+  { re: /^\/api\/rates\/curve-history\/?$/, allow: new Set(['periods']) },
   { re: /^\/api\/rates\/correlations\/?$/, allow: new Set(['window','period']) },
   { re: /^\/api\/rates\/jgb-curve\/?$/, allow: new Set(['compare_days']) },
   { re: /^\/api\/rates\/fx\/?$/, allow: new Set() },
   { re: /^\/api\/rates\/auctions\/?$/, allow: new Set(['limit']) },
   { re: /^\/api\/rates\/global-yields\/?$/, allow: new Set() },
   { re: /^\/api\/rates\/global-yields\/[^/]+\/?$/, allow: new Set() },
-  { re: /^\/api\/crypto\/spot\/?$/, allow: new Set(['symbol','ticker']) },
-  { re: /^\/api\/perp\/basis\/?$/, allow: new Set(['symbol']) },
-  { re: /^\/api\/sec\/context\/[^/]+\/?$/, allow: new Set(['limit','symbol']) },
+  { re: /^\/api\/crypto\/spot\/?$/, allow: new Set() },
+  { re: /^\/api\/perp\/basis\/?$/, allow: new Set() },
+  { re: /^\/api\/sec\/context\/[^/]+\/?$/, allow: new Set(['limit']) },
   { re: /^\/api\/macro\/summary\/?$/, allow: new Set() },
   { re: /^\/api\/macro\/series\/[^/]+\/?$/, allow: new Set(['limit']) },
   { re: /^\/api\/macro\/stress\/?$/, allow: new Set() },
   { re: /^\/api\/macro\/primary\/?$/, allow: new Set() },
-  { re: /^\/api\/stir\/strip\/?$/, allow: new Set(['period']) },
+  { re: /^\/api\/stir\/strip\/?$/, allow: new Set() },
   { re: /^\/api\/feed\/[^/]+\/?$/, allow: new Set() },
-  { re: /^\/api\/surface\/[^/]+\/?$/, allow: new Set(['ticker','symbol','r','q','strike_range']) },
-  { re: /^\/api\/surface\/[^/]+\/preview\/?$/, allow: new Set(['ticker','symbol','r','q','strike_range']) },
-  { re: /^\/api\/greeks\/[^/]+\/?$/, allow: new Set(['ticker','r','q','strike_range']) },
+  { re: /^\/api\/surface\/[^/]+\/?$/, allow: new Set(['r','q','strike_range']) },
+  { re: /^\/api\/surface\/[^/]+\/preview\/?$/, allow: new Set(['r','q']) },
+  { re: /^\/api\/greeks\/[^/]+\/?$/, allow: new Set(['r','q']) },
   { re: /^\/api\/greeks\/history\/[^/]+\/?$/, allow: new Set(['period']) },
 ];
 function allowedKeysForPath(path) {
@@ -99,19 +99,23 @@ function validateMacroQuery(suffix) {
   if (qIdx === -1) return { error: null, normalized: suffix };
   const path = suffix.slice(0, qIdx);
   const qs = suffix.slice(qIdx + 1);
+  // Catch malformed percent-encoding before URLSearchParams throws — return 400 not 500
+  try { decodeURIComponent(qs); } catch { return { error: 'malformed percent encoding', normalized: null }; }
   const allow = allowedKeysForPath(path);
   if (allow === null) return { error: 'unknown route', normalized: null };
   // Duplicate-key detection: raw string search before URLSearchParams dedupes
   const rawPairs = qs.split('&').filter(Boolean);
   const seen = new Set();
   for (const pair of rawPairs) {
-    const k = decodeURIComponent(pair.split('=')[0] || '').trim();
+    let k;
+    try { k = decodeURIComponent(pair.split('=')[0] || '').trim(); } catch { return { error: 'malformed percent encoding', normalized: null }; }
     if (!k) continue;
     if (seen.has(k)) return { error: `duplicate param ${k}`, normalized: null };
     seen.add(k);
     if (!allow.has(k)) return { error: `unknown param ${k}`, normalized: null };
   }
-  const params = new URLSearchParams(qs);
+  let params;
+  try { params = new URLSearchParams(qs); } catch { return { error: 'malformed percent encoding', normalized: null }; }
   for (const [k, v] of params) {
     if (v.length > 32) return { error: `param ${k} too long`, normalized: null };
     if (k === 'ticker' || k === 'symbol') {
@@ -119,7 +123,8 @@ function validateMacroQuery(suffix) {
     }
     if (k === 'limit') {
       const n = Number(v);
-      if (!Number.isInteger(n) || n < 1 || n > 2000) return { error: 'limit out of bounds', normalized: null };
+      const max = path.includes('/auctions') ? 50 : 2000;
+      if (!Number.isInteger(n) || n < 1 || n > max) return { error: 'limit out of bounds', normalized: null };
     }
     if (k === 'history') {
       const n = Number(v);
@@ -145,10 +150,18 @@ function validateMacroQuery(suffix) {
       const n = Number(v);
       if (!Number.isInteger(n) || n < 30 || n > 800) return { error: 'compare_days out of bounds', normalized: null };
     }
-    if (k === 'period' || k === 'periods') {
-      if (!/^(1mo|3mo|6mo|1y|2y|5y|10y|ytd|\d+[dmy])$/i.test(v) && !/^(1Y|6M|1M|3M)$/.test(v)) {
-        if (v.length > 8) return { error: `invalid period ${v}`, normalized: null };
+    if (k === 'period') {
+      const ALLOWED_PERIODS = new Set(['1d','5d','1mo','3mo','6mo','1y','2y','5y','10y','ytd','max']);
+      if (!ALLOWED_PERIODS.has(v)) return { error: `invalid period ${v}`, normalized: null };
+    }
+    if (k === 'periods') {
+      // Curve-history: 1W/1M/3M/6M/1Y/2Y or Nd (7-800 days) — strict
+      if (!/^(1W|1M|3M|6M|1Y|2Y)$/.test(v) && !/^(\d+)d$/i.test(v)) return { error: `invalid periods ${v}`, normalized: null };
+      if (/^(\d+)d$/i.test(v)) {
+        const n = parseInt(v, 10);
+        if (!Number.isFinite(n) || n < 7 || n > 800) return { error: `periods out of bounds ${v}`, normalized: null };
       }
+      if (v === 'garbage') return { error: `invalid periods ${v}`, normalized: null };
     }
   }
   // Normalize: sort keys alphabetically for stable cache key (prevents cardinality abuse via ordering)

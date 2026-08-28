@@ -95,7 +95,7 @@ export function HedgeWorkflow() {
           {mode === 'threshold' && <DeskField label="|Δ| trigger" value={threshold} onChange={setThreshold} step={0.01} />}
           {mode === 'tolerance' && <DeskField label="Band" value={tolerance} onChange={setTolerance} step={0.01} />}
           {mode === 'period' && <DeskField label="Every N steps" value={period} onChange={setPeriod} step={1} min={1} />}
-          <DeskField label="Realized vol" value={rv} onChange={setRv} step={0.01} />
+          <DeskField label="Implied vol (scenario)" value={rv} onChange={setRv} step={0.01} />
           <DeskField label="Opt qty (− short)" value={qty} onChange={setQty} step={1} />
         </>}
         print={<PrintStrip items={hedgeResult ? [
@@ -104,9 +104,10 @@ export function HedgeWorkflow() {
           { label: 'Max DD', value: fmtSigned(hedgeResult.maxDrawdown), tone: 'down' },
           { label: 'Avg |Δ|', value: hedgeResult.avgAbsNetDelta.toFixed(3) },
           { label: 'Strike', value: defaults.strike != null ? fmtPrice(defaults.strike) : '—' },
+          { label: 'Vol scenario', value: `${(rv*100).toFixed(1)}% implied (ATM IV)`, tone: 'muted' as const },
         ] : [{ label: 'Terminal PnL', value: '—', tone: 'muted' as const }]} />}
       >
-        <DeskChartFrame xTitle="Day" yTitle="PnL ($) · Net Δ" className="min-h-[220px]" header={<span className="text-muted-foreground">Δ-hedge — spot hedge instrument · observed-σ sim (seed 19)</span>}>
+        <DeskChartFrame xTitle="Day" yTitle="PnL ($) · Net Δ" className="min-h-[220px]" header={<span className="text-muted-foreground">Δ-hedge — spot hedge instrument · implied-vol scenario (seed 19) — not realized vol</span>}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={hedgeChart} margin={{ ...chrome.margin, right: 28 }}>
               <CartesianGrid {...chrome.grid} />
@@ -127,16 +128,17 @@ export function HedgeWorkflow() {
         controls={<>
           <DeskField label="Band" value={band} onChange={setBand} step={0.01} />
           <DeskField label="Option qty" value={fQty} onChange={setFQty} step={1} />
-          <DeskField label="Realized σ" value={fRv} onChange={setFRv} step={0.01} />
+          <DeskField label="Implied σ (scenario)" value={fRv} onChange={setFRv} step={0.01} />
         </>}
         print={<PrintStrip items={followResult ? [
           { label: 'Terminal PnL', value: fmtSigned(followResult.terminalPnl), tone: followResult.terminalPnl >= 0 ? 'up' : 'down' },
           { label: 'Trades', value: String(followResult.tradeCount) },
           { label: 'Max DD', value: fmtSigned(followResult.maxDrawdown), tone: 'down' },
           { label: 'Avg |Δ|', value: followResult.avgAbsNetDelta.toFixed(3) },
+          { label: 'Vol scenario', value: `${(fRv*100).toFixed(1)}% implied (ATM IV)`, tone: 'muted' as const },
         ] : [{ label: 'Terminal PnL', value: '—', tone: 'muted' as const }]} />}
       >
-        <DeskChartFrame xTitle="Day" yTitle="PnL ($) · Net Δ" className="min-h-[220px]" header={<span className="text-muted-foreground">Δ-follower — futures hedge · tolerance band (seed 33)</span>}>
+        <DeskChartFrame xTitle="Day" yTitle="PnL ($) · Net Δ" className="min-h-[220px]" header={<span className="text-muted-foreground">Δ-follower — futures hedge · tolerance band (seed 33) · implied-vol scenario</span>}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={followChart} margin={{ ...chrome.margin, right: 28 }}>
               <CartesianGrid {...chrome.grid} />
@@ -167,7 +169,7 @@ export function HedgeWorkflow() {
       >
         <DeskChartFrame
           xTitle="Time (DTE)" yTitle="Basis % · Ann. carry %" className="min-h-[220px]"
-          header={<span className="text-zinc-600">{basisCurve.hasMarketMarks ? 'Market F − S' : '(F−S)/S theo'} · (F/S−1)/T</span>}
+          header={<span className="text-zinc-400">{basisCurve.hasMarketMarks ? 'Market F − S' : '(F−S)/S theo'} · (F/S−1)/T</span>}
         >
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={basisChart} margin={{ ...chrome.margin, right: 36 }}>
@@ -197,7 +199,7 @@ export function HedgeWorkflow() {
         <div className="flex h-full min-h-0 flex-col bg-black/40">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-2 py-1 font-mono text-type-2xs text-muted-foreground">
             <span>Rows: <span className="text-foreground">spot shock %</span></span>
-            <span className="text-zinc-500">Roll / funding PnL</span>
+            <span className="text-zinc-400">Roll / funding PnL</span>
             <span>Cols: <span className="text-foreground">hold horizon (days)</span></span>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">

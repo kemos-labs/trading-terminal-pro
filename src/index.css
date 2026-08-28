@@ -80,7 +80,7 @@
   --secondary: oklch(0.165 0.006 80);
   --secondary-foreground: oklch(0.93 0.004 95);
   --muted: oklch(0.15 0.005 80);
-  --muted-foreground: oklch(0.66 0.01 95);
+  --muted-foreground: oklch(0.76 0.01 95);
   --border: oklch(0.26 0.008 80);
   --input: oklch(0.17 0.006 80);
   --ring: var(--brand);

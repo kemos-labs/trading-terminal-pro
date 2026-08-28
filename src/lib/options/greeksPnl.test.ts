@@ -36,19 +36,24 @@ describe('greeksPnl / BS foundation', () => {
       Math.abs(q.strike - snap.spot) < Math.abs(b.strike - snap.spot) ? q : b
     , slice.calls[0]!);
     const path = syntheticSpotPath(snap.spot, 20, 0.18, 5);
+    // Long entry uses ask (executable)
+    const ask = atm.ask ?? atm.mid ?? 5;
     const res = optionGreeksPnl(snap, {
       type: 'call',
       strike: atm.strike,
       expiry: slice.expiry,
       path,
+      entryPrice: ask,
+      entryBasis: 'ask',
     });
+    expect(res.available).toBe(true);
     expect(res.bars.length).toBe(path.length);
     expect(res.bars[0]!.pnl).toBe(0);
-    expect(Number.isFinite(res.terminalPnl)).toBe(true);
+    expect(res.terminalPnl != null && Number.isFinite(res.terminalPnl)).toBe(true);
     // Attribution should roughly sum to terminal
     const attr =
-      res.totalDelta + res.totalGamma + res.totalTheta + res.totalVega + res.totalResidual;
-    expect(attr).toBeCloseTo(res.terminalPnl, 4);
+      (res.totalDelta ?? 0) + (res.totalGamma ?? 0) + (res.totalTheta ?? 0) + (res.totalVega ?? 0) + (res.totalResidual ?? 0);
+    expect(attr).toBeCloseTo(res.terminalPnl as number, 4);
   });
 
   it('combo PnL attribution closes', () => {

@@ -79,13 +79,13 @@ export function CryptoVolatilityView() {
         <span className="rounded bg-muted px-2 py-1">As of: {new Date(bundle.fetchedAt).toISOString().slice(11, 19)}Z</span>
         <span className="rounded bg-muted px-2 py-1">Coverage {Math.round((bundle.coverage ?? 0) * 100)}% ({term.length} expiries)</span>
         {stale ? (
-          <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-700" title={`Snapshot from ${new Date(bundle.fetchedAt).toISOString()}`}>Stale</span>
+          <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400" title={`Snapshot from ${new Date(bundle.fetchedAt).toISOString()}`}>Stale</span>
         ) : partial ? (
-          <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-700" title={`${withIvCount}/${term.length} expiries have observed ATM IV`}>Partial</span>
+          <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400" title={`${withIvCount}/${term.length} expiries have observed ATM IV`}>Partial</span>
         ) : (
           <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-700" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()}`}>Observed</span>
         )}
-        {showModel && <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-700">Model</span>}
+        {showModel && <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Model</span>}
         <button onClick={() => setShowModel(v => !v)} className="ml-auto rounded border px-2 py-1 text-xs hover:bg-muted" aria-pressed={showModel}>
           {showModel ? 'Hide model diagnostics' : 'Show model diagnostics'}
         </button>

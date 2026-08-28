@@ -161,16 +161,25 @@ export function optionGreeksPnl(
     pathProvenance?: 'observed-history' | 'scenario-synthetic';
     /** Override IV; else surface */
     iv?: number;
+    /** Explicit executable entry price: long→ask, short→bid; null forces unavailable */
+    entryPrice?: number | null;
+    entryBasis?: 'ask' | 'bid' | 'mid' | 'last' | 'user' | null;
   },
 ): GreeksPnlSeries {
+  const side = opts.side ?? 'long';
+  const hasExplicit = opts.entryPrice !== undefined;
+  const entryPrice = hasExplicit ? (opts.entryPrice ?? null) : null;
+  // Fail-closed: no silent 0 — explicit executable price required
+  const entryBasis = hasExplicit ? (opts.entryBasis ?? null) : null;
   const leg: PortfolioLeg = {
     id: '1',
     kind: opts.type,
-    side: opts.side ?? 'long',
+    side,
     qty: opts.qty ?? 1,
     strike: opts.strike,
     expiry: opts.expiry,
-    entryPrice: 0,
+    entryPrice,
+    entryBasis,
     iv: opts.iv,
   };
   return comboGreeksPnl([leg], snap, opts.path, opts.pathProvenance);

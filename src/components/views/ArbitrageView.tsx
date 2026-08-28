@@ -276,7 +276,7 @@ export function ArbitrageView() {
         yTitle="DTE"
         className="relative min-h-0 flex-1"
         header={
-          <span className="text-type-2xs text-zinc-500">
+          <span className="text-type-2xs text-zinc-400">
             Arb · {mode}
           </span>
         }

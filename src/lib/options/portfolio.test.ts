@@ -31,9 +31,11 @@ describe('portfolio / combo', () => {
 
   it('finds break-evens for long straddle', () => {
     const legs = templateLegs('long_straddle', snap, 0);
-    const bes = breakEvenSpots(legs, snap.spot, 0.7, 1.3, 500);
-    expect(bes.length).toBeGreaterThanOrEqual(1);
+    const beRes = breakEvenSpots(legs, snap.spot, 0.7, 1.3, 500);
+    expect(beRes.available).toBe(true);
+    expect(beRes.breakEvens.length).toBeGreaterThanOrEqual(1);
     // Payoff at deep ITM call side should be positive for long straddle
-    expect(comboPayoffAtExpiry(legs, snap.spot * 1.5)).toBeGreaterThan(0);
+    const payoff = comboPayoffAtExpiry(legs, snap.spot * 1.5);
+    expect(payoff != null && payoff > 0).toBe(true);
   });
 });

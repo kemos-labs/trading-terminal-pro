@@ -65,7 +65,7 @@ export function PanelToolbar({
         aria-label="Panel toolbar"
       >
         {/* Panel back/forward chrome (visual only — single panel v1) */}
-        <span className="hidden text-muted-foreground/50 sm:inline" aria-hidden>
+        <span className="hidden text-muted-foreground sm:inline" aria-hidden>
           ◂ ▸
         </span>
 
@@ -134,7 +134,7 @@ export function PanelToolbar({
           )}
         </div>
 
-        <span className="ml-1 hidden truncate text-muted-foreground/60 lg:inline">
+        <span className="ml-1 hidden truncate text-muted-foreground lg:inline">
           {label}
         </span>
 

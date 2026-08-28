@@ -44,7 +44,8 @@ export function StrategyBuilderStrip({ className }: { className?: string }) {
 
   const bes = useMemo(() => {
     if (!snapshot || !legs.length) return [];
-    return breakEvenSpots(legs, snapshot.spot, 0.7, 1.3, 300).slice(0, 3);
+    const res = breakEvenSpots(legs, snapshot.spot, 0.7, 1.3, 300);
+    return res.available ? res.breakEvens.slice(0, 3) : [];
   }, [snapshot, legs]);
 
   if (!snapshot) {
@@ -100,7 +101,7 @@ export function StrategyBuilderStrip({ className }: { className?: string }) {
         Legs:{' '}
         {legs.map((l) => (
           <span key={l.id} className="mr-2">
-            {l.side} {l.qty} {l.kind} {l.strike} @ {fmtPrice(l.entryPrice)}
+            {l.side} {l.qty} {l.kind} {l.strike} @ {l.entryPrice != null ? fmtPrice(l.entryPrice) : 'Unavailable'}
           </span>
         ))}
         {bes.length > 0 && (

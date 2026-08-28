@@ -53,9 +53,9 @@ export function DataBadge({
         down={down}
       />
       {source && <span className="text-muted-foreground/90">{source}</span>}
-      {source && asOf && <span className="opacity-50">·</span>}
+      {source && asOf && <span className="opacity-80">·</span>}
       {asOf && <span className="tabular-nums">{formatRelative(asOf)}</span>}
-      {note && <span className="opacity-60">· {note}</span>}
+      {note && <span className="opacity-80">· {note}</span>}
     </div>
   );
 }

@@ -48,7 +48,7 @@ export function CryptoFlowView() {
         <span className="rounded bg-muted px-2 py-1">Coverage {trades.length} trades</span>
         <span className="rounded bg-muted px-2 py-1">As of {asOf ? new Date(asOf).toISOString().slice(11, 19) + 'Z' : '—'}</span>
         {stale
-          ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-700">Stale</span>
+          ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Stale</span>
           : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-700" title={`Deribit snapshot ${asOf ? new Date(asOf).toISOString() : ''}`}>Observed</span>}
       </div>
       <div className="rounded border">

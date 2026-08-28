@@ -83,9 +83,9 @@ export function CryptoPositioningView() {
           Greeks: Black-Scholes @ observed mark IV
         </span>
         {stale ? (
-          <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-700">Stale</span>
+          <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Stale</span>
         ) : gexComputable < matrix.flat().length ? (
-          <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-700" title={`${gexComputable}/${matrix.flat().length} cells computable (need OI + observed IV)`}>Partial</span>
+          <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400" title={`${gexComputable}/${matrix.flat().length} cells computable (need OI + observed IV)`}>Partial</span>
         ) : (
           <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-700" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()}`}>Observed</span>
         )}

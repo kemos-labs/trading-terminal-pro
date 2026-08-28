@@ -58,7 +58,7 @@ export function SofrFuturesCurve({
         <span className="font-mono text-type-xs font-semibold tracking-wide text-zinc-100">
           3 MONTH SOFR FUTURE · YIELD
         </span>
-        <span className="font-mono text-type-2xs text-zinc-500">
+        <span className="font-mono text-type-2xs text-zinc-400">
           Sep24→Dec30 · white = live · blue = prior · settled = FRED SOFR · USD %
         </span>
       </div>

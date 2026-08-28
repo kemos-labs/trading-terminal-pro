@@ -234,9 +234,9 @@ export function TerminalHeader({ onOpenShortcuts }: TerminalHeaderProps) {
             title="Desk clocks: New York · London · Tokyo"
           >
             NY {zoneClock('America/New_York', clock)}
-            <span className="text-muted-foreground/50"> · </span>
+            <span className="text-muted-foreground"> · </span>
             LDN {zoneClock('Europe/London', clock)}
-            <span className="text-muted-foreground/50"> · </span>
+            <span className="text-muted-foreground"> · </span>
             TYO {zoneClock('Asia/Tokyo', clock)}
           </span>
           <span className="hidden tabular-nums text-muted-foreground sm:inline">{fmtClock(clock)}</span>

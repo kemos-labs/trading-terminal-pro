@@ -60,7 +60,7 @@ export function PlaybackBar() {
       </span>
 
       <span 
-        className="text-muted-foreground/50"
+        className="text-muted-foreground"
         id="frame-counter"
         aria-live="polite"
       >

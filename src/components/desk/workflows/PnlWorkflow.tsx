@@ -56,7 +56,12 @@ export function PnlWorkflow() {
   useEffect(() => { setOStrike(oDefaultStrike); }, [oDefaultStrike]);
   const oSeries = useMemo(() => {
     if (!oSlice) return null;
-    return optionGreeksPnl(snapshot, { type: oType, strike: oStrike, expiry: oSlice.expiry, side: oSide, path });
+    const list = oType === 'call' ? oSlice.calls : oSlice.puts;
+    const q = list.find(x => x.strike === oStrike);
+    const exec = q ? (oSide === 'long' ? q.ask : q.bid) : null;
+    const basis = oSide === 'long' ? 'ask' as const : 'bid' as const;
+    // Require explicit executable price; null → unavailable (never 0)
+    return optionGreeksPnl(snapshot, { type: oType, strike: oStrike, expiry: oSlice.expiry, side: oSide, path, entryPrice: exec ?? null, entryBasis: exec != null ? basis : null });
   }, [snapshot, oType, oStrike, oSlice, oSide, path]);
   const oChart = oSeries?.bars.map((b) => ({ t: b.dateLabel, pnl: b.pnl, mark: b.mark, delta: b.cumDelta, gamma: b.cumGamma, theta: b.cumTheta })) ?? [];
   const oDomain = tightDomain(oChart.flatMap((r) => [r.pnl, r.delta, r.theta]), 0.08, { includeZero: true });
@@ -77,13 +82,14 @@ export function PnlWorkflow() {
   const sMark = useMemo(() => evaluateCombo(sLegs, snapshot), [sLegs, snapshot]);
   const sBe = useMemo(() => analyzeComboBreakEven(sLegs, snapshot.spot), [sLegs, snapshot]);
   const sStrike = sLegs[0]?.strike ?? snapshot.spot;
-  const sCallMid = sLegs.find((l) => l.kind === 'call')?.entryPrice ?? 0;
-  const sPutMid = sLegs.find((l) => l.kind === 'put')?.entryPrice ?? 0;
-  const sStrBe = straddleBreakEvens(sStrike, sCallMid, sPutMid, sSide);
+  const sCallExec = sLegs.find((l) => l.kind === 'call')?.entryPrice;
+  const sPutExec = sLegs.find((l) => l.kind === 'put')?.entryPrice;
+  const hasExec = sCallExec != null && sPutExec != null && Number.isFinite(sCallExec) && Number.isFinite(sPutExec);
+  const sStrBe = hasExec ? straddleBreakEvens(sStrike, sCallExec as number, sPutExec as number, sSide) : null;
   const sSeries = useMemo(() => comboGreeksPnl(sLegs, snapshot, path), [sLegs, snapshot, path]);
   const sPnlChart = sSeries.bars.map((b) => ({ t: b.dateLabel, pnl: b.pnl, delta: b.cumDelta, theta: b.cumTheta }));
-  const sPayoffChart = sBe.payoffCurve.map((p) => ({ spot: p.spot, pnl: p.pnl }));
-  const sBeDomain = tightDomain(sPayoffChart.map((r) => r.pnl), 0.08, { includeZero: true });
+  const sPayoffChart = sBe.available ? sBe.payoffCurve.filter(p => p.pnl != null).map((p) => ({ spot: p.spot, pnl: p.pnl as number })) : [];
+  const sBeDomain = sPayoffChart.length ? tightDomain(sPayoffChart.map((r) => r.pnl), 0.08, { includeZero: true }) : ([-1, 1] as [number, number]);
   const sPnlDomain = tightDomain(sPnlChart.flatMap((r) => [r.pnl, r.delta, r.theta]), 0.08, { includeZero: true });
 
   // ── D: break-even matrix ───────────────────────────────────────────
@@ -216,11 +222,19 @@ export function PnlWorkflow() {
         </>}
         print={<PrintStrip items={[
           { label: 'K', value: fmtPrice(sStrike, sStrike > 1000 ? 0 : 2) },
-          { label: 'Premium', value: fmtPrice(sStrBe.totalPremium) },
-          { label: 'BE lo', value: fmtPrice(sStrBe.lower, sStrBe.lower > 1000 ? 0 : 2) },
-          { label: 'BE hi', value: fmtPrice(sStrBe.upper, sStrBe.upper > 1000 ? 0 : 2) },
-          { label: 'Mark Δ', value: fmtSigned(sMark.greeks.delta, 3), title: 'delta' },
-          { label: 'Mark ν', value: fmtSigned(sMark.greeks.vega, 2), title: 'vega' },
+          ...(sStrBe ? [
+            { label: 'Premium', value: fmtPrice(sStrBe.totalPremium) },
+            { label: 'BE lo', value: fmtPrice(sStrBe.lower, sStrBe.lower > 1000 ? 0 : 2) },
+            { label: 'BE hi', value: fmtPrice(sStrBe.upper, sStrBe.upper > 1000 ? 0 : 2) },
+          ] : [
+            { label: 'Premium', value: 'Unavailable', tone: 'muted' as const },
+            { label: 'BE lo', value: 'Unavailable', tone: 'muted' as const },
+            { label: 'BE hi', value: 'Unavailable', tone: 'muted' as const },
+          ]),
+          ...(sMark && !sMark.unavailable ? [
+            { label: 'Mark Δ', value: fmtSigned(sMark.greeks.delta, 3), title: 'delta' },
+            { label: 'Mark ν', value: fmtSigned(sMark.greeks.vega, 2), title: 'vega' },
+          ] : [{ label: 'Mark', value: 'Unavailable', tone: 'muted' as const }]),
           ...(sMode === 'pnl' ? [{ label: 'Path', value: pathSrc, tone: 'muted' as const }] : []),
         ]} />}
       >
@@ -234,9 +248,9 @@ export function PnlWorkflow() {
                 <Tooltip contentStyle={chrome.tooltipStyle} />
                 <ReferenceLine y={0} stroke={DESK_SERIES.zero} />
                 <ReferenceLine x={snapshot.spot} stroke={DESK_SERIES.spot} strokeDasharray="3 3" />
-                <ReferenceLine x={sStrBe.lower} stroke={CHART_GREEK.delta} strokeDasharray="2 2" />
-                <ReferenceLine x={sStrBe.upper} stroke={CHART_GREEK.delta} strokeDasharray="2 2" />
-                <Area type="monotone" dataKey="pnl" stroke={DESK_SERIES.combo} fill={DESK_SERIES.combo} fillOpacity={0.2} name="Payoff" />
+                {sStrBe && <ReferenceLine x={sStrBe.lower} stroke={CHART_GREEK.delta} strokeDasharray="2 2" />}
+                {sStrBe && <ReferenceLine x={sStrBe.upper} stroke={CHART_GREEK.delta} strokeDasharray="2 2" />}
+                {sBe.available ? <Area type="monotone" dataKey="pnl" stroke={DESK_SERIES.combo} fill={DESK_SERIES.combo} fillOpacity={0.2} name="Payoff" /> : <text x="50%" y="50%" textAnchor="middle" fill="var(--muted-foreground)" fontSize={12}>Unavailable — missing executable premium</text>}
               </ComposedChart>
             </ResponsiveContainer>
           </DeskChartFrame>
@@ -349,7 +363,7 @@ export function PnlWorkflow() {
       {/* F — Scenario Monte Carlo (NOT historical backtest) */}
       <DeskToolShell
         controls={<>
-          <span className="self-center font-mono text-type-2xs text-amber-600" title="Scenario model with user-controlled vol; not a historical backtest with provenance">Scenario Monte Carlo — synthetic GBM · not Historical Backtest</span>
+          <span className="self-center font-mono text-type-2xs text-amber-400" title="Scenario model with user-controlled vol; not a historical backtest with provenance">Scenario Monte Carlo — synthetic GBM · not Historical Backtest</span>
           <DeskField label="Weeks" value={weeks} onChange={setWeeks} step={1} min={1} max={26} />
           <DeskField label="Realized σ" value={rv} onChange={setRv} step={0.01} />
         </>}

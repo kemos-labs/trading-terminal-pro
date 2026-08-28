@@ -232,7 +232,7 @@ export function CommandLine({
           'min-w-0 flex-1 bg-transparent font-mono outline-none',
           redbar
             ? 'px-1 text-type-2xs text-white placeholder:text-white/40'
-            : 'px-2 text-type-sm text-foreground placeholder:text-muted-foreground/50',
+            : 'px-2 text-type-sm text-foreground placeholder:text-muted-foreground',
         )}
         autoComplete="off"
         spellCheck={false}

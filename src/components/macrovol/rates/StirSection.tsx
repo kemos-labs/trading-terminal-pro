@@ -326,7 +326,7 @@ export function StirSection({
                         : ''
                     }`}
                   >
-                    <span className={`truncate ${c.source === 'settled' ? 'text-zinc-500' : 'text-muted-foreground'}`}>
+                    <span className={`truncate ${c.source === 'settled' ? 'text-zinc-400' : 'text-muted-foreground'}`}>
                       {c.month}
                       {c.source === 'settled' ? ' · set' : ''}
                     </span>
@@ -473,7 +473,7 @@ export function StirSection({
                   {/* Fill leftover with a compact continuum strip so the panel isn't empty */}
                   {liveTsy.length > 0 && liveTsy.length < 10 && (
                     <div className="mt-auto border-t border-border/50 px-1.5 py-1 font-mono text-type-2xs text-muted-foreground">
-                      <div className="mb-0.5 text-type-2xs uppercase tracking-wide text-zinc-500">
+                      <div className="mb-0.5 text-type-2xs uppercase tracking-wide text-zinc-400">
                         Curve continuum (last)
                       </div>
                       <div className="grid grid-cols-3 gap-1 sm:grid-cols-6">

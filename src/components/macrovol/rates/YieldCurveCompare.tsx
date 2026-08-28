@@ -131,10 +131,10 @@ export function YieldCurveCompare({
         <span className="font-mono text-type-xs font-semibold tracking-wide text-zinc-100">
           {chartTitle}
           {compareLoading ? (
-            <span className="ml-2 font-normal text-zinc-500">· loading…</span>
+            <span className="ml-2 font-normal text-zinc-400">· loading…</span>
           ) : null}
         </span>
-        <span className="font-mono text-type-2xs text-zinc-500">
+        <span className="font-mono text-type-2xs text-zinc-400">
           {sourceHint
             || `${source || 'FRED'} · white = live · blue = compare · ${currencyLabel} %`}
         </span>
@@ -230,7 +230,7 @@ export function YieldCurveCompare({
         </ResponsiveContainer>
       </DeskChartFrame>
 
-      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 border-t border-zinc-800 px-1 pt-1 font-mono text-type-2xs text-zinc-500">
+      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 border-t border-zinc-800 px-1 pt-1 font-mono text-type-2xs text-zinc-400">
         {rows.map((p) => {
           const d =
             p.delta_bps != null

@@ -21,7 +21,6 @@ const BtcView = lazy(() => import('../views/BtcView').then(m => ({ default: m.Bt
 export const INDEPENDENT_TABS: ReadonlySet<ActiveTab> = new Set([
   'rates',
   'crypto',
-  'desk',
   'academy',
   'ksa',
   'home',
@@ -29,7 +28,7 @@ export const INDEPENDENT_TABS: ReadonlySet<ActiveTab> = new Set([
 
 export function renderDeskView(tab: ActiveTab, loading: boolean): ReactNode {
   if (loading && !INDEPENDENT_TABS.has(tab)) {
-    const testId = tab === 'vol' ? 'vol-structure-view' : tab === 'positioning' ? 'positioning-view' : tab === 'rates' ? 'rates-view' : undefined;
+    const testId = tab === 'vol' ? 'vol-structure-view' : tab === 'positioning' ? 'positioning-view' : tab === 'desk' ? 'trade-structure-workflow' : tab === 'rates' ? 'rates-view' : undefined;
     return <div data-testid={testId} className="h-full"><DeskLoading message="Building chain surface…" /></div>;
   }
 

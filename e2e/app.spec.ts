@@ -237,7 +237,6 @@ for (const vp of VIEWPORTS) {
         await mockAll(page);
         const errors: string[] = [];
         const pageErrors: string[] = [];
-        page.on('response', (response) => { if (response.url().includes('/api/')) console.log(`E2E_API ${response.status()} ${response.url()}`); });
         page.on('console', (msg) => {
           if (msg.type() !== 'error') return;
           const txt = msg.text();

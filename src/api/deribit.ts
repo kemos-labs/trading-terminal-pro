@@ -38,6 +38,14 @@ export interface NormalizedTicker {
   bidIv: number | null;
   askIv: number | null;
   markIv: number | null;
+  /** Venue-reported mark IV (observed feed layer), decimal. */
+  feedIv: number | null;
+  /** IV solved from executable mid/bid/ask prices; null until solved. */
+  midIv: number | null;
+  bidIvDerived: number | null;
+  askIvDerived: number | null;
+  /** Fitted/model IV, never substituted for an observed venue IV. */
+  modelIv: number | null;
   indexPrice: number | null;
   openInterest: number | null;
   volume: number | null;

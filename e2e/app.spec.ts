@@ -114,6 +114,15 @@ async function mockAll(page: import('@playwright/test').Page) {
   await page.route('**/api/options/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(yResp) });
   });
+  await page.route('**/api/desk/pack**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'SPY', timestamp: Date.now(), spot: 500, quotes: [], source: 'test-empty' }) });
+  });
+  await page.route('**/api/yf/history/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'SPY', data: [] }) });
+  });
+  await page.route('**/api/yf/info/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'SPY', data: {} }) });
+  });
   await page.route('**/api/fmp/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) });
   });
@@ -202,6 +211,22 @@ async function mockAll(page: import('@playwright/test').Page) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'SPY', spot: 500, close: 500, period: '1mo', points: [] }) });
     }
   });
+  // Exact success-path mocks for legacy equity bootstrap calls. These are
+  // registered last so they take precedence over the generic upstream route.
+  await page.route(/\/api\/desk\/pack(?:\?|$)/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ...yResp,
+      symbol: 'SPY',
+      timestamp: Date.now(),
+      source: 'test-fixture',
+    }) });
+  });
+  await page.route(/\/api\/yf\/(?:history|info)\//, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'SPY', close: 500, spot: 500, points: [] }) });
+  });
+  await page.route(/\/api\/options\//, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(yResp) });
+  });
 }
 
 for (const vp of VIEWPORTS) {
@@ -212,6 +237,7 @@ for (const vp of VIEWPORTS) {
         await mockAll(page);
         const errors: string[] = [];
         const pageErrors: string[] = [];
+        page.on('response', (response) => { if (response.url().includes('/api/')) console.log(`E2E_API ${response.status()} ${response.url()}`); });
         page.on('console', (msg) => {
           if (msg.type() !== 'error') return;
           const txt = msg.text();
@@ -233,7 +259,7 @@ for (const vp of VIEWPORTS) {
         // Overflow 0
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
         expect(overflow, `overflow at ${vp.name} ${desk.id}`).toBe(0);
-        // No console errors at all (except whitelisted 404/favicon)
+        // Success-path mocks must be clean; unexpected console errors fail.
         expect(errors, `console errors at ${vp.name} ${desk.id}: ${errors.join('; ')}`).toEqual([]);
         // No uncaught page errors — toUpperCase, Cannot read, etc must be 0
         expect(pageErrors, `page errors at ${vp.name} ${desk.id}: ${pageErrors.join('; ')}`).toEqual([]);

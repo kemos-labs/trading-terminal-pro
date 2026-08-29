@@ -1,4 +1,17 @@
 import { describe, it, expect } from 'vitest';
+import React from 'react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { StructureWorkflow } from './StructureWorkflow';
+import { PnlWorkflow } from './PnlWorkflow';
+import { HedgeWorkflow } from './HedgeWorkflow';
+import { useTerminalStore } from '../../../store/terminalStore';
+
+class TestResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver;
 import { buildSnapshot } from '../../../lib/options/synthetic';
 import { templateLegs, breakEvenSpots, comboPayoffAtExpiry, evaluateCombo } from '../../../lib/options/portfolio';
 import { comboGreeksPnl, optionGreeksPnl, syntheticSpotPath } from '../../../lib/options/greeksPnl';
@@ -7,8 +20,34 @@ import { simulateDeltaHedge } from '../../../lib/options/hedging';
 import { priceGreeksMarket } from '../../../lib/math/adapters';
 
 describe('Trade workflows — behavior (not export existence)', () => {
-  it('keeps all three rendered workflow roots present in the product contract', () => {
-    expect(['trade-structure-workflow', 'trade-pnl-workflow', 'trade-hedge-workflow']).toHaveLength(3);
+  it('renders Structure controls and updates the selected template', () => {
+    useTerminalStore.setState({ snapshot: snap, symbol: 'SPY' });
+    render(<StructureWorkflow />);
+    expect(screen.getByTestId('trade-structure-workflow')).toBeInTheDocument();
+    const template = screen.getAllByLabelText('Template')[0]!;
+    fireEvent.change(template, { target: { value: 'long_call' } });
+    expect(template).toHaveValue('long_call');
+  });
+
+  it('renders PnL controls and changes the observed option side', () => {
+    useTerminalStore.setState({ snapshot: snap, symbol: 'SPY' });
+    render(<PnlWorkflow />);
+    expect(screen.getByTestId('trade-pnl-workflow')).toBeInTheDocument();
+    const side = screen.getAllByLabelText('Side')[0]!;
+    fireEvent.change(side, { target: { value: 'short' } });
+    expect(side).toHaveValue('short');
+    expect(screen.getAllByText(/Historical|Scenario/).length).toBeGreaterThan(0);
+  });
+
+  it('renders Hedge controls and exposes the path-vol scenario label', () => {
+    useTerminalStore.setState({ snapshot: snap, symbol: 'SPY', fundingAnn: null });
+    render(<HedgeWorkflow />);
+    expect(screen.getByTestId('trade-hedge-workflow')).toBeInTheDocument();
+    expect(screen.getAllByText(/Path vol scenario/).length).toBeGreaterThan(0);
+    const mode = screen.getAllByLabelText('Mode')[0]!;
+    fireEvent.change(mode, { target: { value: 'period' } });
+    expect(mode).toHaveValue('period');
+    expect(screen.getByLabelText('Every N steps')).toBeInTheDocument();
   });
   const snap = buildSnapshot('SPY', Date.now(), 500, 0.05, 0.01);
 

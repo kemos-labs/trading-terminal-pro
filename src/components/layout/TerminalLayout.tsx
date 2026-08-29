@@ -129,7 +129,9 @@ export function TerminalLayout() {
       void s.setSource('live');
     }
     const tab = s.activeTab as string;
-    const chainDependent = ['vol', 'positioning'].includes(tab);
+    // Trade workflows price real legs and therefore need the same observed
+    // option chain as Vol/Positioning before rendering their controls.
+    const chainDependent = ['vol', 'positioning', 'desk'].includes(tab);
     if (chainDependent && !s.snapshot && s.lastChainUpdate === 0) {
       void setSymbol(s.symbol || 'SPY');
     }

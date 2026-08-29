@@ -14,6 +14,9 @@ import { registerDeribitMarketRoutes } from './routes/deribitMarket.js';
 import { registerFreeCryptoMarketRoutes } from './routes/freeCryptoMarket.js';
 import { registerMacrovolRoutes } from './routes/macrovol.js';
 import { registerSseRoutes } from './routes/sse.js';
+import { registerEquityFeedsRoutes } from './routes/equityFeeds.js';
+import { registerDeskFeedRoutes } from './routes/deskFeeds.js';
+import { registerAcademyDocsRoutes } from './routes/academyDocs.js';
 import { registerStripeBilling, gateInfoForRequest } from '../api/stripeBilling.js';
 import { registerStripeAuth } from '../api/authRoutes.js';
 import { resolveProxyTrust } from '../api/proxyTrust.js';
@@ -239,14 +242,16 @@ export async function buildServer() {
   // Health + cache status
   fastify.get('/api/health', async () => ({ status: 'ok', timestamp: Date.now() }));
   fastify.get('/api/cache/status', async () => ({ status: 'ok', ...cacheStats() }));
-
   // Routes
   registerBootRoutes(fastify);
   registerFmpRoutes(fastify);
   registerSseRoutes(fastify);
+  registerEquityFeedsRoutes(fastify);
+  registerDeskFeedRoutes(fastify);
   await registerDeribitMarketRoutes(fastify);
   await registerFreeCryptoMarketRoutes(fastify);
   await registerMacrovolRoutes(fastify);
+  await registerAcademyDocsRoutes(fastify);
   registerFlashalphaRoutes(fastify);
   registerKsaRoutes(fastify);
   registerOpraRoutes(fastify);
@@ -263,8 +268,11 @@ export async function buildServer() {
   } catch (err) { console.error('static register failed', err); }
 
   fastify.setNotFoundHandler((request, reply) => {
-    const path = (request.url || '').split('?')[0];
-    if (path.startsWith('/assets/') || path.startsWith('/api')) { reply.code(404).send({ error: 'Not found', path }); return; }
+    // Decode percent-encoding so %2e%2e traversal shapes cannot slip through to
+    // the SPA fallback; they are rejected, never silently served.
+    let path = (request.url || '').split('?')[0];
+    try { path = decodeURIComponent(path); } catch { reply.code(400).send({ error: 'Bad path' }); return; }
+    if (path.startsWith('/assets/') || path.startsWith('/api') || path.startsWith('/docs') || path.includes('..')) { reply.code(404).send({ error: 'Not found', path }); return; }
     return reply.sendFile('index.html');
   });
 

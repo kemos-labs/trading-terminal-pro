@@ -1,0 +1,205 @@
+/**
+ * Equity chain + yfinance enrichment routes — restored (Phase 1).
+ * Recovers the registered-but-deleted handlers for /api/options, /api/yf/* that
+ * the Vol/Positioning/Trade desks call on first use. Deletion happened during the
+ * server decomposition (5a6e8d0); implementations recovered from 64c90fa/166dd08.
+ *
+ * Data rules: real yfinance/FMP data or typed fail-closed errors — never synthetic.
+ * Quota: one upstream fill per cache key + TTL via shared upstreamCache (single-flight).
+ */
+import { execFile as execFileImpl } from 'node:child_process';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { getOrFetch, peek, TTL } from '../../api/upstreamCache.js';
+import { validateSymbol } from '../validation.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Indirection point for the upstream process boundary. Tests override this to
+ * stub the yfinance python fetchers deterministically (process spawns are not
+ * interceptable in-band). Production always uses the real execFile.
+ */
+export const __testHooks = { execFile: execFileImpl };
+const runProc = (...args) => __testHooks.execFile(...args);
+
+function runOptionsFetcher(symbol, maxArg) {
+  return new Promise((resolve, reject) => {
+    const args = [join(__dirname, '../../fetch_options.py'), symbol];
+    if (maxArg) args.push(String(maxArg));
+    // yfinance often needs 45–90s for multi-expiry equity chains.
+    runProc('python3', args, { timeout: maxArg ? 30_000 : 90_000 }, (err, stdout, stderr) => {
+      const tryParse = (raw) => {
+        if (!raw) return null;
+        try {
+          const data = JSON.parse(String(raw).trim().split('\n').filter(Boolean).pop());
+          if (data && !data.error && Array.isArray(data.quotes)) return data;
+          if (data?.error) return { __err: data.error };
+        } catch { /* fall through */ }
+        return null;
+      };
+      const parsed = tryParse(stdout);
+      if (parsed && !parsed.__err) return resolve(parsed);
+      if (err) {
+        const detail = parsed?.__err || stderr || stdout?.slice(0, 500) || err.message;
+        return reject(new Error(detail));
+      }
+      if (parsed?.__err) return reject(new Error(parsed.__err));
+      reject(new Error('Invalid response from data fetcher'));
+    });
+  });
+}
+
+/** yfinance enrichment runner (history/info) — same JSON-on-stdout contract. */
+function runYf(symbol, mode) {
+  return new Promise((resolve, reject) => {
+    runProc('python3', [join(__dirname, '../../fetch_yf.py'), symbol, mode], { timeout: 60_000 }, (err, stdout, stderr) => {
+      // Accept JSON even if yfinance wrote rate-limit noise to stderr.
+      try {
+        const line = String(stdout || '').trim().split('\n').filter(Boolean).pop();
+        if (line) {
+          const data = JSON.parse(line);
+          if (!data.error) return resolve(data);
+          return reject(new Error(data.error));
+        }
+      } catch { /* fall through to err */ }
+      if (err) {
+        const detail = stderr || stdout?.slice(0, 500) || err.message;
+        return reject(new Error(detail));
+      }
+      reject(new Error('Invalid response from yfinance fetcher'));
+    });
+  });
+}
+
+export function registerEquityFeedsRoutes(fastify) {
+  // Option chain — backs Vol/Positioning/Trade first paint.
+  fastify.get('/api/options/:symbol', async (request, reply) => {
+    const symbol = validateSymbol(request.params.symbol);
+    if (!symbol) {
+      reply.code(400);
+      return { error: 'Invalid symbol' };
+    }
+    const { probe, max: maxStr } = request.query ?? {};
+    const isProbe = probe === '1' || probe === 'true';
+    const max = parseInt(maxStr, 10);
+    const maxArg = Number.isFinite(max) && max > 0 ? Math.min(max, 12) : null;
+    const cacheKey = `options:${symbol}:${maxArg || 'full'}`;
+
+    try {
+      // Stale shared chain still serves while a refresh is in flight (SWR).
+      const stale = peek(cacheKey);
+      if (stale && Date.now() - stale.timestamp < TTL.OPTIONS_MS) {
+        if (isProbe) {
+          const contracts = Array.isArray(stale.data?.quotes) ? stale.data.quotes.length : 0;
+          return { available: contracts >= 10, contracts, fromCache: true };
+        }
+        return { ...stale.data, _cache: { hit: true, ageMs: Date.now() - stale.timestamp } };
+      }
+
+      const { data: result, fromCache, ageMs } = await getOrFetch(
+        cacheKey,
+        isProbe ? TTL.OPTIONS_PROBE_MS : TTL.OPTIONS_MS,
+        () => runOptionsFetcher(symbol, maxArg),
+        { allowStaleOnError: true },
+      );
+
+      const contracts = Array.isArray(result.quotes) ? result.quotes.length : 0;
+      // Fail closed on an empty payload — an empty 200 would read as "no options today".
+      if (!isProbe && (!Number.isFinite(Number(result.spot)) || Number(result.spot) <= 0 || contracts === 0)) {
+        const err = new Error('Empty chain payload from provider');
+        err.empty = true;
+        throw err;
+      }
+      if (isProbe) return { available: contracts >= 10, contracts, fromCache };
+      return { ...result, _cache: { hit: fromCache, ageMs } };
+    } catch (err) {
+      // Empty payloads are not cached as success — allow a later retry.
+      if (err?.empty) { reply.code(502); return { error: 'No option chain for symbol', detail: err.message }; }
+      console.error('API endpoint error:', err);
+      reply.code(502);
+      return { error: 'Failed to fetch data', detail: err.message };
+    }
+  });
+
+  // yfinance history — RV/realized-vol and price-history fallback.
+  fastify.get('/api/yf/history/:symbol', async (request, reply) => {
+    const symbol = validateSymbol(request.params.symbol);
+    if (!symbol) {
+      reply.code(400);
+      return { error: 'Invalid symbol' };
+    }
+    try {
+      const { data } = await getOrFetch(`yf:history:${symbol}`, TTL.YF_ENRICH_MS, () => runYf(symbol, 'history'), { allowStaleOnError: true });
+      return data;
+    } catch (err) {
+      reply.code(502);
+      return { error: 'Failed to fetch yfinance history', detail: err.message };
+    }
+  });
+
+  // yfinance info — profile/quote fallback when FMP is unkeyed.
+  fastify.get('/api/yf/info/:symbol', async (request, reply) => {
+    const symbol = validateSymbol(request.params.symbol);
+    if (!symbol) {
+      reply.code(400);
+      return { error: 'Invalid symbol' };
+    }
+    try {
+      const { data } = await getOrFetch(`yf:info:${symbol}`, TTL.YF_ENRICH_MS, () => runYf(symbol, 'info'), { allowStaleOnError: true });
+      return data;
+    } catch (err) {
+      reply.code(502);
+      return { error: 'Failed to fetch yfinance info', detail: err.message };
+    }
+  });
+
+  fastify.get('/api/history/spy', async (request, reply) => {
+    try {
+      const yf = await runYf('SPY', 'history');
+      const bars = Array.isArray(yf?.bars) ? yf.bars : [];
+      const sorted = bars
+        .map((b) => ({ date: String(b.date ?? ''), close: Number(b.close) }))
+        .filter((b) => b.date && Number.isFinite(b.close) && b.close > 0)
+        .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+      if (sorted.length < 20) {
+        reply.code(502);
+        return { error: 'No live SPY history (yfinance)', symbol: 'SPY', data: [], source: 'none' };
+      }
+      const data = [];
+      for (let i = 0; i < sorted.length; i++) {
+        const close = sorted[i].close;
+        const prev = i > 0 ? sorted[i - 1].close : close;
+        const ret = prev > 0 ? (close - prev) / prev : 0;
+        let vix = null;
+        if (i >= 20) {
+          let sum = 0;
+          let sum2 = 0;
+          for (let j = i - 19; j <= i; j++) {
+            const p0 = sorted[j - 1] ? sorted[j - 1].close : sorted[j].close;
+            const r = p0 > 0 ? Math.log(sorted[j].close / p0) : 0;
+            sum += r;
+            sum2 += r * r;
+          }
+          const mean = sum / 20;
+          const var_ = Math.max(0, sum2 / 20 - mean * mean);
+          vix = Math.min(80, Math.max(8, Math.sqrt(var_ * 252) * 100));
+        }
+        data.push({
+          date: sorted[i].date,
+          close: Math.round(close * 100) / 100,
+          return: Math.round(ret * 100000) / 100000,
+          logReturn: Math.round(Math.log(1 + ret) * 100000) / 100000,
+          // Derived realized-vol proxy (20d) — labelled derived at consumers; null until 20 observations.
+          vix: vix != null ? Math.round(vix * 10) / 10 : null,
+        });
+      }
+      return { symbol: 'SPY', data, source: 'yfinance' };
+    } catch (err) {
+      reply.code(502);
+      return { error: 'Failed to fetch live SPY history', detail: err.message, symbol: 'SPY', data: [], source: 'none' };
+    }
+  });
+}
+
+

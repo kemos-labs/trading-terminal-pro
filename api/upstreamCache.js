@@ -155,6 +155,12 @@ export function peek(key) {
   return touch(key);
 }
 
+/** Test hook — drop every cached entry and in-flight promise (isolation). */
+export function clearCacheForTests() {
+  store.clear();
+  inflight.clear();
+}
+
 export function setCache(key, data) {
   setEntry(key, { data, timestamp: Date.now() });
 }

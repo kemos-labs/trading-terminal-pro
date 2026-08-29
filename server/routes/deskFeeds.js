@@ -1,0 +1,360 @@
+/**
+ * Desk feed routes — restored (Phase 1).
+ * Recovers /api/finnhub/quote|news, /api/alphavantage/quote, /api/tradingview/snapshot,
+ * /api/desk/pack and /api/venues/options/:currency — all registered routes that
+ * Home/Feeds, Academy news and the crypto venue strip call. Implementations
+ * recovered from 64c90fa/166dd08/656b9c9 (deleted during decomposition).
+ *
+ * Rules: all upstream calls server-side, budgeted, cached, single-flight.
+ * Keys never leave the server. Fail-closed typed errors — never synthetic prices.
+ */
+import { getOrFetch, peek, TTL, budgetAllows, monthBudgetAllows, recordBudget, ALPHA_VANTAGE_FREE_DAILY, getBudgetUsed, getMonthBudgetUsed } from '../../api/upstreamCache.js';
+import { validateSymbol } from '../validation.js';
+
+const FINNHUB_BASE = 'https://finnhub.io/api/v1';
+const AV_BASE = 'https://www.alphavantage.co/query';
+const OKX_BASE = 'https://www.okx.com';
+const BYBIT_BASE = 'https://api.bybit.com';
+
+function finnhubKey() { return process.env.FINNHUB_API_KEY || null; }
+
+function finnhubDate(d = new Date()) { return d.toISOString().slice(0, 10); }
+
+async function finnhubGet(path, params = {}) {
+  const key = finnhubKey();
+  if (!key) {
+    const err = new Error('FINNHUB_API_KEY not configured');
+    err.code = 'no_api_key';
+    throw err;
+  }
+  const u = new URL(`${FINNHUB_BASE}${path}`);
+  for (const [k, v] of Object.entries(params)) {
+    if (v != null && v !== '') u.searchParams.set(k, String(v));
+  }
+  u.searchParams.set('token', key);
+  const res = await fetch(u.toString(), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
+  recordBudget('finnhub', 1);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Finnhub HTTP ${res.status}: ${body.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+/** Deribit totals from the book summary (public, keyless). */
+async function deribitOptionsSummary(ccy) {
+  try {
+    const { deribitFetch } = await import('../providers/deribit/client.js');
+    const result = await deribitFetch(`get_book_summary_by_currency?currency=${ccy}&kind=option`);
+    const list = Array.isArray(result) ? result : [];
+    if (!list.length) return null;
+    let volCcy = 0, volUsd = 0, openIntCcy = 0, instruments = 0;
+    for (const s of list) {
+      instruments += 1;
+      volCcy += Number(s.volume) || 0;
+      volUsd += Number(s.volume_usd) || 0;
+      openIntCcy += Number(s.open_interest) || 0; // contracts (Deribit summary field)
+    }
+    return { venue: 'Deribit', instruments, volCcy24h: volCcy, volUsd24h: volUsd, openIntContracts: openIntCcy, fetchedAt: Date.now() };
+  } catch { return null; }
+}
+
+/** Sum OKX option tickers (public, keyless). */
+async function okxOptionsSummary(ccy) {
+  try {
+    const res = await fetch(`${OKX_BASE}/api/v5/market/tickers?instType=OPTION&instFamily=${ccy}-USD`, { signal: AbortSignal.timeout(8_000) });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const list = Array.isArray(json?.data) ? json.data : [];
+    if (!list.length) return null;
+    let volCcy = 0, volUsd = 0, openIntCcy = 0, instruments = 0;
+    for (const t of list) {
+      instruments += 1;
+      volCcy += Number(t.volCcy24h) || 0; // base-ccy notional
+      volUsd += Number(t.volUsd24h) || 0;
+      openIntCcy += Number(t.openInt) || 0;
+    }
+    // OKX OI lives on a separate public endpoint (per-instrument rows).
+    try {
+      const oiRes = await fetch(`${OKX_BASE}/api/v5/public/open-interest?instType=OPTION&instFamily=${ccy}-USD`, { signal: AbortSignal.timeout(8_000) });
+      if (oiRes.ok) {
+        const oiJson = await oiRes.json();
+        const oiRows = Array.isArray(oiJson?.data) ? oiJson.data : [];
+        let oiCcySum = 0;
+        for (const r of oiRows) oiCcySum += Number(r.oiCcy) || 0;
+        if (oiCcySum > 0) openIntCcy = oiCcySum;
+      }
+    } catch { /* tickers fallback already applied */ }
+    return { venue: 'OKX', instruments, volCcy24h: volCcy, volUsd24h: volUsd, openIntContracts: openIntCcy, fetchedAt: Date.now() };
+  } catch { return null; }
+}
+
+/** Sum Bybit option tickers (public, keyless). */
+async function bybitOptionsSummary(ccy) {
+  try {
+    const res = await fetch(`${BYBIT_BASE}/v5/market/tickers?category=option&baseCoin=${ccy}`, { signal: AbortSignal.timeout(8_000) });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const list = Array.isArray(json?.result?.list) ? json.result.list : [];
+    if (!list.length) return null;
+    let volCcy = 0, openIntCcy = 0, instruments = 0;
+    for (const t of list) {
+      instruments += 1;
+      volCcy += Number(t.volume24h) || 0; // base-ccy contracts (1 = 1 ccy on Bybit)
+      openIntCcy += Number(t.openInterest) || 0;
+    }
+    return { venue: 'Bybit', instruments, volCcy24h: volCcy, openIntCcy, fetchedAt: Date.now() };
+  } catch { return null; }
+}
+
+export function registerDeskFeedRoutes(fastify) {
+  fastify.get('/api/finnhub/quote', async (request, reply) => {
+    const raw = String(request.query?.symbol || 'SPY').toUpperCase();
+    const symbol = validateSymbol(raw) || 'SPY';
+    try {
+      const { data, fromCache, ageMs } = await getOrFetch(`finnhub:quote:${symbol}`, TTL.FINNHUB_QUOTE_MS, async () => {
+        const q = await finnhubGet('/quote', { symbol });
+        const price = Number(q?.c);
+        return {
+          symbol,
+          price: price > 0 ? price : null,
+          change: q?.d != null ? Number(q.d) : null,
+          change_pct: q?.dp != null ? Number(q.dp) : null,
+          high: q?.h != null ? Number(q.h) : null,
+          low: q?.l != null ? Number(q.l) : null,
+          open: q?.o != null ? Number(q.o) : null,
+          previous_close: q?.pc != null ? Number(q.pc) : null,
+          as_of: new Date().toISOString(),
+          source: 'Finnhub',
+          error: price > 0 ? null : 'empty',
+          note: 'Shared desk quote · server budget · not per-visitor.',
+        };
+      }, { allowStaleOnError: true });
+      return { ...data, fromCache, ageMs };
+    } catch (err) {
+      if (err?.code === 'no_api_key' || String(err?.message || '').includes('not configured')) {
+        reply.code(503);
+        return { symbol, price: null, error: 'no_api_key', source: 'Finnhub', note: 'Set FINNHUB_API_KEY. Fail-closed.' };
+      }
+      reply.code(502);
+      return { symbol, price: null, error: err.message, source: 'Finnhub', note: 'Finnhub quote failed. No synthetic price.' };
+    }
+  });
+
+  fastify.get('/api/finnhub/news', async (request, reply) => {
+    const raw = String(request.query?.symbol || 'SPY').toUpperCase();
+    const symbol = validateSymbol(raw) || 'SPY';
+    const limit = Math.min(30, Math.max(1, parseInt(String(request.query?.limit || '12'), 10) || 12));
+    // Fail closed when unconfigured — an empty 200 would misread as "no news today".
+    if (!finnhubKey()) {
+      reply.code(503);
+      return { symbol, items: [], count: 0, error: 'no_api_key', source: 'Finnhub', note: 'Headlines unavailable without FINNHUB_API_KEY. Fail-closed.' };
+    }
+    const cacheKey = `finnhub:news:${symbol}:${limit}`;
+    try {
+      const { data, fromCache, ageMs } = await getOrFetch(cacheKey, TTL.FINNHUB_NEWS_MS, async () => {
+        const to = new Date();
+        const from = new Date(to.getTime() - 14 * 24 * 3600 * 1000);
+        let company = [];
+        try {
+          const rows = await finnhubGet('/company-news', { symbol, from: finnhubDate(from), to: finnhubDate(to) });
+          company = Array.isArray(rows) ? rows : [];
+        } catch { company = []; }
+        let general = [];
+        try {
+          const rows = await finnhubGet('/news', { category: 'general' });
+          general = Array.isArray(rows) ? rows : [];
+        } catch { general = []; }
+        const mapItem = (n, related) => ({
+          id: n.id ?? `${n.datetime}-${n.headline}`,
+          datetime: n.datetime ?? null,
+          headline: n.headline || '',
+          summary: n.summary || '',
+          source: n.source || '',
+          url: n.url || null,
+          related: related || n.related || '',
+          category: n.category || '',
+        });
+        const items = [
+          ...company.slice(0, limit).map((n) => mapItem(n, symbol)),
+          ...general.slice(0, Math.max(0, limit - Math.min(company.length, limit))).map((n) => mapItem(n, 'MARKET')),
+        ]
+          .filter((n) => n.headline)
+          .slice(0, limit);
+        return {
+          symbol,
+          items,
+          count: items.length,
+          as_of: new Date().toISOString(),
+          source: 'Finnhub',
+          note: items.length ? 'Company + general headlines. Not trade advice.' : 'No headlines returned (rate limit or empty).',
+          error: items.length ? null : 'empty',
+        };
+      }, { allowStaleOnError: true });
+      return { ...data, fromCache, ageMs };
+    } catch (err) {
+      if (err?.code === 'no_api_key') {
+        reply.code(503);
+        return { symbol, items: [], count: 0, error: 'no_api_key', source: 'Finnhub', note: 'Headlines unavailable without FINNHUB_API_KEY. Fail-closed.' };
+      }
+      reply.code(502);
+      return { symbol, items: [], count: 0, error: 'Finnhub news failed', detail: err.message, source: 'Finnhub' };
+    }
+  });
+
+  fastify.get('/api/alphavantage/quote', async (request, reply) => {
+    const raw = String(request.query?.symbol || 'SPY').toUpperCase();
+    const symbol = validateSymbol(raw) || 'SPY';
+    const key = process.env.ALPHA_VANTAGE_API_KEY || process.env.ALPHAVANTAGE_API_KEY || null;
+    if (!key) {
+      reply.code(503);
+      return { symbol, price: null, error: 'no_api_key', source: 'Alpha Vantage', note: 'Set ALPHA_VANTAGE_API_KEY. Fail-closed.' };
+    }
+    if (!budgetAllows('alphavantage', ALPHA_VANTAGE_FREE_DAILY, 0.85)) {
+      const stale = peek(`av:quote:${symbol}`);
+      if (stale) {
+        reply.header('X-Cache', 'STALE-BUDGET');
+        return { ...stale.data, fromCache: true, ageMs: Date.now() - stale.timestamp };
+      }
+      reply.code(429);
+      return { symbol, price: null, error: 'budget_exhausted', cap: ALPHA_VANTAGE_FREE_DAILY, used: getBudgetUsed('alphavantage'), source: 'Alpha Vantage' };
+    }
+    try {
+      const { data, fromCache, ageMs } = await getOrFetch(`av:quote:${symbol}`, TTL.ALPHA_VANTAGE_MS, async () => {
+        const u = new URL(AV_BASE);
+        u.searchParams.set('function', 'GLOBAL_QUOTE');
+        u.searchParams.set('symbol', symbol);
+        u.searchParams.set('apikey', key);
+        const res = await fetch(u.toString(), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20_000) });
+        recordBudget('alphavantage', 1);
+        if (!res.ok) throw new Error(`Alpha Vantage HTTP ${res.status}`);
+        const json = await res.json();
+        if (json?.Note || json?.Information) throw new Error(String(json.Note || json.Information));
+        const g = json?.['Global Quote'] ?? {};
+        const price = Number(g['05. price']);
+        return {
+          symbol,
+          price: price > 0 ? price : null,
+          change: g['09. change'] != null ? Number(g['09. change']) : null,
+          change_pct: g['10. change percent'] != null ? parseFloat(g['10. change percent']) : null,
+          as_of: new Date().toISOString(),
+          source: 'Alpha Vantage',
+          error: price > 0 ? null : 'empty',
+        };
+      }, { allowStaleOnError: true });
+      return { ...data, fromCache, ageMs };
+    } catch (err) {
+      reply.code(502);
+      return { symbol, price: null, error: 'Alpha Vantage quote failed', detail: err.message, source: 'Alpha Vantage' };
+    }
+  });
+
+  fastify.get('/api/tradingview/snapshot', async (request, reply) => {
+    const raw = String(request.query?.symbol || 'SPY').toUpperCase();
+    const symbol = validateSymbol(raw) || 'SPY';
+    const key = process.env.RAPIDAPI_KEY || process.env.X_RAPIDAPI_KEY || null;
+    if (!key) {
+      reply.code(503);
+      return { symbol, price: null, error: 'no_api_key', source: 'TradingView RapidAPI', note: 'Set RAPIDAPI_KEY. Fail-closed.' };
+    }
+    const host = process.env.RAPIDAPI_TV_HOST || 'tradingview-data1.p.rapidapi.com';
+    if (!monthBudgetAllows('tradingview', 150, 0.9)) {
+      const stale = peek(`tv:snap:${symbol}`);
+      if (stale) {
+        reply.header('X-Cache', 'STALE-BUDGET');
+        return { ...stale.data, fromCache: true };
+      }
+      reply.code(429);
+      return { symbol, price: null, error: 'budget_exhausted', cap: 150, used: getMonthBudgetUsed('tradingview'), source: 'TradingView RapidAPI' };
+    }
+    try {
+      const { data, fromCache } = await getOrFetch(`tv:snap:${symbol}`, TTL.TRADINGVIEW_MS, async () => {
+        const u = `https://${host}/symbols/get-tick-raw?symbol=${encodeURIComponent(symbol)}`;
+        const res = await fetch(u, {
+          headers: { 'x-rapidapi-host': host, 'x-rapidapi-key': key, Accept: 'application/json' },
+          signal: AbortSignal.timeout(15_000),
+        });
+        recordBudget('tradingview', 1);
+        if (!res.ok) throw new Error(`TradingView HTTP ${res.status}`);
+        const json = await res.json();
+        const price = Number(json?.close ?? json?.last_price ?? json?.lp);
+        return {
+          symbol,
+          price: Number.isFinite(price) && price > 0 ? price : null,
+          as_of: new Date().toISOString(),
+          source: 'TradingView RapidAPI',
+          error: null,
+        };
+      }, { allowStaleOnError: true });
+      return { ...data, fromCache };
+    } catch (err) {
+      reply.code(502);
+      return { symbol, price: null, error: 'TradingView snapshot failed', detail: err.message, source: 'TradingView RapidAPI' };
+    }
+  });
+
+  // Shared desk pack — one call per client refresh; every field from shared cache.
+  fastify.get('/api/desk/pack', async (request, reply) => {
+    const symbol = validateSymbol(String(request.query?.symbol || 'SPY')) || 'SPY';
+    try {
+      const base = `http://127.0.0.1:${fastify.server?.address()?.port ?? (process.env.PORT || '3001')}`;
+      const avQuotePeek = peek(`av:quote:${symbol}`);
+      const avDailyPeek = peek(`av:daily:${symbol}:40`) || peek(`av:daily:${symbol}:60`);
+      const tvPeek = peek(`tv:snap:${symbol}`) || peek('tv:snap:SPY');
+
+      const [fhQuote, fhNews, cache] = await Promise.all([
+        fetch(`${base}/api/finnhub/quote?symbol=${symbol}`).then((r) => r.json()).catch((e) => ({ error: e.message })),
+        fetch(`${base}/api/finnhub/news?symbol=${symbol}&limit=6`).then((r) => r.json()).catch((e) => ({ error: e.message })),
+        fetch(`${base}/api/cache/status`).then((r) => r.json()).catch(() => null),
+      ]);
+
+      let avQuote = avQuotePeek ? { ...avQuotePeek.data, fromCache: true, ageMs: Date.now() - avQuotePeek.timestamp } : null;
+      let avDaily = avDailyPeek ? { ...avDailyPeek.data, fromCache: true, ageMs: Date.now() - avDailyPeek.timestamp } : null;
+      let tv = tvPeek ? { ...tvPeek.data, fromCache: true, ageMs: Date.now() - tvPeek.timestamp } : null;
+
+      // Optional fill only if warmer has not yet run and budget remains (1 AV call max here).
+      if (!avQuote && budgetAllows('alphavantage', ALPHA_VANTAGE_FREE_DAILY, 0.85)) {
+        avQuote = await fetch(`${base}/api/alphavantage/quote?symbol=${symbol}`).then((r) => r.json()).catch((e) => ({ error: e.message, source: 'Alpha Vantage' }));
+      }
+      if (!tv && process.env.RAPIDAPI_KEY) {
+        tv = { price: null, error: 'awaiting_warmer', note: 'TradingView fills on server warmer (~few times/day). Not used for rates.', source: 'TradingView RapidAPI' };
+      }
+
+      return {
+        symbol,
+        finnhub_quote: fhQuote,
+        alphavantage_quote: avQuote,
+        alphavantage_daily: avDaily,
+        finnhub_news: fhNews,
+        tradingview: tv,
+        budgets: cache?.budgets || null,
+        keys: cache?.keys || null,
+        as_of: new Date().toISOString(),
+        note: 'Shared desk pack · Finnhub live-cached · AV/TV from server board (warmer-owned).',
+      };
+    } catch (err) {
+      reply.code(502);
+      return { error: err.message, note: 'Desk pack failed.' };
+    }
+  });
+
+  // Multi-venue options aggregation (public endpoints, no keys).
+  fastify.get('/api/venues/options/:currency', async (request, reply) => {
+    const currency = String(request.params.currency || 'BTC').toUpperCase();
+    if (currency !== 'BTC' && currency !== 'ETH') {
+      reply.code(400);
+      return { error: 'currency must be BTC or ETH' };
+    }
+    try {
+      const { data } = await getOrFetch(`venues:options:${currency}`, 30_000, async () => {
+        const venues = (await Promise.all([deribitOptionsSummary(currency), okxOptionsSummary(currency), bybitOptionsSummary(currency)])).filter(Boolean);
+        if (!venues.length) throw new Error('All venue summaries unavailable');
+        return { currency, venues, fetchedAt: Date.now() };
+      }, { allowStaleOnError: true });
+      return data;
+    } catch (err) {
+      reply.code(502);
+      return { error: 'Venue aggregation failed', detail: err.message };
+    }
+  });
+}

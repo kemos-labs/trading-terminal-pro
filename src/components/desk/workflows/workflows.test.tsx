@@ -30,9 +30,13 @@ describe('Trade workflows — behavior (not export existence)', () => {
   });
 
   it('renders observed midpoint and Model price as separate provenance fields', () => {
-    useTerminalStore.setState({ snapshot: snap, symbol: 'SPY' });
+    const noMid = buildSnapshot('SPY-NOMID', Date.now(), 500, 0.05, 0.01);
+    noMid.expiries.forEach((expiry) => [...expiry.calls, ...expiry.puts].forEach((quote) => { quote.mid = null; }));
+    useTerminalStore.setState({ snapshot: noMid, symbol: 'SPY-NOMID' });
     render(<StructureWorkflow />);
-    expect(screen.getAllByText(/Obs:/).length).toBeGreaterThan(0);
+    const provenance = screen.getAllByTestId(/grid-provenance-/);
+    expect(provenance.length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Obs: Unavailable/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Model:/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Observed midpoint.*Model price/)).toBeNull();
   });

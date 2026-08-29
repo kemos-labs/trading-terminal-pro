@@ -24,6 +24,17 @@ const VIEWPORTS = [
 const WORKFLOWS = ['overview', 'volatility', 'positioning', 'flow', 'carry', 'trade-risk'];
 
 async function mockDeribit(page) {
+  // Keep the success path network-clean: every request used by the shell is mocked.
+  // Failure-state tests below intentionally override the Deribit route with 502.
+  await page.route('**/favicon.ico', async (route) => await route.fulfill({ status: 204, body: '' }));
+  await page.route('**/api/auth/me', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: null }) }));
+  await page.route('**/api/billing/config', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: false }) }));
+  await page.route('**/api/options/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'SPY', spot: null, expirations: [], quotes: [], timestamp: Date.now() }) }));
+  await page.route('**/api/desk/pack**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'SPY', spot: null, quotes: [], timestamp: Date.now(), source: 'test-empty' }) }));
+  await page.route('**/api/yf/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'SPY', data: [] }) }));
+  await page.route('**/api/fmp/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) }));
+  await page.route('**/api/macrovol/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) }));
+
   const instrumentsOption = loadFixture('get_instruments.option.json');
   const instrumentsFuture = loadFixture('get_instruments.future.json');
   const catalogue = [...instrumentsOption, ...instrumentsFuture];

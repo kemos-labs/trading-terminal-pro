@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+
+// Virtualized positioning rows retain keyboard-accessible list semantics.
 import { buildSnapshot } from '../../lib/options/synthetic';
 
 describe('Positioning OI coverage — row and aggregate', () => {

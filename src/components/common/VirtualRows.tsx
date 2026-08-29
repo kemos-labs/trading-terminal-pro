@@ -41,7 +41,7 @@ export function VirtualRows<T>({
   }) => {
     const item = data[index];
     if (item === undefined) return null;
-    return <>{renderRow({ index, style, item })}</>;
+    return <div role="listitem" style={style}>{renderRow({ index, style: {}, item })}</div>;
   };
 
   return (
@@ -52,6 +52,8 @@ export function VirtualRows<T>({
         rowHeight={rowHeight}
         rowProps={{ data: items } as never}
         overscanCount={overscanCount}
+        tabIndex={0}
+        aria-label="Scrollable rows"
         style={{ height: '100%', width: '100%' }}
       />
     </div>

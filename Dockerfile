@@ -15,9 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Python: yfinance (equity chains) + MacroVol (rates/FRED)
-COPY macrovol-api/requirements.txt /tmp/macrovol-requirements.txt
-RUN pip3 install --no-cache-dir --break-system-packages \
-    -r /tmp/macrovol-requirements.txt \
+# Hashed, fully resolved lock is the production dependency authority.
+COPY macrovol-api/requirements.lock /tmp/macrovol-requirements.lock
+RUN pip3 install --no-cache-dir --break-system-packages --require-hashes \
+    -r /tmp/macrovol-requirements.lock \
     && python3 -c "import yfinance, fastapi, uvicorn; print('python ok')"
 
 # Node deps (cached layer)

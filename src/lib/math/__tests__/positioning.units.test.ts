@@ -18,6 +18,7 @@ describe('positioning units and provenance', () => {
     expect(total.gex).toBe(0);
     expect(total.dex).toBe(1000);
     expect(total.coverageState).toBe('observed');
+    expect(aggregateExposure(rows, r => r.optionType === 'put' ? -1 : 1).perRow.map(r => r.gex)).toEqual([10, -10]);
     expect(total.vanna).toBe(0);
     expect(total.charm).toBe(0);
   });

@@ -71,7 +71,7 @@ export function CryptoPositioningView() {
         return row.gamma * signOf(cell) * cell.openInterest * spot * spot * 0.01;
       });
       if (exposures.some(v => v == null) || !exposures.length) return null;
-      return exposures.reduce((sum, value) => sum + (value ?? 0), 0);
+      return exposures.reduce<number>((sum, value) => sum + (value ?? 0), 0);
     }),
   );
 

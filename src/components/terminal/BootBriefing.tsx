@@ -106,6 +106,14 @@ export function BootBriefing({ heavyReady, onEnter }: BootBriefingProps) {
     return () => window.clearTimeout(id);
   }, [heavyReady, enter]);
 
+  // Provider-failure escape hatch: even with heavyReady stuck false, auto-enter
+  // after 6s so a dead equity chain can never trap the user on the landing.
+  useEffect(() => {
+    if (heavyReady) return;
+    const id = window.setTimeout(enter, 6_000);
+    return () => window.clearTimeout(id);
+  }, [heavyReady, enter]);
+
   // ⏎ enters from anywhere.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

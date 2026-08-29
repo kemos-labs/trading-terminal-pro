@@ -12,6 +12,7 @@ export {
   CRYPTO_SECTIONS,
   TRADE_SECTIONS,
   ACADEMY_SECTIONS,
+  KSA_SECTIONS,
   TAB_LABELS,
   tabLabel,
   sectionsForTab,

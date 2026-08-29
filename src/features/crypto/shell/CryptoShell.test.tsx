@@ -28,7 +28,7 @@ describe('CryptoShell V2', () => {
 
   it('shows global asset/venue strip and provenance', () => {
     render(<CryptoShell />);
-    expect(screen.getByText(/VOLATERM/)).toBeInTheDocument();
+    expect(screen.getByText(/CRYPTO/)).toBeInTheDocument();
     expect(screen.getByText(/BTC.*deribit/i)).toBeInTheDocument();
     expect(screen.getByText(/Source: Deribit/)).toBeInTheDocument();
   });

@@ -13,7 +13,8 @@ import {
   fetchFmpEarnings,
   invalidateFmpCache,
 } from '../lib/data/fmpClient';
-import { fetchYfHistory, fetchYfInfo, invalidateYfCache } from '../lib/data/yfinanceClient';
+import { fetchYfHistory, fetchYfInfo, fetchYfInfoRaw, invalidateYfCache } from '../lib/data/yfinanceClient';
+// yfinance info fallback keeps spot honest when FMP is unconfigured (see refresh loop)
 import { invalidateYahooChainCache } from '../lib/options/yahoo';
 import { invalidateDeribitCache } from '../lib/data/deribitClient';
 import { getProvider, LiveProvider, type ChainMode } from '../lib/data/provider';
@@ -216,8 +217,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   activeTab: (() => {
     try {
       const d = new URLSearchParams(window.location.search).get('desk');
-      return (['home', 'vol', 'positioning', 'rates', 'ksa', 'academy', 'desk', 'crypto'].includes(d ?? '') ? d : 'vol') as ActiveTab;
-    } catch { return 'vol' as ActiveTab; }
+      return (['home', 'vol', 'positioning', 'rates', 'ksa', 'academy', 'desk', 'crypto'].includes(d ?? '') ? d : 'home') as ActiveTab;
+    } catch { return 'home' as ActiveTab; }
   })(),
   displayMode: 'strike',
   selectedExpiry: null,
@@ -499,10 +500,30 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const needChain = now - state.lastChainUpdate >= chainCadence || state.lastChainUpdate === 0;
 
     // When SSE is connected, skip poll-based spot (stream owns lastSpotUpdate).
-    if (needSpot && !state.streamConnected) {
+    if (needSpot && !state.streamConnected && state.spotSource !== 'yfinance') {
       const spotSym = state.symbol.toUpperCase();
       try {
         const quotes = await fetchFmpQuote(state.symbol);
+        // FMP unkeyed/down → one-time yfinance quote fallback (observed delayed print).
+        if ((!quotes || quotes.length === 0) && state.spotSource === 'none') {
+          const info = await fetchYfInfoRaw(state.symbol);
+          const price = Number(info?.lastPrice ?? NaN);
+          if (Number.isFinite(price) && price > 0) {
+            const prevKind = get().provenance.spot?.kind;
+            const spotProv = makeProvenance('spot', 'yfinance', now, {
+              previousKind: prevKind,
+            });
+            set({
+              fmpSpot: price,
+              liveAvailable: true,
+              lastSpotUpdate: now,
+              lastUpdate: now,
+              spotSource: 'yfinance',
+              provenance: { ...get().provenance, spot: spotProv },
+            });
+          }
+          return; // yfinance fallback cadence is slower; let next cycle decide
+        }
         // Drop stale poll replies (symbol switched while quote was in flight).
         if (get().symbol.toUpperCase() === spotSym && quotes && quotes.length > 0) {
           const q = quotes[0]!;

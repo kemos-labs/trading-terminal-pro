@@ -31,7 +31,6 @@ import {
   setDisplayStripEnabled,
 } from '../../lib/market/shellPrefs';
 import { DeskViewGate } from './renderDeskView';
-import { LaunchpadGrid } from '../terminal/LaunchpadGrid';
 import { useAccountStore } from '../../store/accountStore';
 
 /**
@@ -52,15 +51,22 @@ export function TerminalLayout() {
   const [cmdFocusToken, setCmdFocusToken] = useState(0);
   const [urlHydrated, setUrlHydrated] = useState(false);
   /** First-open chain briefing — only for chain-dependent desks (vol/positioning). Independent desks (crypto/rates/ksa/academy/trade) never wait for equity chain. */
+  // Boot briefing only on explicit first-visit without a desk deep link;
+  // never gates independent desks and never blocks a failed chain (manual Enter).
   const [bootOpen, setBootOpen] = useState(() => {
-    const tab = useTerminalStore.getState().activeTab as string;
-    const independent = ['crypto', 'rates', 'ksa', 'academy', 'home'].includes(tab);
-    return independent ? false : true;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const desk = params.get('desk');
+      if (desk || params.get('view') || params.get('sec')) return false;
+      // Returning users (session flag) skip the landing entirely.
+      if (sessionStorage.getItem('boot.seen') === '1') return false;
+      return true;
+    } catch { return true; }
   });
   const heavyReady = Boolean(snapshot && chainAvailable && lastChainUpdate > 0) || (!loading && lastChainUpdate > 0);
-  // Make independent desks never block on chain: they are ready immediately.
-  const isIndependentDesk = ['crypto', 'rates', 'ksa', 'academy', 'home'].includes(activeTab as string);
-  const effectiveBootOpen = isIndependentDesk ? false : bootOpen;
+  // The landing must never hold the user hostage on a provider failure: cap the
+  // briefing's auto-enter wait at 6s regardless of chain readiness.
+  const effectiveBootOpen = bootOpen;
 
   const jumpSection = useCallback((dir: 1 | -1) => {
     const tab = useTerminalStore.getState().activeTab;
@@ -313,17 +319,7 @@ export function TerminalLayout() {
         aria-label={(activeTab as unknown as string) === 'academy' ? 'Academy publication' : (activeTab as unknown as string) === 'home' ? 'Home launchpad' : 'Function area'}
         id={`panel-${activeTab}`}
       >
-        {(activeTab as unknown as string) === 'home' ? (
-          <div className="h-full overflow-auto p-3">
-            <div className="mx-auto max-w-5xl">
-              <h1 className="mb-1 font-mono text-sm font-bold uppercase tracking-wider">Home — Launchpad</h1>
-              <p className="mb-3 font-mono text-type-2xs text-muted-foreground">Function codes · desks · no synthetic market data. Use LPAD or Cmd+K.</p>
-              <LaunchpadGrid />
-            </div>
-          </div>
-        ) : (
-          <DeskViewGate tab={activeTab as never} loading={loading} />
-        )}
+        <DeskViewGate tab={activeTab as never} loading={loading} />
       </main>
 
       {displayStripOn && <SidePanel />}
@@ -348,6 +344,7 @@ export function TerminalLayout() {
         <BootBriefing
           heavyReady={heavyReady}
           onEnter={() => {
+            try { sessionStorage.setItem('boot.seen', '1'); } catch { /* ignore */ }
             setBootOpen(false);
           }}
         />

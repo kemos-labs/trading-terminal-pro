@@ -62,6 +62,11 @@ export async function fetchYfHistory(symbol: string, ttl = 3_600_000): Promise<F
   return bars.length > 0 ? bars : null;
 }
 
+/** Raw yfinance info incl. observed last print (lastPrice) — used for spot fallback. */
+export async function fetchYfInfoRaw(symbol: string, ttl = 60_000): Promise<Record<string, unknown> | null> {
+  return yfGet<Record<string, unknown>>(`info/${encodeURIComponent(symbol)}`, ttl);
+}
+
 /** Fundamentals from yfinance, normalised to the FmpProfile shape. */
 export async function fetchYfInfo(symbol: string, ttl = 86_400_000): Promise<FmpProfile | null> {
   const data = await yfGet<Record<string, unknown>>(`info/${encodeURIComponent(symbol)}`, ttl);

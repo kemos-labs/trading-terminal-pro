@@ -95,10 +95,10 @@ describe('BootBriefing (landing)', () => {
     await waitFor(() => expect(onEnter).toHaveBeenCalled());
   });
 
-  it('does NOT auto-enter while chains are still loading', async () => {
+  it('auto-enters after the 6s escape hatch even when chains stay down (never traps the user)', async () => {
     const onEnter = vi.fn();
     render(<BootBriefing heavyReady={false} onEnter={onEnter} />);
-    await vi.advanceTimersByTimeAsync(35_000);
-    expect(onEnter).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(7_000);
+    expect(onEnter).toHaveBeenCalled();
   });
 });

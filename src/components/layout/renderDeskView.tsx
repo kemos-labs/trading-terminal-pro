@@ -10,6 +10,7 @@ import { AcademyView } from '../views/AcademyView';
 
 const KsaMarketView = lazy(() => import('../views/KsaMarketView').then(m => ({ default: m.KsaMarketView })));
 const RatesView = lazy(() => import('../views/RatesView').then(m => ({ default: m.RatesView })));
+const HomeBriefing = lazy(() => import('../home/HomeBriefing').then(m => ({ default: m.HomeBriefing })));
 import { DeskLoading } from '../common/Skeleton';
 import type { ActiveTab } from '../../lib/options/types';
 
@@ -35,7 +36,7 @@ export function renderDeskView(tab: ActiveTab, loading: boolean): ReactNode {
   const view = (() => {
     switch (tab) {
       case 'home':
-        return null;
+        return <HomeBriefing />;
       case 'vol':
         return <VolStructureView />;
       case 'positioning':
@@ -74,7 +75,7 @@ function DeskPaywall({ tab }: { tab: ActiveTab }) {
           {tab} desk — subscribers
         </h2>
         <p className="mt-1.5 font-mono text-xs leading-relaxed text-muted-foreground">
-          This desk is part of the paid VOLATERM plan.
+          This desk is part of a paid plan.
           {user ? '' : ' Sign in with your billing email to link an existing subscription.'}
         </p>
         <button

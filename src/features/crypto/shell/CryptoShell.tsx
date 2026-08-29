@@ -67,7 +67,7 @@ export function CryptoShell() {
     <div className="flex h-full min-h-0 flex-col gap-2" data-testid="crypto-v2-shell">
       {/* Global strip: asset/venue/freshness */}
       <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-card px-3 py-2" role="banner" aria-label="Market context">
-        <span className="font-mono text-xs font-bold uppercase tracking-wider">VOLATERM</span>
+        <span className="font-mono text-xs font-bold uppercase tracking-wider">CRYPTO</span>
         <span className="h-4 w-px bg-border" aria-hidden />
         <span className="font-mono text-xs">{asset} · {venue}</span>
         <span className="ml-auto font-mono text-xs text-muted-foreground" aria-live="polite">Source: Deribit · {new Date().toISOString().slice(0,10)}</span>

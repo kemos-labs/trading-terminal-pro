@@ -75,8 +75,21 @@ def fetch_info(sym):
         info = {}
     officers = info.get("companyOfficers") or []
     rng = info.get("fiftyTwoWeekRange") or ""
+    # Observed last print via fast_info (cheap); null when unavailable — never zero-filled.
+    last_price = None
+    prev_close = None
+    try:
+        fi = ticker.fast_info
+        lp = getattr(fi, "last_price", None) or fi.get("last_price")
+        pc = getattr(fi, "previous_close", None) or fi.get("previous_close")
+        last_price = float(lp) if lp is not None else None
+        prev_close = float(pc) if pc is not None else None
+    except Exception:
+        pass
     return {
         "symbol": sym,
+        "lastPrice": last_price,
+        "previousClose": prev_close,
         "companyName": info.get("shortName") or info.get("longName"),
         "marketCap": safe_float(info.get("marketCap")),
         "sector": info.get("sector"),

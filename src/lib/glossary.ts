@@ -203,7 +203,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   },
   cashFuturesBasis: {
     title: 'Cash–futures basis (UST)',
-    body: 'Classic relative-value: long cash CTD bond, short Treasury futures, finance in repo. Leverage + margin + rollover risk drive unwind risk when funding tightens (SOFR vs EFFR, RRP drain). VOLATERM pairs continuous futures marks with cash yields for context — not CTD-adjusted basis or G-SIB scores.',
+    body: 'Classic relative-value: long cash CTD bond, short Treasury futures, finance in repo. Leverage + margin + rollover risk drive unwind risk when funding tightens (SOFR vs EFFR, RRP drain). The terminal pairs continuous futures marks with cash yields for context — not CTD-adjusted basis or G-SIB scores.',
   },
   equityForwardBasis: {
     title: 'Equity forward / basis',

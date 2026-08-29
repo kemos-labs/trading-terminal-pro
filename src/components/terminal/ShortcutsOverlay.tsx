@@ -76,7 +76,7 @@ export function ShortcutsOverlay({ onClose }: ShortcutsOverlayProps) {
           Function codes
         </h3>
         <p className="text-type-2xs text-muted-foreground mb-2">
-          VOLATERM codes (study aliases work in palette)
+          Function codes (study aliases work in palette)
         </p>
         <div className="border border-border rounded">
           <table className="w-full font-mono text-type-2xs">

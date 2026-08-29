@@ -17,6 +17,7 @@ import { registerSseRoutes } from './routes/sse.js';
 import { registerEquityFeedsRoutes } from './routes/equityFeeds.js';
 import { registerDeskFeedRoutes } from './routes/deskFeeds.js';
 import { registerAcademyDocsRoutes } from './routes/academyDocs.js';
+import { registerHomeBriefingRoutes } from './routes/homeBriefing.js';
 import { registerStripeBilling, gateInfoForRequest } from '../api/stripeBilling.js';
 import { registerStripeAuth } from '../api/authRoutes.js';
 import { resolveProxyTrust } from '../api/proxyTrust.js';
@@ -252,6 +253,7 @@ export async function buildServer() {
   await registerFreeCryptoMarketRoutes(fastify);
   await registerMacrovolRoutes(fastify);
   await registerAcademyDocsRoutes(fastify);
+  registerHomeBriefingRoutes(fastify);
   registerFlashalphaRoutes(fastify);
   registerKsaRoutes(fastify);
   registerOpraRoutes(fastify);

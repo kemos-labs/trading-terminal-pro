@@ -29,19 +29,12 @@ async function mockDeribit(page) {
   await page.route('**/favicon.ico', async (route) => await route.fulfill({ status: 204, body: '' }));
   await page.route('**/api/auth/me', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: null }) }));
   await page.route('**/api/billing/config', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: false }) }));
-  await page.route('**/api/options/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'SPY', spot: null, expirations: [], quotes: [], timestamp: Date.now() }) }));
-  await page.route('**/api/desk/pack**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'SPY', spot: null, quotes: [], timestamp: Date.now(), source: 'test-empty' }) }));
-  await page.route('**/api/yf/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'SPY', data: [] }) }));
-  await page.route('**/api/fmp/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) }));
-  await page.route('**/api/macrovol/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) }));
-  await page.route('**/api/cache/status', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) }));
-  await page.route('**/api/opra/status', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ configured: false, status: 'unavailable' }) }));
-  await page.route('**/api/opra/chain/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ quotes: [], source: 'test-empty' }) }));
-  await page.route('**/api/venues/options/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ instruments: [], source: 'test-empty' }) }));
-  await page.route('**/api/deribit-market/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) }));
-  await page.route('**/api/free-crypto/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) }));
-  await page.route('**/api/flashalpha/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) }));
-  await page.route('**/api/finnhub/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) }));
+  await page.route('**/api/yf/history/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'BTC-USD', data: [] }) }));
+  await page.route('**/api/yf/info/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'BTC', data: {} }) }));
+  await page.route('**/api/fmp/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
+  await page.route('**/api/deribit/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ currency: 'BTC', indexPrice: 60150, instruments: [], coverage: 1, fetchedAt: Date.now(), source: 'deribit' }) });
+  });
 
   const instrumentsOption = loadFixture('get_instruments.option.json');
   const instrumentsFuture = loadFixture('get_instruments.future.json');

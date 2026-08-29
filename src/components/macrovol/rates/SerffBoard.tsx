@@ -44,6 +44,10 @@ export function SerffBoard({
 
   if (!data.length) return null;
 
+  // Exact legs + ratio resolved from the data contract (never guessed from the name).
+  const legs = Array.from(new Set(data.flatMap((r) => (r.legs ?? [])))).filter(Boolean);
+  const ccSet = Array.from(new Set(data.map((r) => r.cc).filter(Boolean)));
+  const legLabel = legs.length ? legs.join(' − ') : ccSet.join(' / ');
   const curvePoints = toCurvePoints(data, {
     x: (r) => r.cc && r.name ? `${r.cc} ${r.name}` : (r.name || r.cc),
     bps: (r) => r.last_bps,
@@ -58,11 +62,16 @@ export function SerffBoard({
   return (
     <div className="mt-3 overflow-hidden rounded border border-border">
       <StirSpreadCurve
-        title="SERFF TERM STRUCTURE (bps)"
+        title={`SERFF · ${legLabel} = leg1 − leg2 (bp per 1 contract)`}
         points={curvePoints}
         synthNote={synthNote}
         height={140}
       />
+      <p className="border-b border-border bg-background/30 px-2 py-1 font-mono text-type-2xs leading-snug text-muted-foreground" data-testid="serff-sign-note">
+        Sign convention: positive = SOFR leg above EFFR leg (secured funding priced firmer than unsecured — firm/liquidity premium).
+        Negative = SOFR leg below EFFR (secured cheaper than unsecured — abundant collateral / soft funding).
+        X = common reference quarter per contract; Y = spread in basis points, never mixed with outright rates.
+      </p>
       <div className="flex items-center justify-between border-b border-border bg-background/50 px-2 py-1 text-type-xs font-semibold text-foreground">
         <span>
           SERFF / SOFR−EFFR INTERMARKET · CME ICS style

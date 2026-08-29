@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import {
-  CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import {
   CHART, chartAxisTick, chartGridProps, chartTooltipStyle, tightDomain,
@@ -58,10 +58,13 @@ export function StirSpreadCurve({
   asOf,
 }: StirSpreadCurveProps) {
   const rows = useMemo(() => points.filter((p) => p.bps != null), [points]);
-  const yDomain = useMemo(
-    () => tightDomain(rows.map((r) => r.bps), 0.15, { minPadAbs: 1 }),
-    [rows],
-  );
+  const yDomain = useMemo(() => {
+    const d = tightDomain(rows.map((r) => r.bps), 0.15, { minPadAbs: 1 }) as [number, number];
+    // Signed spreads: keep zero inside the domain so the reference line + 0 tick render.
+    if (rows.some((r) => (r.bps ?? 0) > 0) && d[0] > 0) d[0] = 0;
+    if (rows.some((r) => (r.bps ?? 0) < 0) && d[1] < 0) d[1] = 0;
+    return d;
+  }, [rows]);
 
   // Fail-closed: no empty axes when nothing resolved.
   if (rows.length < 2) {
@@ -107,10 +110,18 @@ export function StirSpreadCurve({
           />
           <YAxis
             tick={{ ...chartAxisTick, fontSize: 8 }}
-            width={34}
+            width={44}
             domain={yDomain}
             tickFormatter={(v) => Number(v).toFixed(0)}
+            label={{
+              value: 'bp',
+              angle: -90,
+              position: 'insideLeft',
+              style: { ...chartAxisTick, textAnchor: 'middle', fontSize: 9 },
+            }}
           />
+          {/* Visible zero — sign convention reference (SOFR−FF: + = secured firmer than unsecured). */}
+          <ReferenceLine y={0} stroke={CHART.axisLine} strokeDasharray="4 3" />
           <Tooltip
             contentStyle={chartTooltipStyle}
             formatter={(v: number, _n, item) => [
@@ -120,7 +131,7 @@ export function StirSpreadCurve({
             labelFormatter={(l) => String(l)}
           />
           <Line
-            type="monotone"
+            type="linear"
             dataKey="bps"
             name="bps"
             stroke={color}

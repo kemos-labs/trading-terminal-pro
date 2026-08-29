@@ -46,6 +46,7 @@ import { StrategyBuilderStrip } from '../common/StrategyBuilderStrip';
 import { consumeDeskJumpOnMount } from '../../lib/market/deskJump';
 import { DeskChartFrame, deskChartChrome, deskAxisLabel } from '../desk/DeskChart';
 import { PrintStrip } from '../desk/PrintStrip';
+import { HeatmapEngine, type HeatmapCellData, type HeatmapAxisKey } from '../charts/HeatmapEngine';
 import { DESK_SERIES } from '../desk/seriesGrammar';
 import { DeskModeBar } from '../terminal/DeskModeBar';
 // DealerGradientPanel / DealerGreekProfiles / SessionGexHeatmap removed in Phase 9 (Plotly/Three stubs).
@@ -147,6 +148,65 @@ export function PositioningView() {
     () => (snapshot ? dealerExposureByExpiry(snapshot, { weight }) : []),
     [snapshot, weight],
   );
+
+  /** Canonical exposure matrix — net GEX by expiry × strike, spot-centered window. */
+  const exposureMatrix = useMemo(() => {
+    if (!snapshot) return null;
+    const spot = snapshot.spot;
+    const expiries = snapshot.expiries.slice(0, 8);
+    if (!expiries.length) return null;
+    // Spot-centered strike set: ±10% window, max 24 strikes, always includes spot-nearest.
+    const strikeSet = new Set<number>();
+    for (const e of expiries) {
+      for (const q of [...e.calls, ...e.puts]) {
+        if (Math.abs(q.strike - spot) / spot <= 0.10) strikeSet.add(q.strike);
+      }
+    }
+    const strikes = [...strikeSet].sort((a, b) => a - b).slice(0, 24);
+    if (!strikes.length) return null;
+    const cols: HeatmapAxisKey[] = strikes.map((k) => ({
+      key: String(k),
+      label: k >= 1000 ? String(Math.round(k)) : k.toFixed(k % 1 === 0 ? 0 : 1),
+      num: k,
+    }));
+    const rows: HeatmapAxisKey[] = expiries.map((e) => ({
+      key: e.expiry,
+      label: `${e.dte}d`,
+      num: e.dte,
+    }));
+    // Per (expiry, strike) net GEX in $mm via per-expiry dealer exposure.
+    const cells: HeatmapCellData[][] = expiries.map((e) => {
+      const d = dealerExposure(snapshot, { expiry: e.expiry, weight });
+      const byStrike = new Map(d.points.map((p) => [p.strike, p]));
+      const fetchedAt = snapshot.timestamp ?? null;
+      return strikes.map((k) => {
+        const p = byStrike.get(k);
+        const net = p?.netGEX ?? null;
+        return {
+          value: net != null ? net / 1e6 : null,
+          display: net != null ? fmtCompact(net) : undefined,
+          sides: p ? 'call+put' : undefined,
+          coverage: weight === 'oi' ? 'OI-weighted' : weight === 'volume' ? 'vol-weighted (scenario proxy)' : undefined,
+          source: weight === 'oi' ? 'chain OI (observed)' : 'chain volume (observed)',
+          asOf: fetchedAt,
+          assumption: 'Dealer-sign model: customer-long calls/puts → dealers short gamma. OI proxy, not MM inventory.',
+        };
+      });
+    });
+    // Spot reference: nearest strike column.
+    let nearest = strikes[0]!;
+    for (const k of strikes) {
+      if (Math.abs(k - spot) < Math.abs(nearest - spot)) nearest = k;
+    }
+    return {
+      rows,
+      cols,
+      cells,
+      spotRef: { colKey: String(nearest), label: `SPOT ${fmtPrice(spot, 0)}` },
+      metricLabel: 'net GEX ($mm / 1%)',
+      units: '$mm',
+    };
+  }, [snapshot, weight]);
 
   /** Sample book for 1D / session GEX·DEX Δ (browser localStorage). */
   useEffect(() => {
@@ -831,6 +891,33 @@ export function PositioningView() {
                           </tr>
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Canonical exposure matrix — GEX × strike × expiry (spot-centered) */}
+                {exposureMatrix && (
+                  <div className="shrink-0 border-t border-border p-2" data-testid="positioning-exposure-matrix">
+                    <div className="mb-1 flex flex-wrap items-center justify-between gap-1 font-mono text-type-2xs">
+                      <span className="font-semibold text-foreground">
+                        EXPOSURE MATRIX · net GEX by strike × expiry ($mm per 1%)
+                      </span>
+                      <span className="text-muted-foreground">
+                        spot-centered ±10% · hatched = missing (never zero)
+                      </span>
+                    </div>
+                    <div className="h-64">
+                      <HeatmapEngine
+                        rows={exposureMatrix.rows}
+                        cols={exposureMatrix.cols}
+                        cells={exposureMatrix.cells}
+                        diverging
+                        units={exposureMatrix.units}
+                        metricLabel="net GEX"
+                        spotRef={exposureMatrix.spotRef}
+                        caption="Net GEX by strike and expiry in $mm per 1%"
+                        emptyMessage="No exposure matrix — chain missing OI/γ."
+                      />
                     </div>
                   </div>
                 )}

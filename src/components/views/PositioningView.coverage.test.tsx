@@ -1,64 +1,40 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { aggregateExposure, type PositionRow } from '../../lib/math/positioning/exposure';
 
-// Virtualized positioning rows retain keyboard-accessible list semantics.
-import { buildSnapshot } from '../../lib/options/synthetic';
+const row = (oi: number | null, optionType: 'call' | 'put' = 'call'): PositionRow => ({
+  optionType, strike: 100, expiryMs: 1, oi, gamma: 0.01, delta: 0.5,
+  vannaRaw: 0, charmRaw: 0, spot: 100,
+});
 
-describe('Positioning OI coverage — row and aggregate', () => {
-  it('missing OI → missing state, not zero', () => {
-    const snap = buildSnapshot('SPY', Date.now(), 500, 0, 0);
-    snap.expiries.forEach(e => { e.calls.forEach(q => q.openInterest = null); e.puts.forEach(q => q.openInterest = null); });
-    const e = snap.expiries[0]!;
-    const callVals = e.calls.map(q => q.openInterest);
-    const putVals = e.puts.map(q => q.openInterest);
-    const callMissing = callVals.some(v => v == null);
-    const putMissing = putVals.some(v => v == null);
-    expect(callMissing).toBe(true);
-    expect(putMissing).toBe(true);
-    // aggregate should be null, not 0
-    const callOI = callMissing ? null : 0;
-    const putOI = putMissing ? null : 0;
-    expect(callOI).toBeNull();
-    expect(putOI).toBeNull();
+/** Coverage assertions exercise the production aggregator, not locally hardcoded labels. */
+describe('Positioning OI coverage', () => {
+  const sign = (r: PositionRow) => r.optionType === 'put' ? -1 as const : 1 as const;
+
+  it('reports missing OI as missing and null exposure', () => {
+    const result = aggregateExposure([row(null)], sign);
+    expect(result.total.coverageState).toBe('missing');
+    expect(result.total.coverage).toBe(0);
+    expect(result.total.gex).toBeNull();
+    expect(result.perRow[0]?.coverageState).toBe('missing');
   });
 
-  it('partial OI → partial state', () => {
-    const snap = buildSnapshot('SPY', Date.now(), 500, 0, 0);
-    // Make half missing
-    snap.expiries[0]!.calls[0]!.openInterest = null;
-    snap.expiries[0]!.calls[1]!.openInterest = 100;
-    const vals = snap.expiries[0]!.calls.map(q => q.openInterest);
-    const hasNull = vals.some(v => v == null);
-    const allNull = vals.every(v => v == null);
-    expect(hasNull).toBe(true);
-    expect(allNull).toBe(false);
-    // should be partial, not observed
+  it('reports actual zero OI as observed-zero', () => {
+    const result = aggregateExposure([row(0)], sign);
+    expect(result.total.coverageState).toBe('observed-zero');
+    expect(result.total.coverage).toBe(1);
+    expect(result.total.gex).toBe(0);
   });
 
-  it('all-zero OI → observed-zero (not missing)', () => {
-    const snap = buildSnapshot('SPY', Date.now(), 500, 0, 0);
-    snap.expiries.forEach(e => { e.calls.forEach(q => q.openInterest = 0); e.puts.forEach(q => q.openInterest = 0); });
-    const vals = snap.expiries[0]!.calls.map(q => q.openInterest);
-    expect(vals.every(v => v === 0)).toBe(true);
-    expect(vals.some(v => v == null)).toBe(false);
-    // state should be observed-zero, not missing
+  it('reports mixed observed and missing rows as partial', () => {
+    const result = aggregateExposure([row(100), row(null, 'put')], sign);
+    expect(result.total.coverageState).toBe('partial');
+    expect(result.total.coverage).toBe(0.5);
+    expect(result.total.gex).not.toBeNull();
   });
 
-  it('positive OI → observed-positive', () => {
-    const snap = buildSnapshot('SPY', Date.now(), 500, 0, 0);
-    const vals = snap.expiries[0]!.calls.map(q => q.openInterest);
-    expect(vals.every(v => v != null && v > 0)).toBe(true);
-  });
-
-  it('OI mode labelled observed only when coverage supports it', () => {
-    // This is a UI label test — OI weight should be "OI" (observed) not "Vol (scenario)"
-    // The mode items in PositioningView are correctly labelled
-    const modes = [
-      { id: 'oi', label: 'OI' },
-      { id: 'volume', label: 'Vol (scenario)' },
-      { id: 'unit', label: 'Unit (scenario)' },
-    ];
-    expect(modes.find(m => m.id === 'oi')!.label).toBe('OI');
-    expect(modes.find(m => m.id === 'volume')!.label).toContain('scenario');
-    expect(modes.find(m => m.id === 'unit')!.label).toContain('scenario');
+  it('does not silently change OI weighting to volume or unit weighting', () => {
+    const result = aggregateExposure([row(null)], sign);
+    expect(result.total.missingOiCount).toBe(1);
+    expect(result.total.gex).toBeNull();
   });
 });

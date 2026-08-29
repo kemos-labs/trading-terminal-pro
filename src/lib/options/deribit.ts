@@ -107,8 +107,8 @@ export function buildFuturesMarks(
   return out;
 }
 
-function coinToUsd(coinPrice: number | null | undefined, index: number): number {
-  if (coinPrice == null || !isFinite(coinPrice) || coinPrice < 0) return 0;
+function coinToUsd(coinPrice: number | null | undefined, index: number): number | null {
+  if (coinPrice == null || !isFinite(coinPrice) || coinPrice <= 0 || !(index > 0)) return null;
   return coinPrice * index;
 }
 
@@ -133,29 +133,25 @@ function toQuote(
   const ask = coinToUsd(row.ask_price, pxIndex);
   const last = coinToUsd(row.last, pxIndex);
   const mark = coinToUsd(row.mark_price, pxIndex);
-  let mid = coinToUsd(row.mid_price, pxIndex);
-  if (!(mid > 0)) {
-    if (bid > 0 && ask > 0) mid = (bid + ask) / 2;
-    else if (mark > 0) mid = mark;
-    else if (last > 0) mid = last;
-    else mid = 0;
-  }
-  // Deep OTM may have zero bid — still usable with mark
-  if (!(mid > 0) && mark > 0) mid = mark;
-  if (!(mid > 0)) return null;
+  // Midpoint is a local executable quote derivation, never mark/last fallback.
+  const mid = bid != null && ask != null && ask >= bid ? (bid + ask) / 2 : null;
 
   const g = priceGreeksMarket(parsed.type, index, parsed.strike, T, r, q, iv);
-  const oi = Math.max(0, row.open_interest ?? 0);
-  const vol = Math.max(0, row.volume ?? 0);
+  const oi = row.open_interest != null && isFinite(row.open_interest) && row.open_interest >= 0 ? row.open_interest : null;
+  const vol = row.volume != null && isFinite(row.volume) && row.volume >= 0 ? row.volume : null;
 
   return {
     strike: parsed.strike,
     expiry: parsed.expiry,
     type: parsed.type,
     bid,
-    ask: ask > 0 ? ask : mid,
-    last: last > 0 ? last : mid,
+    ask,
+    mark,
+    last,
     mid,
+    provenance: 'observed',
+    priceBasis: mid != null ? 'mid' : 'none',
+    feedIv: iv,
     iv,
     delta: g.delta,
     gamma: g.gamma,

@@ -29,6 +29,14 @@ describe('Trade workflows — behavior (not export existence)', () => {
     expect(template).toHaveValue('long_call');
   });
 
+  it('renders observed midpoint and Model price as separate provenance fields', () => {
+    useTerminalStore.setState({ snapshot: snap, symbol: 'SPY' });
+    render(<StructureWorkflow />);
+    expect(screen.getAllByText(/Obs:/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Model:/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Observed midpoint.*Model price/)).toBeNull();
+  });
+
   it('renders PnL controls and changes the observed option side', () => {
     useTerminalStore.setState({ snapshot: snap, symbol: 'SPY' });
     render(<PnlWorkflow />);

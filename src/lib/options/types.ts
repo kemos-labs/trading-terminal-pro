@@ -4,7 +4,10 @@ export interface OptionQuote {
   type: 'call' | 'put';
   bid: number | null;
   ask: number | null;
+  /** Venue mark/reference price; never an executable substitute. */
+  mark?: number | null;
   last: number | null;
+  /** Derived only from valid two-sided bid/ask. */
   mid: number | null;
   /** Per-field provenance — never conflate observed/solved/model */
   provenance?: 'observed' | 'derived' | 'model' | 'unavailable';

@@ -46,14 +46,14 @@ export function CryptoPositioningView() {
     const T = t.expiryMs != null && t.expiryMs > now ? yearFractionAct365(now, t.expiryMs) : null;
     const tradable = t.openInterest != null && t.markIv != null && T != null && T > 0 && spot != null;
     if (!tradable) {
-      return { strike: t.strike!, expiryMs: t.expiryMs!, oi: t.openInterest, gamma: 0, delta: 0, vannaRaw: 0, charmRaw: 0, spot: spot ?? 0 };
+      return { optionType: t.optionType === 'put' ? 'put' : 'call', strike: t.strike!, expiryMs: t.expiryMs!, oi: t.openInterest, gamma: 0, delta: 0, vannaRaw: 0, charmRaw: 0, spot: spot ?? 0, available: false };
     }
     const g = greeksEuropean(t.optionType === 'put' ? 'put' : 'call', spot!, t.strike!, T, 0 as never, 0 as never, t.markIv as never);
-    return { strike: t.strike!, expiryMs: t.expiryMs!, oi: t.openInterest, gamma: g.gamma, delta: g.delta, vannaRaw: g.vanna, charmRaw: g.charm, spot: spot! };
+    return { optionType: t.optionType === 'put' ? 'put' : 'call', strike: t.strike!, expiryMs: t.expiryMs!, oi: t.openInterest, gamma: g.gamma, delta: g.delta, vannaRaw: g.vanna, charmRaw: g.charm, spot: spot!, available: true };
   });
 
   const tradableCount = rows.filter(r => r.oi != null && r.gamma !== 0 || (r.oi != null && r.gamma === 0 && r.spot > 0)).length;
-  const { total } = aggregateExposure(rows, (r) => (options.find(o => o.strike === r.strike && o.expiryMs === r.expiryMs)?.optionType === 'put' ? -1 : 1));
+  const { total } = aggregateExposure(rows, (r) => (r.optionType === 'put' ? -1 : 1));
 
   // Strike × expiry matrix of per-1% GEX where computable (null = unavailable)
   const strikes = [...new Set(options.map(t => t.strike!))].sort((a, b) => a - b).slice(0, 9);
@@ -62,10 +62,16 @@ export function CryptoPositioningView() {
 
   const matrix: (number | null)[][] = expiries.map(exp =>
     strikes.map(strike => {
-      const cell = options.find(t => t.strike === strike && t.expiryMs === exp);
-      const row = rows.find(r => r.strike === strike && r.expiryMs === exp);
-      if (!cell || !row || cell.openInterest == null || cell.markIv == null || spot == null) return null;
-      return row.gamma * signOf(cell) * cell.openInterest * spot * spot * 0.01;
+      const cells = options.filter(t => t.strike === strike && t.expiryMs === exp);
+      const matchingRows = rows.filter(r => r.strike === strike && r.expiryMs === exp);
+      if (!cells.length || !matchingRows.length || spot == null) return null;
+      const exposures = matchingRows.map(row => {
+        const cell = cells.find(t => t.optionType === row.optionType);
+        if (!cell || !row.available || cell.openInterest == null || cell.markIv == null) return null;
+        return row.gamma * signOf(cell) * cell.openInterest * spot * spot * 0.01;
+      });
+      if (exposures.some(v => v == null) || !exposures.length) return null;
+      return exposures.reduce((sum, value) => sum + value!, 0);
     }),
   );
 
@@ -89,7 +95,8 @@ export function CryptoPositioningView() {
         ) : (
           <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-400" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()}`}>Observed</span>
         )}
-        <span className="rounded bg-muted px-2 py-1">Coverage {((total.coverage ?? 0) * 100).toFixed(0)}% ({rows.length - (total.missingOiCount ?? 0)}/{rows.length} rows with OI)</span>
+        <span className="rounded bg-muted px-2 py-1" data-testid="positioning-coverage" title="Coverage is calculated from rows with observed OI and all required observed inputs.">Coverage {((total.coverage ?? 0) * 100).toFixed(0)}% ({rows.length - (total.missingOiCount ?? 0)}/{rows.length} rows available)</span>
+        <span className={`rounded px-2 py-1 ${total.coverageState === 'observed' || total.coverageState === 'observed-zero' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`} data-testid="positioning-coverage-state">OI {total.coverageState}</span>
       </div>
 
       {total.gex == null ? (
@@ -122,7 +129,8 @@ export function CryptoPositioningView() {
           </thead>
           <tbody>
             {expiries.flatMap(exp => strikes.map(strike => {
-              const cell = options.find(t => t.strike === strike && t.expiryMs === exp);
+              const cells = options.filter(t => t.strike === strike && t.expiryMs === exp);
+              const cell = cells[0];
               const val = matrix[expiries.indexOf(exp)]?.[strikes.indexOf(strike)];
               if (!cell) return null;
               return (

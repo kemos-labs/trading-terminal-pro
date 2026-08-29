@@ -166,7 +166,7 @@ export function StructureWorkflow() {
               <tr>
                 <th className="sticky left-0 z-20 bg-card px-1 py-1 text-left text-muted-foreground">K \ T</th>
                 {grid.dtes.map((d, i) => (
-                  <th key={grid.expiries[i]} className="px-1 py-1 font-normal text-muted-foreground">{d}d</th>
+                  <th key={grid.expiries[i]} className="px-1 py-1 font-normal text-muted-foreground"><div>{d}d</div><div className="text-[9px]">Observed / Model</div></th>
                 ))}
               </tr>
             </thead>
@@ -186,7 +186,10 @@ export function StructureWorkflow() {
                       const tone = nearZero ? 'text-muted-foreground' : v! > 0 ? 'text-up' : 'text-down';
                       return (
                         <td key={ei} className={cn('px-1 py-0.5 text-right tabular-nums', tone)}>
-                          {v == null ? '·' : metric === 'nd2' ? (v * 100).toFixed(0) : v.toFixed(1)}
+                          <div>{v == null ? '·' : metric === 'nd2' ? (v * 100).toFixed(0) : v.toFixed(1)}</div>
+                          <div className="text-[9px] text-muted-foreground" data-testid={`grid-provenance-${K}-${ei}`}>
+                            Obs: {cell?.mid != null ? fmtPrice(cell.mid, 4) : 'Unavailable'} · Model: {cell?.modelPrice != null ? fmtPrice(cell.modelPrice, 4) : 'Unavailable'}
+                          </div>
                         </td>
                       );
                     })}

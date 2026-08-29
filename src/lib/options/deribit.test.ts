@@ -63,6 +63,22 @@ describe('buildDeribitSnapshot', () => {
     };
   }
 
+  it('keeps missing executable fields null and never uses mark/last as midpoint', () => {
+    const base = row('BTC-31JUL26-100000-C', 50, 0.04);
+    const bundle: DeribitMarketBundle = {
+      currency: 'BTC', indexPrice: 100_000,
+      options: [
+        { ...base, bid_price: null, ask_price: null, mid_price: null },
+        row('BTC-31JUL26-100000-P', 50, 0.04),
+        row('BTC-31JUL26-110000-C', 52, 0.02),
+        row('BTC-31JUL26-90000-P', 55, 0.025),
+      ], futures: [], perp: null, fundingAnn: null, fetchedAt: now, source: 'deribit',
+    };
+    const snap = buildDeribitSnapshot(bundle, { now });
+    const quote = snap?.expiries[0]?.calls.find(q => q.strike === 100_000);
+    expect(quote).toMatchObject({ bid: null, ask: null, last: 0.04 * 100_000, mark: 0.04 * 100_000, mid: null });
+  });
+
   it('builds a live surface with contractSize 1', () => {
     const bundle: DeribitMarketBundle = {
       currency: 'BTC',

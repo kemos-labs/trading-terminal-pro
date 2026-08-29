@@ -6,6 +6,8 @@
 export type Sign = 1 | -1;
 
 export interface PositionRow {
+  /** Unambiguous instrument identity; calls and puts may share strike/expiry. */
+  optionType: 'call' | 'put';
   strike: number;
   expiryMs: number;
   oi: number | null; // underlying amount units (Deribit) or null if missing
@@ -16,6 +18,8 @@ export interface PositionRow {
   vannaRaw: number; // per 1.0 vol
   charmRaw: number; // per year, -d delta / dT
   spot: number;
+  /** False when a required observed input (for example mark IV) is unavailable. */
+  available?: boolean;
 }
 
 export interface ExposureResult {
@@ -29,7 +33,7 @@ export interface ExposureResult {
 }
 
 export function normalizeQuantity(row: PositionRow): number | null {
-  if (row.oi != null && isFinite(row.oi)) return row.oi;
+  if (row.available !== false && row.oi != null && isFinite(row.oi)) return row.oi;
   // Do NOT fallback to volume or unit weight — return null for missing OI
   return null;
 }

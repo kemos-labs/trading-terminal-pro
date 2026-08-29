@@ -102,8 +102,8 @@ for (const vp of VIEWPORTS) {
         page.on('console', (msg) => {
           if (msg.type() !== 'error') return;
           const txt = msg.text();
-          // Filter expected network failures (missing keys, workers down, desk routes not wired)
-          if (txt.includes('Failed to load resource') && /4\d\d|5\d\d/.test(txt)) return;
+          // All crypto provider requests are mocked below; any browser error is unexpected.
+          // Failure-state tests mock the intended 502 response and assert the UI state.
           errors.push(txt);
         });
         await page.goto(`/?desk=crypto&view=${wf}`);

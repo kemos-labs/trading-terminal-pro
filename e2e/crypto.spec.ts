@@ -39,6 +39,9 @@ async function mockDeribit(page) {
   await page.route('**/api/opra/chain/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ quotes: [], source: 'test-empty' }) }));
   await page.route('**/api/venues/options/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ instruments: [], source: 'test-empty' }) }));
   await page.route('**/api/deribit-market/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) }));
+  await page.route('**/api/free-crypto/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) }));
+  await page.route('**/api/flashalpha/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) }));
+  await page.route('**/api/finnhub/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], source: 'test-empty' }) }));
 
   const instrumentsOption = loadFixture('get_instruments.option.json');
   const instrumentsFuture = loadFixture('get_instruments.future.json');

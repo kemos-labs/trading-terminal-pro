@@ -12,7 +12,6 @@ import { CHART, CHART_SPREAD, chartGridProps, chartTooltipStyle } from '../../..
 import type { CurveShapeData, ImplyRead, RatesCurveHistory } from '../../../lib/macrovol/api';
 import { ImplyChip } from '../../common/ImplyDrawer';
 import { Spark } from './Spark';
-import { SofrFuturesCurve } from './SofrFuturesCurve';
 import {
   YieldCurveCompare,
   type CurveComparePoint,
@@ -167,7 +166,6 @@ export function CurvesBoard({
   compareLoading?: boolean;
 }) {
   const compareLive = curveComparePoints.filter((p) => p.today != null || p.historical != null);
-  const sofrPath = stirChart.filter((p) => p.rate != null || p.prior != null);
   const compareDate = curveCompare?.compare_as_of;
 
   return (
@@ -181,7 +179,7 @@ export function CurvesBoard({
       subtitle="Visual layer for UST data strip above · same tenors / same SOFR path · auction calendar"
       badge={
         <span className="font-mono text-type-2xs text-muted-foreground">
-          {compareLive.length} UST dual · {sofrPath.length} SOFR futs · {SPREAD_META.length} spreads
+          {compareLive.length} UST dual · {stirChart.length} SOFR futs · {SPREAD_META.length} spreads
           {sofr != null ? ` · SOFR ${sofr.toFixed(2)}%` : ''}
         </span>
       }
@@ -205,20 +203,7 @@ export function CurvesBoard({
         compareLoading={compareLoading}
       />
 
-      {/* Bloomberg-style dual SOFR futures yield path */}
-      <div className="mt-2">
-        <SofrFuturesCurve
-          data={sofrPath.map((p) => ({
-            x: p.x,
-            rate: p.rate,
-            prior: p.prior ?? null,
-            vsSofr: p.vsSofr,
-            source: p.source,
-            contract: p.contract,
-          }))}
-          height={240}
-        />
-      </div>
+      {/* SOFR futures strip is canonical on the STIR mode — not duplicated here (one chart per concept). */}
 
       {/* Every spread — live print + history curve */}
       <div className="mt-2 grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">

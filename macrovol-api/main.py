@@ -1462,6 +1462,8 @@ async def get_stir_strip():
                 "ticker": ticker,
                 "month": c["month"],
                 "product": c.get("product"),
+                "ref_start": c.get("ref_start"),
+                "ref_end": c.get("ref_end"),
                 "implied_rate": rate,
                 "last_price": round(float(last_px), 4) if last_px is not None else (
                     round(100.0 - float(rate), 4) if rate is not None else None
@@ -1593,10 +1595,27 @@ async def get_stir_strip():
         if lab and px is not None and float(px) > 50:
             settle_by_label[lab] = round(100.0 - float(px), 4)
 
+    # Reference-quarter metadata per contract (exact legs for tooltips; never guessed client-side).
+    meta_by_label = {}
+    for row in sr3_results:
+        lab = row.get("contract")
+        if lab:
+            meta_by_label[lab] = {
+                "ref_start": row.get("ref_start"),
+                "ref_end": row.get("ref_end"),
+                "last_price": row.get("last_price"),
+                "settlement": row.get("settlement"),
+                "prev_close": row.get("prev_close"),
+            }
+
     chart = []
     for p in (path.get("points") or []):
         lab = p.get("contract")
         prior = settle_by_label.get(lab) if lab else None
+        meta = meta_by_label.get(lab) or {}
+        px = meta.get("last_price")
+        if px is None:
+            px = meta.get("settlement") if meta.get("settlement") is not None else meta.get("prev_close")
         chart.append({
             "x": p.get("month") or lab,
             "contract": lab,
@@ -1605,6 +1624,9 @@ async def get_stir_strip():
             "prior_rate": prior,
             "source": p.get("source"),
             "vs_sofr_bps": p.get("vs_sofr_bps"),
+            "ref_start": meta.get("ref_start"),
+            "ref_end": meta.get("ref_end"),
+            "futures_price": px,
         })
 
     # Compact reference-rate print for UI (CME/NYFed style)

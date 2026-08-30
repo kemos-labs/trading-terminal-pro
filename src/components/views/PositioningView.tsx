@@ -112,6 +112,8 @@ export function PositioningView() {
   const [bookDeltas, setBookDeltas] = useState<GexBookDeltas>(() =>
     computeGexBookDeltas(loadGexBook(symbol)),
   );
+  /** Session-change matrix metric (Δ1D vs prior sample). */
+  const [sessionMetric, setSessionMetric] = useState<'gex1d' | 'dex1d'>('gex1d');
 
   useEffect(() => consumeDeskJumpOnMount(), []);
 
@@ -917,6 +919,54 @@ export function PositioningView() {
                         spotRef={exposureMatrix.spotRef}
                         caption="Net GEX by strike and expiry in $mm per 1%"
                         emptyMessage="No exposure matrix — chain missing OI/γ."
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Session change — Δ1D GEX/DEX by expiry (stored observed snapshots only) */}
+                {expiryRows.length > 0 && (
+                  <div className="shrink-0 border-t border-border p-2" data-testid="positioning-session-change">
+                    <div className="mb-1 flex flex-wrap items-center justify-between gap-1 font-mono text-type-2xs">
+                      <span className="font-semibold text-foreground">
+                        SESSION CHANGE · Δ1D {sessionMetric === 'gex1d' ? 'GEX' : 'DEX'} by expiry
+                      </span>
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <DeskModeBar
+                          items={[
+                            { id: 'gex1d', label: 'ΔGEX', short: 'ΔG' },
+                            { id: 'dex1d', label: 'ΔDEX', short: 'ΔD' },
+                          ]}
+                          activeId={sessionMetric}
+                          onSelect={(id) => setSessionMetric(id as 'gex1d' | 'dex1d')}
+                        />
+                        <span>
+                          {bookDeltas.hasPriorDay
+                            ? `vs ${bookDeltas.priorDay} sample`
+                            : 'collecting samples (browser-local observed snapshots)'}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-28">
+                      <HeatmapEngine
+                        rows={[{ key: 'all', label: 'Δ1D' }]}
+                        cols={expiryRows.map((r) => ({ key: r.expiry, label: `${r.dte}d`, num: r.dte }))}
+                        cells={[expiryRows.map((r) => {
+                          const d = bookDeltas.byExpiry1d.get(r.expiry);
+                          const v = d ? (sessionMetric === 'gex1d' ? d.gex1d : d.dex1d) : null;
+                          return {
+                            value: v != null ? v / 1e6 : null,
+                            display: v != null ? fmtDeltaCompact(v) : undefined,
+                            source: 'browser-local book samples (observed)',
+                            asOf: bookDeltas.priorDay ?? null,
+                            assumption: 'Change between stored observed samples — not an exchange feed.',
+                          };
+                        })]}
+                        diverging
+                        units="$mm"
+                        metricLabel={sessionMetric === 'gex1d' ? 'Δ GEX 1D' : 'Δ DEX 1D'}
+                        caption={`1-day ${sessionMetric === 'gex1d' ? 'GEX' : 'DEX'} change by expiry`}
+                        emptyMessage="Awaiting second sample — no synthetic history."
                       />
                     </div>
                   </div>

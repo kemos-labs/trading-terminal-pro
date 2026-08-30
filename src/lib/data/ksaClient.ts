@@ -79,7 +79,7 @@ export type KsaBoard = {
     market_mood?: string;
     is_delayed?: boolean;
     error?: string;
-  };
+   timestamp?: string; };
   nomu?: {
     index?: string;
     index_value?: number;

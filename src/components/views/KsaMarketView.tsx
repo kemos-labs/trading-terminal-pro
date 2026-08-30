@@ -528,6 +528,16 @@ export function KsaMarketView() {
             {board?.fromCache ? 'cache' : 'net'}
             {board?.ageMs != null ? ` · ${Math.round(board.ageMs / 1000)}s` : ''}
           </span>
+          {board?.tasi?.timestamp && (
+            <span className="text-muted-foreground" title="Event time (observation) — separate from fetch time">
+              obs {new Date(board.tasi.timestamp).toISOString().slice(11, 16)}Z
+            </span>
+          )}
+          {board?.as_of && (
+            <span className="text-muted-foreground/70" title="Server fetch time">
+              fetched {new Date(board.as_of).toISOString().slice(11, 16)}Z
+            </span>
+          )}
           {board?.budget && (
             <span className="text-muted-foreground">
               SAHMK {board.budget.used ?? '—'}/{board.budget.capDaily ?? 100}/day

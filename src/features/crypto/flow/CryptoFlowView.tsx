@@ -1,5 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer,
+} from 'recharts';
 import { fetchDeribitTrades, type DeribitTrade } from '../../../api/deribit';
+import { CHART } from '../../../lib/chartTheme';
 
 export function CryptoFlowView() {
   const [trades, setTrades] = useState<DeribitTrade[] | null>(null);
@@ -40,6 +44,44 @@ export function CryptoFlowView() {
   const totalNative = trades.reduce((s, t) => s + (t.premiumNative ?? 0), 0);
   const buyNative = trades.filter(t => t.side === 'buy').reduce((s, t) => s + (t.premiumNative ?? 0), 0);
 
+  // Aggregates: call/put × buy/sell taker counts + native premium shares.
+  const agg = useMemo(() => {
+    const g = { buy: 0, sell: 0 };
+    const p = { buy: 0, sell: 0 };
+    for (const t of trades) {
+      const isCall = /-C\d+/.test(t.instrument);
+      const bucket = isCall ? g : p;
+      if (t.side === 'buy') bucket.buy += 1;
+      else bucket.sell += 1;
+    }
+    return { calls: g, puts: p };
+  }, [trades]);
+
+  // Trade timeline: per-hour call/put taker counts (bubble proxy via bar height).
+  const timeline = useMemo(() => {
+    const byHour = new Map<string, { call: number; put: number }>();
+    for (const t of trades) {
+      if (t.timestamp == null) continue;
+      const h = new Date(t.timestamp).toISOString().slice(11, 13) + 'h';
+      const e = byHour.get(h) ?? { call: 0, put: 0 };
+      if (/-C\d+/.test(t.instrument)) e.call += 1;
+      else e.put += 1;
+      byHour.set(h, e);
+    }
+    return [...byHour.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([h, v]) => ({ hour: h, ...v }));
+  }, [trades]);
+
+  // Expiry distribution (top 6 by trade count).
+  const byExpiry = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of trades) {
+      const mm = t.instrument.match(/(\d+[A-Z])\d?-/);
+      const key = mm?.[1] ?? 'other';
+      m.set(key, (m.get(key) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => ({ expiry: k, trades: n }));
+  }, [trades]);
+
   return (
     <div data-testid="flow-workstation" className="space-y-3">
       <div className="flex flex-wrap gap-2 font-mono text-xs">
@@ -51,7 +93,52 @@ export function CryptoFlowView() {
           ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Stale</span>
           : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-400" title={`Deribit snapshot ${asOf ? new Date(asOf).toISOString() : ''}`}>Observed</span>}
       </div>
+      {/* Primary decision visuals: aggregates + timeline + expiry distribution */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div className="rounded border p-3" data-testid="flow-aggregates">
+          <div className="font-mono text-xs font-bold uppercase">Taker Aggregates</div>
+          <div className="mt-2 font-mono text-xs">
+            <div className="grid grid-cols-3 gap-1 border-b border-border/60 pb-1 text-muted-foreground"><span /><span className="text-right">buy</span><span className="text-right">sell</span></div>
+            <div className="grid grid-cols-3 gap-1 border-b border-border/40 py-0.5"><span>Calls</span><span className="text-right tabular-nums text-up">{agg.calls.buy}</span><span className="text-right tabular-nums text-down">{agg.calls.sell}</span></div>
+            <div className="grid grid-cols-3 gap-1 py-0.5"><span>Puts</span><span className="text-right tabular-nums text-up">{agg.puts.buy}</span><span className="text-right tabular-nums text-down">{agg.puts.sell}</span></div>
+          </div>
+        </div>
+        <div className="rounded border p-3 lg:col-span-2" data-testid="flow-timeline">
+          <div className="font-mono text-xs font-bold uppercase">Trade Timeline (trades/hour by type)</div>
+          {timeline.length === 0 ? (
+            <div className="mt-2 font-mono text-[10px] text-muted-foreground">No timestamps in window — timeline unavailable.</div>
+          ) : (
+            <div className="mt-2 h-28">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={timeline} margin={{ top: 2, right: 4, bottom: 0, left: 0 }}>
+                  <CartesianGrid stroke={CHART.grid} vertical={false} />
+                  <XAxis dataKey="hour" tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} interval={Math.max(0, timeline.length - 8)} />
+                  <YAxis tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} width={26} allowDecimals={false} />
+                  <Bar dataKey="call" stackId="a" fill={CHART.series.up} isAnimationActive={false} />
+                  <Bar dataKey="put" stackId="a" fill={CHART.series.down} isAnimationActive={false} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      </div>
+      {byExpiry.length > 0 && (
+        <div className="rounded border p-3" data-testid="flow-expiry-dist">
+          <div className="font-mono text-xs font-bold uppercase">Expiry Distribution (trade count)</div>
+          <div className="mt-2 h-20">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={byExpiry} margin={{ top: 2, right: 4, bottom: 0, left: 0 }}>
+                <CartesianGrid stroke={CHART.grid} vertical={false} />
+                <XAxis dataKey="expiry" tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} />
+                <YAxis tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} width={26} allowDecimals={false} />
+                <Bar dataKey="trades" fill={CHART.series.rate} isAnimationActive={false} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
       <div className="rounded border">
+        <div className="border-b bg-muted/40 px-2 py-1 font-mono text-[10px] font-bold uppercase">Tape — recent options trades (taker)</div>
         <table className="w-full" aria-label="Recent Deribit options trades, taker side">
           <thead>
             <tr className="border-b bg-muted/40 font-mono text-[10px] font-bold uppercase">

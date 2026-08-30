@@ -4,7 +4,7 @@
 
 This report documents corrective work after review findings. It does **not** claim final approval.
 
-- Validated implementation HEAD: `103487c00bd471739a58388241ec19fd4a2355fa`
+- Validated implementation HEAD: `f93ee0ec83c46901335a379a5e26406727f85ebb`
 - Evidence/report commit: committed separately after validation; its hash is intentionally not embedded here.
 - Branch: `codex/full-application-rebuild`
 - Worktree: `/home/kalde/trading-terminal-pro-rebuild`
@@ -25,7 +25,7 @@ Corrective files in the implementation commit are `server/providers/freeCrypto/c
 2. **No synthetic aggregate:** the free-crypto response has no top-level `index`; venue `mark`, `index`, and `last` fields remain separate and nullable. Frontend, Home fallback, OpenAPI, and tests use the corrected shape.
 3. **Partial failures:** one usable venue returns 200; both unusable return typed 502; unsupported currencies return typed 400. BTC and ETH are supported. The 15-second cache and 8-second upstream abort remain in the provider.
 4. **Crypto Overview independence:** Deribit failure now renders an explicit Deribit-unavailable state while the free snapshot renders independently. Free failure renders an explicit unavailable state. Required labels remain exact: `Free multi-venue snapshot` and `Public exchange data; free alternative to Velo, not Velo-normalized.`
-5. **Deterministic tests:** provider tests cover both venues, one-venue partial failure, malformed/all-null payloads, null normalization, BTC/ETH, unsupported currency, cache behavior; Fastify route tests cover HTTP status and response shape.
+5. **Deterministic tests:** provider tests cover both venues, one-venue partial failure, zero/negative/Infinity/overflow prices, mismatched symbols, Bybit error retCode, malformed/all-null payloads, null normalization, BTC/ETH, unsupported currency, cache behavior, and fake-timer timeout cleanup; Fastify route tests cover HTTP status and response shape.
 6. **MCP protocol:** results use `structuredContent` plus matching JSON TextContent. Runtime schemas enforce required fields, types, enums, lengths, patterns, and additional properties. Notifications receive no response; complete newline-delimited chunks are processed; tool calls are concurrent; parse errors, unknown methods/tools, and invalid params use JSON-RPC errors; stderr uses `process.stderr`.
 7. **MCP routing/claims:** exact `BTC`/`ETH` identifiers use Deribit routes for crypto market/option analytics. Carry checks market HTTP status. Crypto flow returns Deribit trades and the free snapshot with partial failure semantics. No private or trading capability was added.
 8. **OpenAPI:** the source builder now documents the strict free-crypto 200 schema, nullable venue fields, `source: free-exchanges`, no aggregate index, and 400/502 typed responses. `docs/openapi.generated.json` was regenerated from that source.
@@ -42,7 +42,7 @@ At the corrective implementation HEAD:
 | `npm run validate:openapi` | exit 0; 19 paths, 19 operations, 27 workflows |
 | targeted provider/route/Overview/MCP Vitest | exit 0; 42 tests passed |
 
-The complete required gate list was rerun at this implementation HEAD: unit suite exit 0 with 134 files and 709 tests; MCP contracts 10 passed; integration 16 passed; API contracts and OpenAPI exit 0; type-check/build/lint/secrets/diff checks were rerun. The build emits the existing large-chunk warning about chunks over 500 kB; no gate failed. No approval or overall PASS is asserted here.
+The complete required gate list was rerun at this implementation HEAD: unit suite exit 0 with 134 files and 709 tests; MCP contracts 10 passed; integration 16 passed; API contracts and OpenAPI exit 0; type-check/build/lint/secrets/diff checks were rerun. Warnings were emitted for existing >500 kB build chunks, zero-sized chart containers in jsdom, existing React act warnings, and an expected provider-error diagnostic; none caused a gate failure. No approval or overall PASS is asserted here.
 
 ## Live validation requirements
 

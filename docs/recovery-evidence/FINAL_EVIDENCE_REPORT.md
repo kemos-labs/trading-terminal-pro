@@ -4,7 +4,7 @@
 
 This report documents corrective work after review findings. It does **not** claim final approval.
 
-- Validated implementation HEAD: `5220d5f09e63d2853a238d4259767e819a22b31a`
+- Validated implementation HEAD: `103487c00bd471739a58388241ec19fd4a2355fa`
 - Evidence/report commit: committed separately after validation; its hash is intentionally not embedded here.
 - Branch: `codex/full-application-rebuild`
 - Worktree: `/home/kalde/trading-terminal-pro-rebuild`
@@ -17,7 +17,7 @@ The authoritative candidate file inventory is generated with:
 git diff --name-status e6753ae..HEAD
 ```
 
-Corrective files in the implementation commit are `server/providers/freeCrypto/client.js`, `server/providers/freeCrypto/client.test.js`, `server/routes/freeCryptoMarket.js`, `server/routes/freeCryptoMarket.test.js`, `src/api/freeCrypto.ts`, `src/components/home/HomeBriefing.tsx`, `src/features/crypto/overview/CryptoOverviewView.tsx`, `mcp/mcp-server.js`, `mcp/mcp-contracts.test.ts`, `server/routes/openapi.js`, and regenerated `docs/openapi.generated.json`.
+Corrective files in the implementation commit are `server/providers/freeCrypto/client.js`, `server/providers/freeCrypto/client.test.js`, `server/routes/freeCryptoMarket.js`, `server/routes/freeCryptoMarket.test.js`, `server/routes/freeCryptoMarket.openapi.test.js`, `src/api/freeCrypto.ts`, `src/components/home/HomeBriefing.tsx`, `src/features/crypto/overview/CryptoOverviewView.tsx`, `src/features/crypto/overview/CryptoOverviewView.test.tsx`, `mcp/mcp-server.js`, `mcp/mcp-contracts.test.ts`, `server/routes/openapi.js`, and regenerated `docs/openapi.generated.json`. The cumulative Git inventory also includes `server/routes/homeBriefing.js`.
 
 ## Findings corrected
 
@@ -40,9 +40,9 @@ At the corrective implementation HEAD:
 | `npm run type-check` | exit 0 |
 | `npm run lint` | exit 0 |
 | `npm run validate:openapi` | exit 0; 19 paths, 19 operations, 27 workflows |
-| targeted provider/route/MCP Vitest | exit 0; 21 tests passed |
+| targeted provider/route/Overview/MCP Vitest | exit 0; 42 tests passed |
 
-The complete required gate list was rerun at this implementation HEAD: unit suite exit 0 with 130 files and 688 tests; MCP contracts 8 passed; integration 16 passed; API contracts and OpenAPI exit 0; type-check/build/lint/secrets/diff checks were rerun. The build emits the existing large-chunk warning; no gate failed. No approval or overall PASS is asserted here.
+The complete required gate list was rerun at this implementation HEAD: unit suite exit 0 with 134 files and 709 tests; MCP contracts 10 passed; integration 16 passed; API contracts and OpenAPI exit 0; type-check/build/lint/secrets/diff checks were rerun. The build emits the existing large-chunk warning about chunks over 500 kB; no gate failed. No approval or overall PASS is asserted here.
 
 ## Live validation requirements
 
@@ -56,7 +56,7 @@ curl -sS http://localhost:3001/api/free-crypto/market/ETH
 curl -i -sS http://localhost:3001/api/free-crypto/market/DOGE
 ```
 
-The MCP generic stdio check sent initialize, `notifications/initialized`, tools/list, invalid empty academy query, and two health calls in one input chunk. It produced five responses: no response for the notification, an invalid-params `-32602` response for the empty query, and both health calls returned `structuredContent` alongside TextContent. The contract suite also confirms malformed/unknown handling and schema enforcement.
+The MCP generic stdio check sent initialize and `terminal.get_market_snapshot` with symbol `123`; it returned JSON-RPC `-32602` and never requested a fallback symbol. The committed protocol suite covers notification suppression, one-chunk batching, concurrent calls, malformed JSON `-32700`, unknown method `-32601`, unknown tool `-32602`, schema violations, and structuredContent/TextContent parity. Adversarial provider demonstration produced `[ 'Bybit Linear' ]` for invalid Binance prices plus valid Bybit, and typed `502` when both venues were invalid.
 
 ## Security and scope confirmation
 

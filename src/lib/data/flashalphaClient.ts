@@ -12,6 +12,7 @@ async function faFetch<T>(path: string, symbol: string, cache: Map<string, { dat
   if (hit && Date.now() - hit.ts < FA_CACHE_TTL) return hit.data;
 
   try {
+    // route-parity: /api/flashalpha/exposure/:type/:symbol
     const res = await fetch(`${FA_BASE}${path}/${symbol.toUpperCase()}`);
     if (res.status === 429 || res.status === 503) return null;
     if (!res.ok) return null;

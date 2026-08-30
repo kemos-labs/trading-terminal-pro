@@ -1,6 +1,55 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-30T04:12:14.659Z",
+  "desks": [
+    {
+      "id": "home",
+      "label": "Home",
+      "hotkey": "0",
+      "defaultWorkflowId": "home"
+    },
+    {
+      "id": "vol",
+      "label": "Vol",
+      "hotkey": "1",
+      "defaultWorkflowId": "vol-sub-surface"
+    },
+    {
+      "id": "positioning",
+      "label": "Flow",
+      "hotkey": "2",
+      "defaultWorkflowId": "pos-sub-chain"
+    },
+    {
+      "id": "desk",
+      "label": "Trade",
+      "hotkey": "3",
+      "defaultWorkflowId": "trade-sub-structure"
+    },
+    {
+      "id": "crypto",
+      "label": "Crypto",
+      "hotkey": "4",
+      "defaultWorkflowId": "crypto-v2-overview"
+    },
+    {
+      "id": "rates",
+      "label": "Rates",
+      "hotkey": "5",
+      "defaultWorkflowId": "rates-mode-funding"
+    },
+    {
+      "id": "academy",
+      "label": "Academy",
+      "hotkey": "6",
+      "defaultWorkflowId": "academy-sub-start"
+    },
+    {
+      "id": "ksa",
+      "label": "KSA",
+      "hotkey": "7",
+      "defaultWorkflowId": "ksa-sub-board"
+    }
+  ],
   "workflows": [
     {
       "id": "home",
@@ -386,5 +435,6 @@
         "terminal.search_academy"
       ]
     }
-  ]
+  ],
+  "generatedFrom": "packages/contracts/src/workflows.json"
 }

@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 
 function registry() {
-  return JSON.parse(readFileSync(join(ROOT, 'docs/registry/workflows.json'), 'utf8'));
+  return JSON.parse(readFileSync(join(ROOT, 'packages/contracts/src/workflows.json'), 'utf8'));
 }
 
 /** Shared JSON fetch against the local REST API (single cache/broker on that side). */

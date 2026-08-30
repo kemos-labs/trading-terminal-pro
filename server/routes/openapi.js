@@ -2,7 +2,7 @@
  * OpenAPI 3.1 + workflow registry publication (Phase 11).
  * - GET /api/openapi.json — OpenAPI 3.1, JSON Schema 2020-12-compatible,
  *   additionalProperties:false, stable operationIds, typed errors.
- * - GET /api/workflows — machine-readable workflow registry (docs/registry artifact).
+ * - GET /api/workflows — canonical machine-readable desk/workflow registry.
  */
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -12,7 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '../..');
 
 function loadRegistry() {
-  const raw = readFileSync(join(ROOT, 'docs/registry/workflows.json'), 'utf8');
+  const raw = readFileSync(join(ROOT, 'packages/contracts/src/workflows.json'), 'utf8');
   return JSON.parse(raw);
 }
 
@@ -261,10 +261,7 @@ export function buildOpenApiDocument(registry) {
 }
 
 export function registerOpenApiRoutes(fastify) {
-  fastify.get('/api/workflows', async () => {
-    const reg = loadRegistry();
-    return { workflows: reg.workflows, version: reg.version };
-  });
+  fastify.get('/api/workflows', async () => loadRegistry());
   fastify.get('/api/openapi.json', async (_req, reply) => {
     reply.header('content-type', 'application/json; charset=utf-8');
     reply.header('cache-control', 'public, max-age=300');

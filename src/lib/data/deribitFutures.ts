@@ -1,34 +1,20 @@
 /**
- * Typed browser client for the Futures desk.
- * Requests go through the Node proxy (/api/deribit-market/*, see
- * api/deribitMarketRoutes.js) — the browser never calls Deribit directly.
- * All fetchers fail CLOSED: they return null on any error so views can show
- * an honest "—" instead of a fabricated number.
+ * Futures-view adapter over the same canonical Deribit market snapshot used by
+ * options. The browser never calls a second `/api/deribit-market/*` route family.
  */
 
 export type DeribitCurrency = 'BTC' | 'ETH';
 
 export interface DeribitFutureInstrument {
   instrument_name: string;
-  /** 'perpetual' for the perp; 'day' | 'week' | 'month' … for dated futures. */
   settlement_period: string;
-  /** ms epoch at 08:00 UTC; perp carries Deribit's year-3000 sentinel. */
-  expiration_timestamp: number;
+  expiration_timestamp: number | null;
   is_active: boolean;
-  tick_size: number;
-  contract_size: number;
-  /** 'reversed' (coin-margined) for BTC/ETH futures. */
+  tick_size: number | null;
+  contract_size: number | null;
   instrument_type: string;
   base_currency: string;
   quote_currency: string;
-}
-
-export interface DeribitInstrumentsBundle {
-  currency: DeribitCurrency;
-  instruments: DeribitFutureInstrument[];
-  count: number;
-  fetchedAt: number;
-  source: 'deribit';
 }
 
 export interface DeribitFutureTicker {
@@ -39,23 +25,12 @@ export interface DeribitFutureTicker {
   last_price: number | null;
   best_bid_price: number | null;
   best_ask_price: number | null;
-  /** USD notional — reversed (coin-margined) contracts report OI in USD. */
   open_interest: number | null;
-  /** Rolling-24h traded volume in base currency (BTC / ETH). */
   volume: number | null;
   volume_usd: number | null;
-  /** Deribit stats.price_change — already expressed in PERCENT units. */
   price_change_pct: number | null;
-  /** 8h funding rate (decimal) — perpetuals only, else null. */
   funding_8h: number | null;
   current_funding: number | null;
-}
-
-export interface DeribitTickersBundle {
-  currency: DeribitCurrency;
-  tickers: Record<string, DeribitFutureTicker>;
-  count: number;
-  fetchedAt: number;
 }
 
 export interface DeribitIndexSnapshot {
@@ -65,12 +40,9 @@ export interface DeribitIndexSnapshot {
   fetchedAt: number;
 }
 
-/** One hourly funding point, normalized server-side from get_funding_rate_history. */
 export interface DeribitFundingHistoryPoint {
   t: number;
-  /** Realized 8h funding rate (decimal, e.g. 0.0001 = 0.01% per 8h). */
   rate8h: number;
-  /** Simple annualization: rate8h × 3 × 365 × 100. */
   annualizedPct: number;
   indexPrice: number | null;
 }
@@ -85,73 +57,127 @@ export interface DeribitFundingHistoryBundle {
   fetchedAt: number;
 }
 
-// ── Tiny client-side dedupe cache (same pattern as deribitClient.ts) ────────
+interface CanonicalInstrument {
+  instrument: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  contractSize: number | null;
+  settlementPeriod: string | null;
+  kind: 'option' | 'future' | 'perp';
+  expiryMs: number | null;
+  tickSize: number | null;
+  isInverse: boolean;
+  bidPrice: number | null;
+  askPrice: number | null;
+  markPrice: number | null;
+  lastPrice: number | null;
+  indexPrice: number | null;
+  openInterest: number | null;
+  volume: number | null;
+  funding8h: number | null;
+}
+
+interface CanonicalMarket {
+  currency: DeribitCurrency;
+  indexPrice: number | null;
+  instruments: CanonicalInstrument[];
+  funding8h: number | null;
+  fetchedAt: number;
+  source: 'deribit';
+  error?: string;
+}
 
 interface CacheEntry {
-  value: unknown;
+  value: CanonicalMarket;
   expiry: number;
 }
 const cache = new Map<string, CacheEntry>();
 
-function getCached<T>(key: string): T | null {
-  const e = cache.get(key);
-  if (!e) return null;
-  if (Date.now() > e.expiry) {
-    cache.delete(key);
-    return null;
-  }
-  return e.value as T;
+function finiteOrNull(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const number = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
-function setCache(key: string, value: unknown, ttl: number) {
-  cache.set(key, { value, expiry: Date.now() + ttl });
-}
-
-async function marketGet<T>(path: string, ttl: number): Promise<T | null> {
-  const key = `deribit-market:${path}`;
-  const hit = getCached<T>(key);
-  if (hit) return hit;
+async function marketSnapshot(
+  currency: DeribitCurrency,
+  ttl: number,
+): Promise<CanonicalMarket | null> {
+  const key = `deribit:market:${currency}`;
+  const cached = cache.get(key);
+  if (cached && cached.expiry > Date.now()) return cached.value;
   try {
-    const res = await fetch(`/api/deribit-market/${path}`);
-    if (!res.ok) return null;
-    const json = (await res.json()) as T & { error?: string };
-    if (json && typeof json === 'object' && 'error' in json && json.error) return null;
-    setCache(key, json, ttl);
-    return json;
+    const response = await fetch(`/api/deribit/market/${currency}`, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = (await response.json()) as CanonicalMarket;
+    if (
+      !response.ok
+      || data.error
+      || data.source !== 'deribit'
+      || !Array.isArray(data.instruments)
+    ) return null;
+    cache.set(key, { value: data, expiry: Date.now() + ttl });
+    return data;
   } catch {
     return null;
   }
 }
 
 export function currencyFromInstrument(instrumentName: string): DeribitCurrency | null {
-  const m = /^(BTC|ETH)-[A-Z0-9]+$/.exec(instrumentName.toUpperCase());
-  return m ? (m[1] as DeribitCurrency) : null;
+  const match = /^(BTC|ETH)-[A-Z0-9]+$/.exec(instrumentName.toUpperCase());
+  return match ? (match[1] as DeribitCurrency) : null;
 }
 
-/** Active dated futures + perpetual for the currency. Cached 60s client-side. */
+function futuresRows(data: CanonicalMarket): CanonicalInstrument[] {
+  return data.instruments.filter((row) => row.kind === 'future' || row.kind === 'perp');
+}
+
 export async function listFutures(
   currency: DeribitCurrency,
   ttl = 60_000,
 ): Promise<DeribitFutureInstrument[] | null> {
-  const data = await marketGet<DeribitInstrumentsBundle>(`instruments?currency=${currency}`, ttl);
-  if (!data || !Array.isArray(data.instruments)) return null;
-  return data.instruments;
+  const data = await marketSnapshot(currency, ttl);
+  if (!data) return null;
+  return futuresRows(data).map((row) => ({
+    instrument_name: row.instrument,
+    settlement_period: row.kind === 'perp' ? 'perpetual' : row.settlementPeriod ?? 'dated',
+    expiration_timestamp: finiteOrNull(row.expiryMs),
+    is_active: row.kind === 'perp' || (row.expiryMs != null && row.expiryMs > Date.now()),
+    tick_size: finiteOrNull(row.tickSize),
+    contract_size: finiteOrNull(row.contractSize),
+    instrument_type: row.isInverse ? 'reversed' : 'linear',
+    base_currency: row.baseCurrency,
+    quote_currency: row.quoteCurrency,
+  }));
 }
 
-/**
- * Bulk tickers for every active future/perp of a currency (server caches 5s).
- * Returns a map keyed by instrument name.
- */
 export async function fetchTickers(
   currency: DeribitCurrency,
   ttl = 5_000,
 ): Promise<Record<string, DeribitFutureTicker> | null> {
-  const data = await marketGet<DeribitTickersBundle>(`tickers?currency=${currency}`, ttl);
-  if (!data || typeof data.tickers !== 'object' || data.tickers === null) return null;
-  return data.tickers;
+  const data = await marketSnapshot(currency, ttl);
+  if (!data) return null;
+  return Object.fromEntries(futuresRows(data).map((row) => [
+    row.instrument,
+    {
+      instrument_name: row.instrument,
+      state: row.kind === 'perp' || (row.expiryMs != null && row.expiryMs > Date.now()) ? 'open' : 'closed',
+      mark_price: finiteOrNull(row.markPrice),
+      index_price: finiteOrNull(row.indexPrice) ?? finiteOrNull(data.indexPrice),
+      last_price: finiteOrNull(row.lastPrice),
+      best_bid_price: finiteOrNull(row.bidPrice),
+      best_ask_price: finiteOrNull(row.askPrice),
+      open_interest: finiteOrNull(row.openInterest),
+      volume: finiteOrNull(row.volume),
+      volume_usd: null,
+      price_change_pct: null,
+      funding_8h: finiteOrNull(row.funding8h),
+      current_funding: finiteOrNull(row.funding8h),
+    } satisfies DeribitFutureTicker,
+  ]));
 }
 
-/** Single-instrument convenience lookup (resolved through the bulk snapshot). */
 export async function fetchTicker(
   instrumentName: string,
   ttl = 5_000,
@@ -159,17 +185,22 @@ export async function fetchTicker(
   const currency = currencyFromInstrument(instrumentName);
   if (!currency) return null;
   const tickers = await fetchTickers(currency, ttl);
-  if (!tickers) return null;
-  return tickers[instrumentName] ?? null;
+  return tickers?.[instrumentName] ?? null;
 }
 
 export async function fetchIndexPrice(
   currency: DeribitCurrency,
   ttl = 8_000,
 ): Promise<DeribitIndexSnapshot | null> {
-  const data = await marketGet<DeribitIndexSnapshot>(`index-price?currency=${currency}`, ttl);
-  if (!data || !(Number(data.index_price) > 0)) return null;
-  return data;
+  const data = await marketSnapshot(currency, ttl);
+  const indexPrice = finiteOrNull(data?.indexPrice);
+  if (!data || indexPrice == null || indexPrice <= 0) return null;
+  return {
+    currency,
+    index_price: indexPrice,
+    estimated_delivery_price: null,
+    fetchedAt: data.fetchedAt,
+  };
 }
 
 export async function fetchFundingHistory(
@@ -179,10 +210,21 @@ export async function fetchFundingHistory(
 ): Promise<DeribitFundingHistoryBundle | null> {
   const currency = currencyFromInstrument(instrumentName);
   if (!currency) return null;
-  const data = await marketGet<DeribitFundingHistoryBundle>(
-    `funding-history?instrument_name=${instrumentName}&days=${days}`,
-    ttl,
-  );
-  if (!data || !Array.isArray(data.points)) return null;
-  return data;
+  const key = `deribit:funding:${instrumentName}:${days}`;
+  const existing = fundingCache.get(key);
+  if (existing && existing.expiry > Date.now()) return existing.value;
+  try {
+    const response = await fetch(
+      `/api/deribit/funding-history?instrument_name=${encodeURIComponent(instrumentName)}&days=${days}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    const data = (await response.json()) as DeribitFundingHistoryBundle & { error?: string };
+    if (!response.ok || data.error || !Array.isArray(data.points)) return null;
+    fundingCache.set(key, { value: data, expiry: Date.now() + ttl });
+    return data;
+  } catch {
+    return null;
+  }
 }
+
+const fundingCache = new Map<string, { value: DeribitFundingHistoryBundle; expiry: number }>();

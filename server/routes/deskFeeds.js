@@ -8,7 +8,7 @@
  * Rules: all upstream calls server-side, budgeted, cached, single-flight.
  * Keys never leave the server. Fail-closed typed errors — never synthetic prices.
  */
-import { getOrFetch, peek, TTL, budgetAllows, monthBudgetAllows, recordBudget, ALPHA_VANTAGE_FREE_DAILY, getBudgetUsed, getMonthBudgetUsed } from '../../api/upstreamCache.js';
+import { getOrFetch, peek, TTL, budgetAllows, monthBudgetAllows, recordBudget, ALPHA_VANTAGE_FREE_DAILY, FINNHUB_SOFT_DAILY, getBudgetUsed, getMonthBudgetUsed } from '../../api/upstreamCache.js';
 import { validateSymbol } from '../validation.js';
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
@@ -199,6 +199,204 @@ export function registerDeskFeedRoutes(fastify) {
       }
       reply.code(502);
       return { symbol, items: [], count: 0, error: 'Finnhub news failed', detail: err.message, source: 'Finnhub' };
+    }
+  });
+
+  fastify.get('/api/finnhub/earnings', async (request, reply) => {
+    const raw = String(request.query?.symbol || 'SPY').toUpperCase();
+    const symbol = validateSymbol(raw) || 'SPY';
+    try {
+      const { data, fromCache, ageMs } = await getOrFetch(
+        `finnhub:earnings:${symbol}`,
+        TTL.FINNHUB_EARNINGS_MS,
+        async () => {
+          const from = new Date();
+          const to = new Date(from.getTime() + 120 * 86_400_000);
+          let rows = [];
+          try {
+            const payload = await finnhubGet('/calendar/earnings', {
+              symbol,
+              from: finnhubDate(from),
+              to: finnhubDate(to),
+            });
+            rows = Array.isArray(payload?.earningsCalendar) ? payload.earningsCalendar : [];
+          } catch {
+            const history = await finnhubGet('/stock/earnings', { symbol, limit: 4 });
+            rows = Array.isArray(history) ? history.map((row) => ({
+              symbol,
+              date: row.period ?? null,
+              epsActual: row.actual,
+              epsEstimate: row.estimate,
+              hour: null,
+              quarter: row.quarter,
+              year: row.year,
+            })) : [];
+          }
+          const normalized = rows.map((row) => ({
+            symbol: row.symbol || symbol,
+            date: row.date || null,
+            hour: row.hour || null,
+            eps_estimate: row.epsEstimate ?? row.eps_estimate ?? null,
+            eps_actual: row.epsActual ?? row.eps_actual ?? null,
+            revenue_estimate: row.revenueEstimate ?? null,
+            revenue_actual: row.revenueActual ?? null,
+            quarter: row.quarter ?? null,
+            year: row.year ?? null,
+          }));
+          const today = finnhubDate();
+          const upcoming = normalized
+            .filter((row) => row.date && row.date >= today)
+            .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+          const next = upcoming[0] || normalized[0] || null;
+          return {
+            symbol,
+            next,
+            upcoming: upcoming.slice(0, 6),
+            recent: normalized.slice(0, 6),
+            as_of: new Date().toISOString(),
+            source: 'Finnhub',
+            error: next ? null : 'empty',
+            note: next ? 'Finnhub earnings calendar.' : 'No earnings date returned.',
+          };
+        },
+        { allowStaleOnError: true },
+      );
+      return { ...data, fromCache, ageMs };
+    } catch (err) {
+      const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
+      reply.code(noKey ? 503 : 502);
+      return {
+        symbol,
+        next: null,
+        upcoming: [],
+        recent: [],
+        error: noKey ? 'no_api_key' : 'Finnhub earnings failed',
+        detail: noKey ? undefined : err.message,
+        source: 'Finnhub',
+        note: 'No synthetic earnings date.',
+      };
+    }
+  });
+
+  fastify.get('/api/finnhub/economic-calendar', async (request, reply) => {
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    const fromRaw = String(request.query?.from || '');
+    const toRaw = String(request.query?.to || '');
+    if ((fromRaw && !datePattern.test(fromRaw)) || (toRaw && !datePattern.test(toRaw))) {
+      reply.code(400);
+      return { error: 'from/to must be YYYY-MM-DD' };
+    }
+    const from = fromRaw || finnhubDate();
+    const toDate = new Date();
+    toDate.setUTCDate(toDate.getUTCDate() + 14);
+    const to = toRaw || finnhubDate(toDate);
+    if (!budgetAllows('finnhub', FINNHUB_SOFT_DAILY, 0.9)) {
+      reply.code(429);
+      return { from, to, events: [], error: 'budget_exhausted', source: 'Finnhub' };
+    }
+    try {
+      const { data, fromCache, ageMs } = await getOrFetch(
+        `finnhub:eco:${from}:${to}`,
+        TTL.FINNHUB_ECO_MS,
+        async () => {
+          const payload = await finnhubGet('/calendar/economic', { from, to });
+          const rows = Array.isArray(payload?.economicCalendar)
+            ? payload.economicCalendar
+            : Array.isArray(payload) ? payload : [];
+          const events = rows.slice(0, 40).map((row, index) => ({
+            id: row?.event ? `${row.event}-${row.time || row.date || index}` : `eco-${index}`,
+            country: row?.country || null,
+            event: row?.event || row?.name || null,
+            time: row?.time || row?.date || null,
+            impact: row?.impact || row?.importance || null,
+            actual: row?.actual ?? null,
+            estimate: row?.estimate ?? row?.consensus ?? null,
+            prev: row?.prev ?? row?.previous ?? null,
+          })).filter((event) => event.event);
+          return {
+            from,
+            to,
+            events,
+            count: events.length,
+            as_of: new Date().toISOString(),
+            source: 'Finnhub',
+            error: events.length ? null : 'empty',
+            note: 'Shared economic calendar · 6h TTL.',
+          };
+        },
+        { allowStaleOnError: true },
+      );
+      return { ...data, fromCache, ageMs };
+    } catch (err) {
+      const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
+      reply.code(noKey ? 503 : 502);
+      return { from, to, events: [], error: noKey ? 'no_api_key' : 'unavailable', detail: noKey ? undefined : err.message, source: 'Finnhub' };
+    }
+  });
+
+  fastify.get('/api/finnhub/recommendation', async (request, reply) => {
+    const symbol = validateSymbol(String(request.query?.symbol || 'SPY')) || 'SPY';
+    try {
+      const { data, fromCache, ageMs } = await getOrFetch(
+        `finnhub:rec:${symbol}`,
+        TTL.FINNHUB_META_MS,
+        async () => {
+          const rows = await finnhubGet('/stock/recommendation', { symbol });
+          const latest = Array.isArray(rows) ? rows[0] ?? null : null;
+          return {
+            symbol,
+            latest: latest ? {
+              period: latest.period || null,
+              strongBuy: latest.strongBuy ?? null,
+              buy: latest.buy ?? null,
+              hold: latest.hold ?? null,
+              sell: latest.sell ?? null,
+              strongSell: latest.strongSell ?? null,
+            } : null,
+            history_count: Array.isArray(rows) ? rows.length : 0,
+            as_of: new Date().toISOString(),
+            source: 'Finnhub',
+            error: latest ? null : 'empty',
+          };
+        },
+        { allowStaleOnError: true },
+      );
+      return { ...data, fromCache, ageMs };
+    } catch (err) {
+      const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
+      reply.code(noKey ? 503 : 502);
+      return { symbol, latest: null, error: noKey ? 'no_api_key' : 'unavailable', detail: noKey ? undefined : err.message, source: 'Finnhub' };
+    }
+  });
+
+  fastify.get('/api/finnhub/peers', async (request, reply) => {
+    const symbol = validateSymbol(String(request.query?.symbol || 'SPY')) || 'SPY';
+    try {
+      const { data, fromCache, ageMs } = await getOrFetch(
+        `finnhub:peers:${symbol}`,
+        TTL.FINNHUB_META_MS,
+        async () => {
+          const rows = await finnhubGet('/stock/peers', { symbol });
+          const peers = (Array.isArray(rows) ? rows : [])
+            .map((peer) => String(peer || '').toUpperCase())
+            .filter((peer) => peer && peer !== symbol)
+            .slice(0, 12);
+          return {
+            symbol,
+            peers,
+            count: peers.length,
+            as_of: new Date().toISOString(),
+            source: 'Finnhub',
+            error: peers.length ? null : 'empty',
+          };
+        },
+        { allowStaleOnError: true },
+      );
+      return { ...data, fromCache, ageMs };
+    } catch (err) {
+      const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
+      reply.code(noKey ? 503 : 502);
+      return { symbol, peers: [], error: noKey ? 'no_api_key' : 'unavailable', detail: noKey ? undefined : err.message, source: 'Finnhub' };
     }
   });
 

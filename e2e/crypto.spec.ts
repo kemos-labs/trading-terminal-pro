@@ -176,7 +176,6 @@ test.describe('accessibility', () => {
     await page.waitForSelector('[data-testid="overview-workstation"]', { timeout: 8000 });
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])
-      .disableRules(['color-contrast', 'landmark-banner-is-top-level', 'landmark-no-duplicate-banner', 'landmark-no-duplicate-main'])
       .analyze();
     expect(results.violations, `axe violations: ${JSON.stringify(results.violations.map(v => ({ id: v.id, desc: v.description })))}`).toEqual([]);
   });

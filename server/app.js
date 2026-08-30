@@ -214,7 +214,7 @@ function registerOpraRoutes(fastify) {
 }
 
 // ── Main composition ────────────────────────────────────────
-export async function buildServer() {
+export async function buildServer({ onRoute } = {}) {
   const fastify = Fastify({
     logger: { level: process.env.LOG_LEVEL || 'info', redact: { paths: ['req.headers.cookie', 'req.headers.authorization', 'req.headers["x-api-key"]', 'req.body.password', 'req.body.token', '*.password', '*.token', 'password', 'token', 'secret'], censor: '***' } },
     trustProxy: proxyTrust.trustProxy,
@@ -223,6 +223,24 @@ export async function buildServer() {
     keepAliveTimeout: 72_000,
     requestTimeout: 30_000,
     routerOptions: { maxParamLength: 200 },
+  });
+
+  // Capture the effective Fastify route table as routes are registered. Gates
+  // consume this runtime inventory rather than a hand-maintained manifest.
+  const runtimeRouteManifest = [];
+  fastify.decorate('runtimeRouteManifest', runtimeRouteManifest);
+  fastify.addHook('onRoute', (route) => {
+    const methods = Array.isArray(route.method) ? route.method : [route.method];
+    for (const method of methods) {
+      const entry = {
+        method: String(method).toUpperCase(),
+        url: String(route.url),
+      };
+      if (!runtimeRouteManifest.some((item) => item.method === entry.method && item.url === entry.url)) {
+        runtimeRouteManifest.push(entry);
+        onRoute?.(entry);
+      }
+    }
   });
 
   await registerSecurityHeaders(fastify);

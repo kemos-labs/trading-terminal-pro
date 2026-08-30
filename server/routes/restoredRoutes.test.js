@@ -149,7 +149,7 @@ describe('restored routes (Phase 1 parity)', () => {
     app = await makeApp();
   });
 
-  it('finnhub quote + news return real upstream data through the shared cache', async () => {
+  it('finnhub routes return normalized upstream data through the shared cache', async () => {
     global.fetch = vi.fn(async (input) => {
       const url = String(input);
       if (url.includes('/quote?')) {
@@ -157,6 +157,10 @@ describe('restored routes (Phase 1 parity)', () => {
       }
       if (url.includes('/company-news')) return new Response(JSON.stringify([{ id: 1, datetime: 1, headline: 'H', source: 'S', url: 'u' }]), { status: 200 });
       if (url.includes('/news?')) return new Response(JSON.stringify([{ id: 2, datetime: 2, headline: 'M', source: 'S', url: 'u' }]), { status: 200 });
+      if (url.includes('/calendar/earnings')) return new Response(JSON.stringify({ earningsCalendar: [{ symbol: 'SPY', date: '2026-12-01', epsEstimate: 2.5 }] }), { status: 200 });
+      if (url.includes('/calendar/economic')) return new Response(JSON.stringify({ economicCalendar: [{ event: 'CPI', time: '2026-09-01T12:30:00Z', country: 'US' }] }), { status: 200 });
+      if (url.includes('/stock/recommendation')) return new Response(JSON.stringify([{ period: '2026-08-01', buy: 10, hold: 2 }]), { status: 200 });
+      if (url.includes('/stock/peers')) return new Response(JSON.stringify(['SPY', 'IVV', 'VOO']), { status: 200 });
       return new Response('{"error":"unexpected"}', { status: 404 });
     });
     const q = await app.inject('/api/finnhub/quote?symbol=SPY');
@@ -165,6 +169,18 @@ describe('restored routes (Phase 1 parity)', () => {
     const n = await app.inject('/api/finnhub/news?symbol=SPY&limit=2');
     expect(n.statusCode).toBe(200);
     expect(n.json().count).toBeGreaterThan(0);
+    const earnings = await app.inject('/api/finnhub/earnings?symbol=SPY');
+    expect(earnings.statusCode).toBe(200);
+    expect(earnings.json().next.date).toBe('2026-12-01');
+    const economic = await app.inject('/api/finnhub/economic-calendar');
+    expect(economic.statusCode).toBe(200);
+    expect(economic.json().events[0].event).toBe('CPI');
+    const recommendation = await app.inject('/api/finnhub/recommendation?symbol=SPY');
+    expect(recommendation.statusCode).toBe(200);
+    expect(recommendation.json().latest.buy).toBe(10);
+    const peers = await app.inject('/api/finnhub/peers?symbol=SPY');
+    expect(peers.statusCode).toBe(200);
+    expect(peers.json().peers).toEqual(['IVV', 'VOO']);
   });
 
   it('finnhub news fails closed 503 with typed error when key absent', async () => {

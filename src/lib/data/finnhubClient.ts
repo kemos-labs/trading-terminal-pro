@@ -4,6 +4,7 @@
  */
 
 async function fetchJson<T>(url: string): Promise<T> {
+  // route-parity: /api/finnhub/news | /api/finnhub/earnings | /api/finnhub/economic-calendar | /api/finnhub/recommendation | /api/finnhub/peers
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
   if (!res.ok && !data) throw new Error(`HTTP ${res.status}`);

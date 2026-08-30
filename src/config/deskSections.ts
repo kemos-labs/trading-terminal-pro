@@ -1,4 +1,9 @@
 import type { ActiveTab } from '../lib/options/types';
+import {
+  DESK_REGISTRY,
+  workflowsForDesk,
+  type DeskId,
+} from './workflowRegistry';
 
 export type DeskNavItem = {
   id: string;
@@ -7,6 +12,18 @@ export type DeskNavItem = {
   /** Upstream APIs for context line */
   apis?: string[];
 };
+
+function navForDesk(
+  desk: DeskId,
+  providersByWorkflow: Readonly<Record<string, string[]>> = {},
+): DeskNavItem[] {
+  return workflowsForDesk(desk).map((workflow) => ({
+    id: workflow.id,
+    label: workflow.title.split(' · ').slice(1).join(' · ') || workflow.title,
+    short: workflow.code,
+    apis: providersByWorkflow[workflow.id],
+  }));
+}
 
 /**
  * Macros & Rates section anchors (must match element ids).
@@ -25,12 +42,12 @@ export type DeskNavItem = {
  * Rates red-bar = 4 modes only (not 17 section chips).
  * Deep-link ids (sec-stir, sec-mm-strip, …) still map to modes in RatesView.
  */
-export const RATES_SECTIONS: DeskNavItem[] = [
-  { id: 'rates-mode-funding', label: 'Funding', short: 'Fund', apis: ['FRED', 'NYFed'] },
-  { id: 'rates-mode-ust', label: 'UST', short: 'UST', apis: ['FRED', 'FiscalData'] },
-  { id: 'rates-mode-stir', label: 'STIR', short: 'STIR', apis: ['yfinance', 'NYFed', 'FRED'] },
-  { id: 'rates-mode-world', label: 'World', short: 'World', apis: ['FRED', 'Frankfurter', 'MoF'] },
-];
+export const RATES_SECTIONS: DeskNavItem[] = navForDesk('rates', {
+  'rates-mode-funding': ['FRED', 'NYFed'],
+  'rates-mode-ust': ['FRED', 'FiscalData'],
+  'rates-mode-stir': ['yfinance', 'NYFed', 'FRED'],
+  'rates-mode-world': ['FRED', 'Frankfurter', 'MoF'],
+});
 
 /** Legacy section id → rates mode (function codes / scroll targets). */
 export const RATES_SECTION_TO_MODE: Record<string, 'funding' | 'ust' | 'stir' | 'world'> = {
@@ -59,24 +76,20 @@ export const RATES_SECTION_TO_MODE: Record<string, 'funding' | 'ust' | 'stir' | 
 };
 
 /** Vol = surface structure + Greeks 1.0 (single home for full greeks). */
-export const VOL_SECTIONS: DeskNavItem[] = [
-  { id: 'vol-sub-surface', label: 'Surface', short: 'Surf' },
-  { id: 'vol-sub-smile', label: 'Smile', short: 'Smile' },
-  { id: 'vol-sub-term', label: 'Term', short: 'Term' },
-  { id: 'vol-sub-greeks', label: 'Greeks', short: 'GRK', apis: ['yfinance', 'FRED'] },
-  { id: 'vol-sub-quality', label: 'Surface Fit', short: 'Fit' },
-];
+export const VOL_SECTIONS: DeskNavItem[] = navForDesk('vol', {
+  'vol-sub-greeks': ['yfinance', 'FRED'],
+});
 
 /**
  * Trade desk — 3 red-bar modes (not 12 tool chips).
  * Internal tool pickers live inside DeskView; legacy `desk-ws-*` ids still deep-link.
  * Combo Greeks = multi-leg portfolio tool, not the Greeks 1.0 surface (Vol).
  */
-export const TRADE_SECTIONS: DeskNavItem[] = [
-  { id: 'trade-sub-structure', label: 'Structure', short: 'STR', apis: ['yfinance', 'Deribit'] },
-  { id: 'trade-sub-pnl', label: 'PnL', short: 'PnL', apis: ['yfinance', 'FMP'] },
-  { id: 'trade-sub-risk', label: 'Hedge', short: 'HDG', apis: ['yfinance', 'Deribit'] },
-];
+export const TRADE_SECTIONS: DeskNavItem[] = navForDesk('desk', {
+  'trade-sub-structure': ['yfinance', 'Deribit'],
+  'trade-sub-pnl': ['yfinance', 'FMP'],
+  'trade-sub-risk': ['yfinance', 'Deribit'],
+});
 
 /** Legacy / function-code tool id → red-bar mode. */
 export const TRADE_TOOL_TO_MODE: Record<string, string> = {
@@ -115,10 +128,7 @@ export const GREEKS_SECTIONS: DeskNavItem[] = [
 ];
 
 /** Flow: Book = chain+dealer split; Tools = levels+edge+strategy stacked. */
-export const POSITIONING_SECTIONS: DeskNavItem[] = [
-  { id: 'pos-sub-chain', label: 'Book', short: 'Book' },
-  { id: 'pos-sub-tools', label: 'Tools', short: 'Tools' },
-];
+export const POSITIONING_SECTIONS: DeskNavItem[] = navForDesk('positioning');
 
 /**
  * Academy desk — Substack-style publication (docs/index.json).
@@ -126,23 +136,15 @@ export const POSITIONING_SECTIONS: DeskNavItem[] = [
  * Positioning is the POS desk product (not an Academy section).
  * Engineering / Design / Tools tracks are not Academy chrome.
  */
-export const ACADEMY_SECTIONS: DeskNavItem[] = [
-  { id: 'academy-sub-start', label: 'Home', short: 'HOME' },
-  { id: 'academy-sub-options', label: 'Options', short: 'OPT' },
-  { id: 'academy-sub-macro', label: 'Macro', short: 'MAC' },
-  { id: 'academy-sub-news', label: 'News', short: 'NEWS' },
-  { id: 'academy-sub-glossary', label: 'Glossary', short: 'GLOS' },
-];
+export const ACADEMY_SECTIONS: DeskNavItem[] = navForDesk('academy');
 
 /** Crypto desk — six coherent workflows (V2 is the product, no flag). */
-export const CRYPTO_SECTIONS: DeskNavItem[] = [
-  { id: 'crypto-v2-overview', label: 'Overview', short: 'OVR', apis: ['Deribit'] },
-  { id: 'crypto-v2-volatility', label: 'Volatility', short: 'VOL', apis: ['Deribit'] },
-  { id: 'crypto-v2-positioning', label: 'Positioning', short: 'POS', apis: ['Deribit'] },
-  { id: 'crypto-v2-flow', label: 'Flow', short: 'FLOW', apis: ['Deribit'] },
-  { id: 'crypto-v2-carry', label: 'Carry', short: 'CARRY', apis: ['Deribit'] },
-  { id: 'crypto-v2-trade-risk', label: 'Trade & Risk', short: 'T&R', apis: ['Deribit'] },
-];
+export const CRYPTO_SECTIONS: DeskNavItem[] = navForDesk(
+  'crypto',
+  Object.fromEntries(
+    workflowsForDesk('crypto').map((workflow) => [workflow.id, ['Deribit']]),
+  ),
+);
 
 export const CRYPTO_V2_SECTIONS = CRYPTO_SECTIONS;
 
@@ -150,19 +152,13 @@ export const CRYPTO_V2_SECTIONS = CRYPTO_SECTIONS;
  * KSA desk — Tadawul board via SAHMK (server-only key, shared Node cache).
  * Single scroll view; section ids are anchors for [ ] jump only.
  */
-export const KSA_SECTIONS: DeskNavItem[] = [
-  { id: 'ksa-sub-board', label: 'Board', short: 'BRD', apis: ['SAHMK'] },
-];
+export const KSA_SECTIONS: DeskNavItem[] = navForDesk('ksa', {
+  'ksa-sub-board': ['SAHMK'],
+});
 
 const TAB_LABELS: Record<string, string> = {
-  vol: 'Vol',
-  positioning: 'Flow',
+  ...Object.fromEntries(DESK_REGISTRY.map((desk) => [desk.id, desk.label])),
   greeks: 'Vol · Greeks', // legacy deep-links
-  desk: 'Trade',
-  crypto: 'Crypto',
-  rates: 'Rates',
-  academy: 'Academy',
-  ksa: 'KSA',
 };
 
 export { TAB_LABELS };

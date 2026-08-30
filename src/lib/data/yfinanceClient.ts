@@ -32,6 +32,7 @@ async function yfGet<T>(path: string, ttl: number): Promise<T | null> {
   const cached = getCached(path);
   if (cached) return cached.value as T;
   try {
+    // route-parity: /api/yf/history/:symbol | /api/yf/info/:symbol
     const res = await fetch(`${YF_PROXY}/${path}`);
     if (!res.ok) return null;
     const json = (await res.json()) as T;

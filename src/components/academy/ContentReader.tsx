@@ -41,6 +41,7 @@ export function ContentReader({
     setLoading(true);
     setErr(null);
     setContent(null);
+    // route-parity: /docs/*
     fetch(docPath)
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);

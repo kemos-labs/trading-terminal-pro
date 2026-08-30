@@ -124,10 +124,11 @@ describe('MCP read-only server (contract)', () => {
   });
 
   it('get_health returns structured ok content', async () => {
-    const res = (await client.call('tools/call', { name: 'terminal.get_health', arguments: {} })) as { content: { type: string; text: string }[] };
+    const res = (await client.call('tools/call', { name: 'terminal.get_health', arguments: {} })) as { content: { type: string; text: string }[]; structuredContent: unknown };
     expect(res.content[0].type).toBe('text');
     const parsed = JSON.parse(res.content[0].text as string);
     expect(parsed.status).toBe('ok');
+    expect(res.structuredContent).toEqual(parsed);
   });
 
   it('get_provider_status returns cache/budget stats without credentials', async () => {

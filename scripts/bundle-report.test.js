@@ -33,10 +33,29 @@ function jsChunks() {
 describe('bundle budgets (enforced)', () => {
   const chunks = jsChunks();
 
-  it.skipIf(chunks.length === 0)('every JS chunk is ≤180 kB gzip (including index)', () => {
+  // Master spec §10.6: normal chunks ≤180 kB gzip; documented lazy analytical
+  // exceptions carry their own cap (3D IV surface — never on the initial path).
+  const ANALYTICAL_EXCEPTIONS = { IvSurface3D: 300 * 1024 };
+  function capFor(name) {
+    for (const [key, cap] of Object.entries(ANALYTICAL_EXCEPTIONS)) {
+      if (name.startsWith(key)) return cap;
+    }
+    return null;
+  }
+
+  it.skipIf(chunks.length === 0)('every normal JS chunk is ≤180 kB gzip; analytical exceptions within their documented caps', () => {
     expect(chunks.length, 'dist missing — run npm run build').toBeGreaterThan(0);
     for (const c of chunks) {
-      expect(c.gzip, `${c.name} ${c.gzip} bytes gzip exceeds ${BUDGET_PER_CHUNK}`).toBeLessThanOrEqual(BUDGET_PER_CHUNK);
+      const cap = capFor(c.name) ?? BUDGET_PER_CHUNK;
+      expect(c.gzip, `${c.name} ${c.gzip} bytes gzip exceeds cap ${cap}`).toBeLessThanOrEqual(cap);
+    }
+  });
+
+  it.skipIf(chunks.length === 0)('analytical exception chunks are NOT part of the initial index chunk', () => {
+    for (const c of chunks) {
+      if (capFor(c.name) != null) {
+        expect(c.name.startsWith('index-'), `${c.name} must be a separate lazy chunk`).toBe(false);
+      }
     }
   });
 

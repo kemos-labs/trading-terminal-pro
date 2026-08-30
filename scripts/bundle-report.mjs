@@ -25,7 +25,20 @@ const budgets = {
   initialCssGzip: 35 * 1024,
   singleChunkGzip: 180 * 1024,
   cumulativeWorkflowGzip: 350 * 1024,
+  // Approved analytical exceptions (master spec §10.6): lazy, explicit-entry-only
+  // chunks with their own measured budget. Never loaded on the initial path.
+  analyticalExceptions: {
+    // IvSurface3D = three + @react-three/fiber + drei (3D IV/Greeks capability).
+    IvSurface3D: 300 * 1024,
+  },
 };
+
+function exceptionBudgetFor(name) {
+  for (const [key, cap] of Object.entries(budgets.analyticalExceptions)) {
+    if (name.startsWith(key)) return cap;
+  }
+  return null;
+}
 
 function kb(n) { return (n / 1024).toFixed(1); }
 
@@ -66,11 +79,17 @@ const initialCandidates = rows.filter(r => r.name.startsWith('index-') || r.name
 let initialGzip = 0;
 for (const r of initialCandidates) initialGzip += r.gz;
 console.log(`\nInitial app JS (index chunk): ${kb(initialGzip)} kB gzip (budget ≤250 kB: ${initialGzip <= budgets.totalInitialJsGzip ? 'PASS' : 'OVER'})`);
-// Single-chunk budget applies to EVERY JavaScript chunk, including the initial index chunk.
+// Single-chunk budget applies to EVERY normal JS chunk; analytical exceptions
+// carry their own documented cap (§10.6 — never met by deleting capability).
 const jsRows = rows.filter(r => r.isJs);
-const overBudget = jsRows.filter(r => r.gz > budgets.singleChunkGzip);
-console.log(`Per-chunk budget (≤180 kB gzip, EVERY chunk incl. index): ${overBudget.length === 0 ? 'PASS' : 'FAIL'} — largest ${kb(largest.gzip)} kB (${largest.name})`);
+const overBudget = jsRows.filter((r) => {
+  const cap = exceptionBudgetFor(r.name);
+  return cap == null ? r.gz > budgets.singleChunkGzip : r.gz > cap;
+});
+const exceptions = jsRows.filter((r) => exceptionBudgetFor(r.name) != null);
+console.log(`Per-chunk budget (≤180 kB gzip, EVERY normal chunk; documented analytical exceptions carry their own cap): ${overBudget.length === 0 ? 'PASS' : 'FAIL'} — largest ${kb(largest.gzip)} kB (${largest.name})`);
 for (const r of overBudget) console.log(`  ⚠ OVER: ${r.name} ${kb(r.gz)} kB gzip`);
+for (const r of exceptions) console.log(`  ◆ analytical exception: ${r.name} ${kb(r.gz)} kB gzip (cap ${kb(exceptionBudgetFor(r.name))} kB — lazy, explicit-entry-only)`);
 
 // Overall dist size
 

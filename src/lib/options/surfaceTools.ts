@@ -98,6 +98,23 @@ export function sviReadout(grid: SurfaceGrid, spot: number): SVIReadout | null {
 }
 
 /**
+ * Per-expiry SVI fits — the MODEL layer for 3D surfaces (never fills observed cells).
+ * Returns one readout per expiry row that had enough samples to fit.
+ */
+export function sviReadoutsByExpiry(grid: SurfaceGrid, spot: number): SVIReadout[] {
+  const out: SVIReadout[] = [];
+  for (let r = 0; r < grid.iv.length; r++) {
+    const dte = grid.dtes?.[r] ?? dteFromExpiry(grid.expiries[r]!);
+    const T = yearFractionFromSlice({ expiry: grid.expiries[r]!, dte });
+    const fit = fitSVI(grid.strikes, grid.iv[r]!, spot, T);
+    if (fit) {
+      out.push({ expiry: grid.expiries[r]!, params: fit.params, rmse: fit.rmse, samples: fit.samples });
+    }
+  }
+  return out;
+}
+
+/**
  * Export the surface grid as CSV.
  * Header: expiry,strike1,strike2,...
  * Rows: YYYY-MM-DD,iv1,iv2,...

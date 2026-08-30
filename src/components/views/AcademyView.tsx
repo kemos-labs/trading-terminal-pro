@@ -159,11 +159,26 @@ export function AcademyView() {
     postsByPath.current = m;
   }, [archivePosts]);
 
+  /** Search filter — title/source/tags/sections match; applies inside archive & category lists. */
+  const [query, setQuery] = useState('');
+  const matchesQuery = useCallback((p: Post) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    const hay = [
+      p.title,
+      p.source,
+      p.catLabel,
+      ...(p.tags ?? []),
+      ...(p.sections ?? []).map((s) => s.heading ?? ''),
+    ].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  }, [query]);
+
   const listPosts = useMemo(() => {
-    if (activeCategory === 'archive') return archivePosts;
+    if (activeCategory === 'archive') return archivePosts.filter(matchesQuery);
     if (activeCategory === 'news' || activeCategory === 'glossary') return [];
-    return archivePosts.filter((p) => p.catId === activeCategory);
-  }, [archivePosts, activeCategory]);
+    return archivePosts.filter((p) => p.catId === activeCategory).filter(matchesQuery);
+  }, [archivePosts, activeCategory, matchesQuery]);
 
   const glossaryEntries = useMemo(() => {
     if (!index || activeCategory !== 'glossary') return [];
@@ -243,8 +258,19 @@ export function AcademyView() {
           </div>
 
           {/* P0 Fix: duplicated Academy nav removed — single navigation via red function bar (FunctionMenuBar). Publication tabs now live on the shell. */}
-          <div className="academy-col academy-tabs-info" aria-hidden>
+          <div className="academy-col academy-tabs-info">
             <span className="font-mono text-type-2xs text-muted-foreground">Navigate via red function bar — Home · Options · Macro · News · Glossary</span>
+            <label className="mt-1 flex items-center gap-1.5 font-mono text-type-2xs">
+              <span className="sr-only">Search essays</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search essays…"
+                data-testid="academy-search"
+                className="w-48 rounded border border-border bg-black/40 px-2 py-1 font-mono text-type-2xs text-foreground placeholder:text-muted-foreground/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+              />
+            </label>
           </div>
         </div>
 

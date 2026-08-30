@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchDeribitMarket, type DeribitMarketBundle, type NormalizedTicker } from '../../../api/deribit';
 import { ChainTable, type ChainRow } from '../../../components/charts/ChainTable';
 import { priceEuropeanBlack76 } from '../../../lib/math/black76';
+import { greeksEuropean } from '../../../lib/math/greeks';
 import { yearFractionAct365 } from '../../../lib/math/units';
 
 export function CryptoTradeView() {
@@ -40,7 +41,8 @@ export function CryptoTradeView() {
   const expiries = [...new Set(
     bundle.instruments.filter(t => t.kind === 'option' && t.expiryMs != null && t.expiryMs > now).map(t => t.expiryMs!),
   )].sort((a, b) => a - b);
-  const selectedExpiry = expiries[0] ?? null;
+  const [expiryIdx, setExpiryIdx] = useState(0);
+  const selectedExpiry = expiries[expiryIdx] ?? expiries[0] ?? null;
 
   if (forward == null || selectedExpiry == null) return (
     <div className="rounded border border-dashed p-8 text-center font-mono text-xs" data-testid="trade-empty">
@@ -100,7 +102,20 @@ export function CryptoTradeView() {
   return (
     <div className="space-y-3" data-testid="trade-risk-workstation">
       <div className="flex flex-wrap gap-2 font-mono text-xs">
-        <span className="rounded bg-muted px-2 py-1">Expiry {new Date(selectedExpiry).toISOString().slice(0, 10)} · T={T.toFixed(4)} (ACT/365F)</span>
+        <span className="flex items-center gap-1 rounded bg-muted px-2 py-1">
+          <span className="text-muted-foreground">Expiry</span>
+          <select
+            aria-label="Expiry selector"
+            value={expiryIdx}
+            onChange={(e) => setExpiryIdx(Number(e.target.value))}
+            className="bg-transparent font-mono text-xs outline-none"
+          >
+            {expiries.slice(0, 10).map((e, i) => (
+              <option key={e} value={i}>{new Date(e).toISOString().slice(0, 10)}</option>
+            ))}
+          </select>
+          <span>· T={T.toFixed(4)} (ACT/365F)</span>
+        </span>
         <span className="rounded bg-muted px-2 py-1">Forward {forward.toFixed(1)} (venue perp mark)</span>
         <span className="rounded bg-muted px-2 py-1">Premium in BTC (inverse, coin-settled)</span>
         {stale
@@ -134,6 +149,35 @@ export function CryptoTradeView() {
             <div className="font-bold text-foreground">Model layer — not executable</div>
             <div>Black-76 @ venue forward, observed mark IV, zero discount (no rate feed wired; r=0 assumption, labelled).</div>
             <div className="mt-1">Leg premium total: {legs.length === 0 ? '—' : legsPriced ? `${totalPremium.toFixed(4)} BTC` : 'unavailable (leg lacks observed IV)'}</div>
+            {legs.length > 0 && (
+              <div className="mt-2" data-testid="trade-leg-greeks">
+                <div className="font-bold text-foreground/80">Combo Greeks (per 1 BTC, model layer)</div>
+                <table className="mt-1 w-full" aria-label="Combo greeks per leg, model layer">
+                  <thead><tr className="text-left"><th className="pr-2">Leg</th><th className="pr-2 text-right">Δ</th><th className="pr-2 text-right">Γ</th><th className="pr-2 text-right">ν (per 1 vol pt)</th><th className="text-right">θ/day</th></tr></thead>
+                  <tbody>
+                    {legs.map((l, i) => {
+                      const o = l.side === 'call' ? byStrike.get(l.strike)?.call : byStrike.get(l.strike)?.put;
+                      const iv = o?.markIv ?? null;
+                      if (iv == null || iv <= 0) {
+                        return <tr key={i}><td>{l.qty}× {l.side} {l.strike}</td><td colSpan={4} className="text-right">unavailable (no observed IV)</td></tr>;
+                      }
+                      const g = greeksEuropean(l.side, forward, l.strike, T, 0 as never, 0 as never, iv as never);
+                      const sgn = l.qty >= 0 ? 1 : -1;
+                      const a = Math.abs(l.qty) * sgn;
+                      return (
+                        <tr key={i}>
+                          <td>{l.qty}× {l.side} {l.strike}</td>
+                          <td className="text-right tabular-nums">{(g.delta * a).toFixed(3)}</td>
+                          <td className="text-right tabular-nums">{(g.gamma * a).toExponential(2)}</td>
+                          <td className="text-right tabular-nums">{(g.vega / 100 * a).toFixed(4)}</td>
+                          <td className="text-right tabular-nums">{(g.theta / 365 * a).toFixed(4)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
         <div className="mt-2 text-[10px] text-muted-foreground">Bids/asks are observed Deribit executable quotes only — no synthetic spread. Same engine as Volatility/Positioning.</div>

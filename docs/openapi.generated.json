@@ -1522,19 +1522,22 @@
                             "type": [
                               "number",
                               "null"
-                            ]
+                            ],
+                            "exclusiveMinimum": 0
                           },
                           "mark": {
                             "type": [
                               "number",
                               "null"
-                            ]
+                            ],
+                            "exclusiveMinimum": 0
                           },
                           "index": {
                             "type": [
                               "number",
                               "null"
-                            ]
+                            ],
+                            "exclusiveMinimum": 0
                           },
                           "funding8h": {
                             "type": [
@@ -1546,13 +1549,15 @@
                             "type": [
                               "number",
                               "null"
-                            ]
+                            ],
+                            "minimum": 0
                           },
                           "volume24hUsd": {
                             "type": [
                               "number",
                               "null"
-                            ]
+                            ],
+                            "minimum": 0
                           },
                           "change24hPct": {
                             "type": [
@@ -1582,7 +1587,7 @@
             }
           },
           "400": {
-            "description": "Typed error envelope",
+            "description": "Unsupported currency",
             "content": {
               "application/json": {
                 "schema": {
@@ -1594,24 +1599,7 @@
                   "properties": {
                     "error": {
                       "type": "string",
-                      "enum": [
-                        "PROVIDER_UNAVAILABLE",
-                        "ENTITLEMENT_MISSING",
-                        "STALE_ONLY",
-                        "INSUFFICIENT_COVERAGE",
-                        "INVALID_SYMBOL",
-                        "UNSUPPORTED_CURRENCY",
-                        "FREE_CRYPTO_UNAVAILABLE",
-                        "RATE_LIMITED",
-                        "no_api_key",
-                        "budget_exhausted"
-                      ]
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "provider": {
-                      "type": "string"
+                      "const": "UNSUPPORTED_CURRENCY"
                     }
                   }
                 }
@@ -1619,7 +1607,7 @@
             }
           },
           "502": {
-            "description": "Typed error envelope",
+            "description": "Free crypto providers unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -1631,24 +1619,7 @@
                   "properties": {
                     "error": {
                       "type": "string",
-                      "enum": [
-                        "PROVIDER_UNAVAILABLE",
-                        "ENTITLEMENT_MISSING",
-                        "STALE_ONLY",
-                        "INSUFFICIENT_COVERAGE",
-                        "INVALID_SYMBOL",
-                        "UNSUPPORTED_CURRENCY",
-                        "FREE_CRYPTO_UNAVAILABLE",
-                        "RATE_LIMITED",
-                        "no_api_key",
-                        "budget_exhausted"
-                      ]
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "provider": {
-                      "type": "string"
+                      "const": "FREE_CRYPTO_UNAVAILABLE"
                     }
                   }
                 }

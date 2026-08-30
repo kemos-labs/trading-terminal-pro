@@ -23,10 +23,13 @@ export function CryptoOverviewView() {
 
   if (!bundle) return (
     <div className="space-y-3" data-testid="overview-workstation">
-      <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
+      {error ? <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
         <div className="font-bold">Deribit unavailable</div>
-        <div className="mt-1 text-muted-foreground">{error ?? 'Options, Greeks, option trades, and volatility are unavailable.'}</div>
-      </div>
+        <div className="mt-1 text-muted-foreground">{error}</div>
+      </div> : <div className="rounded border border-muted bg-muted/20 p-4 font-mono text-xs" data-testid="deribit-loading">
+        <div className="font-bold">Loading Deribit</div>
+        <div className="mt-1 text-muted-foreground">Options, Greeks, option trades, and volatility are loading.</div>
+      </div>}
       {freeError ? <FreeUnavailable /> : freeMarket ? <FreeSnapshot market={freeMarket} /> : <div className="p-3 font-mono text-xs animate-pulse">Loading free snapshot…</div>}
     </div>
   );
@@ -101,9 +104,12 @@ function FreeUnavailable() {
 }
 
 function FreeSnapshot({ market }: { market: FreeCryptoMarket }) {
+  const venues = market.venues.map(v => v.venue);
+  const badge = venues.length === 2 ? 'Binance + Bybit' : 'Partial';
   return <div className="rounded border border-sky-500/30 p-3" data-testid="free-market-snapshot">
     <div className="flex flex-wrap items-center gap-2 font-mono text-xs font-bold uppercase">
-      <span>Free multi-venue snapshot</span><span className="rounded bg-sky-500/15 px-2 py-1 text-sky-300">Binance + Bybit</span>
+      <span>Free multi-venue snapshot</span><span className="rounded bg-sky-500/15 px-2 py-1 text-sky-300">{badge}</span>
+      {venues.length === 1 && <span className="text-muted-foreground">{venues[0]}</span>}
     </div>
     <div className="mt-2 grid grid-cols-1 gap-2 font-mono text-xs md:grid-cols-2">
       {market.venues.map(v => <div key={v.venue} className="rounded bg-muted/50 p-2">

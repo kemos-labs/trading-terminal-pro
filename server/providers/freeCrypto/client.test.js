@@ -68,6 +68,41 @@ describe('free crypto provider normalization', () => {
     vi.useRealTimers();
   });
 
+  it.each([0, -1, Infinity, 'Infinity'])('rejects invalid Binance prices independently (%s)', async (bad) => {
+    const p = payload(); p.binance = [{ lastPrice: bad }, { markPrice: bad, indexPrice: bad }, { openInterest: '2' }]; mockFetch(p);
+    const result = await fetchFreeCryptoMarket('BTC'); expect(result.venues).toHaveLength(1); expect(result.venues[0].venue).toBe('Bybit Linear');
+  });
+
+  it.each([0, -1, Infinity, 'Infinity'])('rejects invalid Bybit prices independently (%s)', async (bad) => {
+    const p = payload(); p.bybit.result.list[0].lastPrice = bad; p.bybit.result.list[0].markPrice = bad; p.bybit.result.list[0].indexPrice = bad; mockFetch(p);
+    const result = await fetchFreeCryptoMarket('BTC'); expect(result.venues).toHaveLength(1); expect(result.venues[0].venue).toBe('Binance Futures');
+  });
+
+  it('rejects mismatched symbols and Bybit error retCode independently', async () => {
+    const p = payload(); p.binance[0].symbol = 'ETHUSDT'; p.bybit.result.list[0].symbol = 'ETHUSDT'; mockFetch(p);
+    await expect(fetchFreeCryptoMarket('BTC')).rejects.toMatchObject({ status: 502 });
+    resetFreeCryptoMarketCache(); const q = payload(); q.bybit.retCode = 10001; mockFetch(q);
+    const result = await fetchFreeCryptoMarket('BTC'); expect(result.venues).toHaveLength(1); expect(result.venues[0].venue).toBe('Binance Futures');
+  });
+
+  it('aborts a hanging venue at 8 seconds while preserving the valid venue', async () => {
+    vi.useFakeTimers();
+    global.fetch = vi.fn((url, options) => String(url).includes('bybit')
+      ? Promise.resolve({ ok: true, json: async () => ({ retCode: 0, result: { list: [{ lastPrice: '100', markPrice: '100', indexPrice: '100' }] } }) })
+      : new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true })));
+    const pending = fetchFreeCryptoMarket('BTC'); const assertion = expect(pending).resolves.toMatchObject({ venues: [{ venue: 'Bybit Linear' }] }); await vi.advanceTimersByTimeAsync(8_000);
+    await assertion; expect(global.fetch).toHaveBeenCalledTimes(4);
+    vi.useRealTimers();
+  });
+
+  it('aborts both hanging venues at 8 seconds and returns typed 502', async () => {
+    vi.useFakeTimers();
+    global.fetch = vi.fn((_url, options) => new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true })));
+    const pending = fetchFreeCryptoMarket('BTC'); const assertion = expect(pending).rejects.toMatchObject({ status: 502 }); await vi.advanceTimersByTimeAsync(8_000);
+    await assertion; expect(global.fetch).toHaveBeenCalledTimes(4);
+    vi.useRealTimers();
+  });
+
   it('rejects unsupported currency before upstream access', async () => {
     global.fetch = vi.fn();
     await expect(fetchFreeCryptoMarket('DOGE')).rejects.toMatchObject({ status: 400 });

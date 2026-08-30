@@ -58,8 +58,10 @@ function validateArgs(schema, args) {
   return null;
 }
 
-function requireSymbol(args, def = 'SPY') {
-  const v = String(args.symbol ?? def).toUpperCase();
+function requireSymbol(args, def = null) {
+  const raw = args.symbol ?? def;
+  if (raw == null) return null;
+  const v = String(raw).toUpperCase();
   return /^[A-Z][A-Z0-9.-]{0,11}$/.test(v) ? v : null;
 }
 
@@ -92,12 +94,12 @@ const TOOLS = [
     inputSchema: {
       type: 'object', additionalProperties: false,
       properties: {
-        symbol: { type: 'string', pattern: '^[A-Z0-9.\\-]{1,12}$' },
+        symbol: { type: 'string', pattern: '^[A-Z][A-Z0-9.\\-]{0,11}$' },
       },
       required: ['symbol'],
     },
     handler: async ({ symbol }) => {
-      const sym = requireSymbol({ symbol }, '') || requireSymbol({ symbol: 'SPY' });
+      const sym = requireSymbol({ symbol });
       const upper = String(symbol).toUpperCase();
       if (upper === 'BTC' || upper === 'ETH') {
         const { status, body } = await api(`/api/deribit/market/${upper}`);

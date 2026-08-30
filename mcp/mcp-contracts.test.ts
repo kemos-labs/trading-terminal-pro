@@ -17,6 +17,7 @@ class McpClient {
   proc: ChildProcess;
   buf = '';
   pending = new Map<number, { resolve: (m: unknown) => void; reject: (e: Error) => void }>();
+  lines: unknown[] = [];
   nextId = 1;
 
   constructor() {
@@ -37,6 +38,7 @@ class McpClient {
         if (!line.trim()) continue;
         let msg: { id: number; result?: unknown; error?: { message?: string } };
         try { msg = JSON.parse(line); } catch { continue; }
+        this.lines.push(msg);
         const p = this.pending.get(msg.id);
         if (p) {
           this.pending.delete(msg.id);
@@ -46,6 +48,29 @@ class McpClient {
       }
     });
   }
+
+  async waitLine(predicate: (line: any) => boolean): Promise<any> {
+    const found = this.lines.find(predicate);
+    if (found) return found;
+    return new Promise(resolve => {
+      const timer = setInterval(() => {
+        const line = this.lines.find(predicate);
+        if (line) { clearInterval(timer); resolve(line); }
+      }, 5);
+    });
+  }
+
+  async batch(calls: { method: string; params: unknown }[]): Promise<unknown[]> {
+    const requests = calls.map(({ method, params }) => {
+      const id = this.nextId++;
+      const p = new Promise((resolve, reject) => this.pending.set(id, { resolve: resolve as (m: unknown) => void, reject }));
+      return { id, method, params, p };
+    });
+    this.proc.stdin.write(requests.map(({ id, method, params }) => JSON.stringify({ jsonrpc: '2.0', id, method, params })).join('\n') + '\n');
+    return Promise.all(requests.map(({ p }) => p));
+  }
+
+  send(text: string) { this.proc.stdin.write(text); }
 
   async call(method: string, params: unknown, expectError = false): Promise<unknown> {
     const id = this.nextId++;
@@ -86,10 +111,6 @@ describe('MCP read-only server (contract)', () => {
       await client.close();
     }
   }, 10_000);
-
-  afterAll(async () => {
-    if (client) await client.close();
-  });
 
   it('tools/list exposes exactly the 12 read-only tools with explicit schemas', async () => {
     const res = (await client.call('tools/list', {})) as { tools: { name: string; inputSchema: { additionalProperties?: boolean; properties?: Record<string, unknown> } }[] };
@@ -151,6 +172,27 @@ describe('MCP read-only server (contract)', () => {
     expect(res.content[0].text).not.toContain('NaN');
     expect(res.content[0].text).not.toContain('Infinity');
   }, 20_000);
+
+  it('protocol framing, notifications, concurrency, and malformed JSON are handled', async () => {
+    const before = client.lines.length;
+    client.send('{"jsonrpc":"2.0","method":"notifications/initialized"}\n');
+    await new Promise(r => setTimeout(r, 30)); expect(client.lines.length).toBe(before);
+    const results = await client.batch([{ method: 'tools/call', params: { name: 'terminal.get_health', arguments: {} } }, { method: 'tools/call', params: { name: 'terminal.get_provider_status', arguments: {} } }]);
+    expect(results).toHaveLength(2);
+    client.send('{bad json}\n'); const parse = await client.waitLine(line => line?.error?.code === -32700); expect(parse.error.code).toBe(-32700);
+    await expect(client.call('no/such/method', {})).rejects.toThrow();
+  });
+
+  it('rejects all strict schema violations and never substitutes SPY', async () => {
+    await expect(client.call('tools/call', { name: 'terminal.search_academy', arguments: { q: '' } })).rejects.toThrow(/too short/i);
+    await expect(client.call('tools/call', { name: 'terminal.search_academy', arguments: { q: 'x'.repeat(121) } })).rejects.toThrow(/too long/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_health', arguments: { extra: true } })).rejects.toThrow(/additional property/i);
+    await expect(client.call('tools/call', { name: 'terminal.search_academy', arguments: {} })).rejects.toThrow(/missing required/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_crypto_carry', arguments: { currency: 'DOGE' } })).rejects.toThrow(/one of/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_options_chain', arguments: { symbol: 123 } })).rejects.toThrow(/string/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_market_snapshot', arguments: { symbol: '123' } })).rejects.toThrow(/invalid format/i);
+    expect(client.lines.at(-1)?.error?.code).toBe(-32602);
+  });
 
   it('academy search returns bounded results (≤12)', async () => {
     const res = (await client.call('tools/call', { name: 'terminal.search_academy', arguments: { q: 'option' } })) as { content: { text: string }[] };

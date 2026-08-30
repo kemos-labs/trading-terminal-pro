@@ -37,17 +37,24 @@ async function getJson(url) {
   }
 }
 
-export function finite(value) {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+export function finite(value, predicate = () => true) {
+  if (typeof value === 'number') return Number.isFinite(value) && predicate(value) ? value : null;
   if (typeof value !== 'string' || value.trim() === '') return null;
   const n = Number(value.trim());
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n) && predicate(n) ? n : null;
 }
 
+const positive = (value) => finite(value, (n) => n > 0);
+const nonNegative = (value) => finite(value, (n) => n >= 0);
+
 function validVenue(venue) {
-  return venue && (venue.mark !== null || venue.index !== null || venue.last !== null)
+  return venue && [venue.mark, venue.index, venue.last].some((value) => value !== null && value > 0)
     ? venue
     : null;
+}
+
+function assertMatchingSymbol(payload, requested) {
+  if (payload?.symbol != null && String(payload.symbol).toUpperCase() !== requested) throw new Error('Upstream symbol mismatch');
 }
 
 async function fetchBinance(symbol) {
@@ -56,11 +63,12 @@ async function fetchBinance(symbol) {
     getJson(`${VENUES.binance}/fapi/v1/premiumIndex?symbol=${symbol}`),
     getJson(`${VENUES.binance}/fapi/v1/openInterest?symbol=${symbol}`),
   ]);
+  [ticker, premium, oi].forEach((payload) => assertMatchingSymbol(payload, symbol));
   const venue = {
     venue: 'Binance Futures', symbol,
-    last: finite(ticker.lastPrice), mark: finite(premium.markPrice), index: finite(premium.indexPrice),
-    funding8h: finite(premium.lastFundingRate), openInterest: finite(oi.openInterest),
-    volume24hUsd: finite(ticker.quoteVolume), change24hPct: finite(ticker.priceChangePercent), fetchedAt: Date.now(),
+    last: positive(ticker.lastPrice), mark: positive(premium.markPrice), index: positive(premium.indexPrice),
+    funding8h: finite(premium.lastFundingRate), openInterest: nonNegative(oi.openInterest),
+    volume24hUsd: nonNegative(ticker.quoteVolume), change24hPct: finite(ticker.priceChangePercent), fetchedAt: Date.now(),
   };
   if (!validVenue(venue)) throw new Error('Binance returned unusable price data');
   return venue;
@@ -69,14 +77,18 @@ async function fetchBinance(symbol) {
 async function fetchBybit(symbol) {
   const url = `${VENUES.bybit}/v5/market/tickers?category=linear&symbol=${symbol}`;
   const json = await getJson(url);
+  if (json.retCode !== 0) throw new Error(`Bybit returned error ${json.retCode}`);
   const row = Array.isArray(json.result?.list) ? json.result.list[0] : null;
   if (!row) throw new Error('Bybit returned no ticker');
+  assertMatchingSymbol(json.result, symbol);
+  assertMatchingSymbol(row, symbol);
   const price24h = finite(row.price24hPcnt);
+  const change24hPct = price24h === null ? null : finite(price24h * 100);
   const venue = {
     venue: 'Bybit Linear', symbol,
-    last: finite(row.lastPrice), mark: finite(row.markPrice), index: finite(row.indexPrice),
-    funding8h: finite(row.fundingRate), openInterest: finite(row.openInterest),
-    volume24hUsd: finite(row.turnover24h), change24hPct: price24h === null ? null : price24h * 100, fetchedAt: Date.now(),
+    last: positive(row.lastPrice), mark: positive(row.markPrice), index: positive(row.indexPrice),
+    funding8h: finite(row.fundingRate), openInterest: nonNegative(row.openInterest),
+    volume24hUsd: nonNegative(row.turnover24h), change24hPct, fetchedAt: Date.now(),
   };
   if (!validVenue(venue)) throw new Error('Bybit returned unusable price data');
   return venue;

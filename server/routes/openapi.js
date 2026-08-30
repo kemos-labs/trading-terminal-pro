@@ -77,6 +77,10 @@ function jsonOk(schema, description) {
   return { description, content: { 'application/json': { schema } } };
 }
 
+function typedErrorResponse(code, description) {
+  return { description, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['error'], properties: { error: { type: 'string', const: code } } } } } };
+}
+
 const symbolParam = (summary = 'Observed equity chain (yfinance, delayed)') => ({
   name: 'symbol',
   in: 'path',
@@ -212,11 +216,12 @@ export function buildOpenApiDocument(registry) {
               currency: { type: 'string', enum: ['BTC', 'ETH'] }, symbol: { type: 'string' },
               venues: { type: 'array', minItems: 1, items: { type: 'object', additionalProperties: false, required: ['venue', 'symbol', 'last', 'mark', 'index', 'funding8h', 'openInterest', 'volume24hUsd', 'change24hPct', 'fetchedAt'], properties: {
                 venue: { type: 'string', enum: ['Binance Futures', 'Bybit Linear'] }, symbol: { type: 'string' },
-                last: { type: ['number', 'null'] }, mark: { type: ['number', 'null'] }, index: { type: ['number', 'null'] }, funding8h: { type: ['number', 'null'] }, openInterest: { type: ['number', 'null'] }, volume24hUsd: { type: ['number', 'null'] }, change24hPct: { type: ['number', 'null'] }, fetchedAt: { type: 'integer' },
+                last: { type: ['number', 'null'], exclusiveMinimum: 0 }, mark: { type: ['number', 'null'], exclusiveMinimum: 0 }, index: { type: ['number', 'null'], exclusiveMinimum: 0 }, funding8h: { type: ['number', 'null'] }, openInterest: { type: ['number', 'null'], minimum: 0 }, volume24hUsd: { type: ['number', 'null'], minimum: 0 }, change24hPct: { type: ['number', 'null'] }, fetchedAt: { type: 'integer' },
               } } },
               fetchedAt: { type: 'integer' }, source: { type: 'string', const: 'free-exchanges' }, note: { type: 'string' },
             } }, 'snapshot'),
-            400: errorResponse, 502: errorResponse,
+            400: typedErrorResponse('UNSUPPORTED_CURRENCY', 'Unsupported currency'),
+            502: typedErrorResponse('FREE_CRYPTO_UNAVAILABLE', 'Free crypto providers unavailable'),
           },
         },
       },

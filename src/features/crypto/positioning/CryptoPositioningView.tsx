@@ -1,14 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchDeribitMarket, type DeribitMarketBundle, type NormalizedTicker } from '../../../api/deribit';
-import { MatrixHeatmap } from '../../../components/charts/MatrixHeatmap';
+import { HeatmapEngine, type HeatmapCellData, type HeatmapAxisKey } from '../../../components/charts/HeatmapEngine';
 import { aggregateExposure, type PositionRow } from '../../../lib/math/positioning/exposure';
 import { greeksEuropean } from '../../../lib/math/greeks';
 import { yearFractionAct365 } from '../../../lib/math/units';
+
+type CryptoMetric = 'gex' | 'dex' | 'vanna' | 'charm';
+
+const METRIC_META: Record<CryptoMetric, { label: string; unit: string }> = {
+  gex: { label: 'GEX', unit: '$/1%' },
+  dex: { label: 'DEX', unit: '$' },
+  vanna: { label: 'Vanna', unit: '$/vol pt' },
+  charm: { label: 'Charm', unit: '$/day' },
+};
 
 export function CryptoPositioningView() {
   const [bundle, setBundle] = useState<DeribitMarketBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
+  const [metric, setMetric] = useState<CryptoMetric>('gex');
 
   useEffect(() => {
     let cancelled = false;
@@ -55,27 +65,73 @@ export function CryptoPositioningView() {
   const tradableCount = rows.filter(r => r.oi != null && r.gamma !== 0 || (r.oi != null && r.gamma === 0 && r.spot > 0)).length;
   const { total } = aggregateExposure(rows, (r) => (r.optionType === 'put' ? -1 : 1));
 
-  // Strike × expiry matrix of per-1% GEX where computable (null = unavailable)
-  const strikes = [...new Set(options.map(t => t.strike!))].sort((a, b) => a - b).slice(0, 9);
-  const expiries = [...new Set(options.map(t => t.expiryMs!))].sort((a, b) => a - b).slice(0, 6);
+  // Strike × expiry exposure matrix — metric-switchable, spot-centered (never first-N).
+  // Sign model: calls +1 / puts −1 applied to OI-weighted canonical greeks.
+  const strikes = useMemo(() => {
+    const all = [...new Set(options.map(t => t.strike!))].sort((a, b) => a - b);
+    if (spot == null) return all.slice(0, 16);
+    const windowed = all.filter((k) => Math.abs(k - spot) / spot <= 0.15);
+    return (windowed.length >= 6 ? windowed : all).slice(0, 16);
+  }, [options, spot]);
+  const expiries = useMemo(
+    () => [...new Set(options.map(t => t.expiryMs!))].sort((a, b) => a - b).slice(0, 6),
+    [options],
+  );
   const signOf = (t: NormalizedTicker) => (t.optionType === 'put' ? -1 : 1);
 
-  const matrix: (number | null)[][] = expiries.map(exp =>
-    strikes.map(strike => {
+  const matrixCells: HeatmapCellData[][] = useMemo(() => expiries.map((exp) =>
+    strikes.map((strike) => {
       const cells = options.filter(t => t.strike === strike && t.expiryMs === exp);
       const matchingRows = rows.filter(r => r.strike === strike && r.expiryMs === exp);
-      if (!cells.length || !matchingRows.length || spot == null) return null;
-      const exposures = matchingRows.map(row => {
+      if (!cells.length || !matchingRows.length || spot == null) {
+        return { value: null, source: 'deribit (observed)', coverage: 'no rows' } as HeatmapCellData;
+      }
+      const exposures = matchingRows.map((row) => {
         const cell = cells.find(t => t.optionType === row.optionType);
         if (!cell || !row.available || cell.openInterest == null || cell.markIv == null) return null;
-        return row.gamma * signOf(cell) * cell.openInterest * spot * spot * 0.01;
+        const S = spot;
+        const oi = cell.openInterest;
+        switch (metric) {
+          case 'gex': return row.gamma * signOf(cell) * oi * S * S * 0.01;
+          case 'dex': return row.delta * signOf(cell) * oi * S;
+          case 'vanna': return row.vannaRaw * signOf(cell) * oi * S;
+          case 'charm': return row.charmRaw * signOf(cell) * oi * S;
+        }
       });
-      if (exposures.some(v => v == null) || !exposures.length) return null;
-      return exposures.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+      if (exposures.some(v => v == null) || !exposures.length) {
+        return {
+          value: null,
+          source: 'deribit (observed)',
+          coverage: 'missing OI or IV',
+          sides: cells.map((c) => c.optionType).join('+'),
+        } as HeatmapCellData;
+      }
+      const sum = exposures.reduce<number>((acc, v) => acc + (v ?? 0), 0);
+      return {
+        value: sum,
+        sides: cells.map((c) => c.optionType).join('+'),
+        coverage: `OI ${cells.reduce((s, c) => s + (c.openInterest ?? 0), 0).toFixed(2)} BTC`,
+        source: 'deribit (observed) · OI-weighted',
+        asOf: bundle?.fetchedAt ?? null,
+        assumption: 'Sign model: calls +1 / puts −1 · OI proxy, not dealer inventory',
+      } as HeatmapCellData;
     }),
-  );
+  ), [expiries, strikes, options, rows, spot, metric, bundle]);
 
-  const gexComputable = matrix.flat().filter(v => v != null).length;
+  const matrixRows: HeatmapAxisKey[] = expiries.map((e) => ({
+    key: String(e), label: `${Math.round((e - now) / 864e5)}d`, num: Math.round((e - now) / 864e5),
+  }));
+  const matrixCols: HeatmapAxisKey[] = strikes.map((k) => ({
+    key: String(k), label: k >= 1000 ? `${(k / 1000).toFixed(1)}k` : String(k), num: k,
+  }));
+  const spotCol = spot != null
+    ? strikes.reduce((best, k) => (Math.abs(k - spot) < Math.abs(best - spot) ? k : best), strikes[0]!)
+    : null;
+
+  const computableCount = matrixCells.flat().filter((c) => c.value != null).length;
+  const matrixTotal = matrixRows.length * matrixCols.length;
+  const gexComputable = computableCount;
+  void matrixTotal;
 
   return (
     <div data-testid="positioning-workstation" className="space-y-3">
@@ -90,8 +146,8 @@ export function CryptoPositioningView() {
         </span>
         {stale ? (
           <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Stale</span>
-        ) : gexComputable < matrix.flat().length ? (
-          <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400" title={`${gexComputable}/${matrix.flat().length} cells computable (need OI + observed IV)`}>Partial</span>
+        ) : gexComputable < matrixTotal ? (
+          <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400" title={`${computableCount}/${matrixTotal} cells computable (need OI + observed IV)`}>Partial</span>
         ) : (
           <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-400" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()}`}>Observed</span>
         )}
@@ -115,37 +171,38 @@ export function CryptoPositioningView() {
         </div>
       )}
 
-      <MatrixHeatmap
-        data={matrix}
-        xLabels={strikes.map(s => `${(s / 1000).toFixed(0)}k`)}
-        yLabels={expiries.map(e => `${Math.round((e - now) / 864e5)}d`)}
-        title="GEX per 1% (signed) — null = missing OI or IV, never zero"
-      />
-      <details className="rounded border p-2 font-mono text-[10px] text-muted-foreground">
-        <summary className="cursor-pointer">Accessible table fallback (exact values)</summary>
-        <table className="mt-2 w-full" aria-label="GEX per 1% by strike and expiry, USD per 1 percent move">
-          <thead>
-            <tr><th scope="col">Expiry</th><th scope="col">Strike</th><th scope="col">GEX ($/1%)</th><th scope="col">OI</th><th scope="col">Mark IV</th></tr>
-          </thead>
-          <tbody>
-            {expiries.flatMap(exp => strikes.map(strike => {
-              const cells = options.filter(t => t.strike === strike && t.expiryMs === exp);
-              const cell = cells[0];
-              const val = matrix[expiries.indexOf(exp)]?.[strikes.indexOf(strike)];
-              if (!cell) return null;
-              return (
-                <tr key={`${exp}-${strike}`}>
-                  <td>{new Date(exp).toISOString().slice(0, 10)}</td>
-                  <td>{strike}</td>
-                  <td>{val != null ? (val / 1e3).toFixed(1) + 'k' : 'unavailable'}</td>
-                  <td>{cell.openInterest != null ? cell.openInterest.toFixed(2) : 'unavailable'}</td>
-                  <td>{cell.markIv != null ? (cell.markIv * 100).toFixed(1) + '%' : 'unavailable'}</td>
-                </tr>
-              );
-            }))}
-          </tbody>
-        </table>
-      </details>
+      <div data-testid="crypto-exposure-matrix" className="rounded border p-2">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-1 font-mono text-type-2xs">
+          <span className="font-bold uppercase">Exposure matrix — {METRIC_META[metric].label} ({METRIC_META[metric].unit})</span>
+          <span className="flex items-center gap-1">
+            {(['gex', 'dex', 'vanna', 'charm'] as CryptoMetric[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMetric(m)}
+                aria-pressed={metric === m}
+                className={`rounded border px-1.5 py-0.5 font-mono transition-colors ${metric === m ? 'border-primary/60 bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:text-foreground'}`}
+              >
+                {METRIC_META[m].label}
+              </button>
+            ))}
+            <span className="ml-2 text-muted-foreground">{computableCount}/{matrixTotal} computable</span>
+          </span>
+        </div>
+        <div className="h-56">
+          <HeatmapEngine
+            rows={matrixRows}
+            cols={matrixCols}
+            cells={matrixCells}
+            diverging
+            units={METRIC_META[metric].unit === '$/1%' ? '$mm/1%' : METRIC_META[metric].unit === '$' ? '$mm' : 'k'}
+            metricLabel={METRIC_META[metric].label}
+            spotRef={spotCol != null && spot != null ? { colKey: String(spotCol), label: `SPOT ${spot.toLocaleString(undefined, { maximumFractionDigits: 0 })}` } : null}
+            caption={`${METRIC_META[metric].label} by strike and expiry (signed)`}
+            emptyMessage="No computable cells — missing OI or observed IV."
+          />
+        </div>
+      </div>
       <div className="rounded border p-2 font-mono text-[10px] text-muted-foreground">
         GEX = sign · gamma · OI(BTC) · S² · 0.01. Gamma from canonical greeksEuropean at observed mark IV, ACT/365 expiry, venue index spot. Rows tradable: {tradableCount}/{rows.length}. Missing OI or IV stays null — distinct from zero.
       </div>

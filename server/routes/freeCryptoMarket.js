@@ -10,13 +10,14 @@ export async function registerFreeCryptoMarketRoutes(fastify) {
     const currency = parseCurrency(request.params.currency);
     if (!currency) {
       reply.code(400);
-      return { error: 'currency must be BTC or ETH' };
+      return { error: 'UNSUPPORTED_CURRENCY' };
     }
     try {
       return await fetchFreeCryptoMarket(currency);
     } catch (err) {
-      reply.code(err.status === 400 ? 400 : 502);
-      return { error: 'Free crypto market unavailable', detail: String(err.message || err) };
+      const status = err.status === 400 ? 400 : 502;
+      reply.code(status);
+      return { error: status === 400 ? 'UNSUPPORTED_CURRENCY' : 'FREE_CRYPTO_UNAVAILABLE' };
     }
   });
 }

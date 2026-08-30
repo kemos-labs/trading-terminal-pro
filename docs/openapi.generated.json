@@ -686,6 +686,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -721,6 +723,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -789,6 +793,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -857,6 +863,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -923,6 +931,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -958,6 +968,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1032,6 +1044,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1067,6 +1081,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1197,6 +1213,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1232,6 +1250,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1316,6 +1336,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1398,6 +1420,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1444,7 +1468,152 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "currency",
+                    "symbol",
+                    "venues",
+                    "fetchedAt",
+                    "source",
+                    "note"
+                  ],
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "BTC",
+                        "ETH"
+                      ]
+                    },
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "venues": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "venue",
+                          "symbol",
+                          "last",
+                          "mark",
+                          "index",
+                          "funding8h",
+                          "openInterest",
+                          "volume24hUsd",
+                          "change24hPct",
+                          "fetchedAt"
+                        ],
+                        "properties": {
+                          "venue": {
+                            "type": "string",
+                            "enum": [
+                              "Binance Futures",
+                              "Bybit Linear"
+                            ]
+                          },
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "last": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "mark": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "index": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "funding8h": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "openInterest": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "volume24hUsd": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "change24hPct": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "fetchedAt": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "fetchedAt": {
+                      "type": "integer"
+                    },
+                    "source": {
+                      "type": "string",
+                      "const": "free-exchanges"
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -1468,6 +1637,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1538,6 +1709,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1573,6 +1746,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1629,6 +1804,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1664,6 +1841,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"
@@ -1699,6 +1878,8 @@
                         "STALE_ONLY",
                         "INSUFFICIENT_COVERAGE",
                         "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
                         "RATE_LIMITED",
                         "no_api_key",
                         "budget_exhausted"

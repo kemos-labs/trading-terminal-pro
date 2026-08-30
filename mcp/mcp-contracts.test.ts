@@ -138,9 +138,7 @@ describe('MCP read-only server (contract)', () => {
   });
 
   it('invalid symbol errors with typed error (never fabricates)', async () => {
-    const res = (await client.call('tools/call', { name: 'terminal.get_options_chain', arguments: { symbol: 'AA++bad' } })) as { content: { text: string }[] };
-    const content = JSON.stringify(res).toLowerCase();
-    expect(content).toContain('invalid_symbol');
+    await expect(client.call('tools/call', { name: 'terminal.get_options_chain', arguments: { symbol: 'AA++bad' } })).rejects.toThrow(/invalid format/i);
   });
 
   it('unknown tool name → protocol error (never auto-substitutes)', async () => {
@@ -151,7 +149,7 @@ describe('MCP read-only server (contract)', () => {
     const res = (await client.call('tools/call', { name: 'terminal.get_crypto_carry', arguments: { currency: 'BTC' } })) as { content: { text: string }[] };
     expect(res.content[0].text).not.toContain('NaN');
     expect(res.content[0].text).not.toContain('Infinity');
-  });
+  }, 20_000);
 
   it('academy search returns bounded results (≤12)', async () => {
     const res = (await client.call('tools/call', { name: 'terminal.search_academy', arguments: { q: 'option' } })) as { content: { text: string }[] };

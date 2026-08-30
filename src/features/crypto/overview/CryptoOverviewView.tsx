@@ -8,6 +8,7 @@ export function CryptoOverviewView() {
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
   const [freeMarket, setFreeMarket] = useState<FreeCryptoMarket | null>(null);
+  const [freeError, setFreeError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -16,18 +17,19 @@ export function CryptoOverviewView() {
       setBundle(r);
       setStale(Date.now() - r.fetchedAt > 60_000);
     }).catch((e: Error) => { if (!cancelled) setError(e.message); });
-    fetchFreeCryptoMarket('BTC').then(r => { if (!cancelled) setFreeMarket(r); }).catch(() => { /* Deribit remains authoritative for options */ });
+    fetchFreeCryptoMarket('BTC').then(r => { if (!cancelled) setFreeMarket(r); }).catch((e: Error) => { if (!cancelled) setFreeError(e.message); });
     return () => { cancelled = true; };
   }, []);
 
-  if (error) return (
-    <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
-      <div className="font-bold">Provider unavailable</div>
-      <div className="mt-1 text-muted-foreground">{error}</div>
+  if (!bundle) return (
+    <div className="space-y-3" data-testid="overview-workstation">
+      <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
+        <div className="font-bold">Deribit unavailable</div>
+        <div className="mt-1 text-muted-foreground">{error ?? 'Options, Greeks, option trades, and volatility are unavailable.'}</div>
+      </div>
+      {freeError ? <FreeUnavailable /> : freeMarket ? <FreeSnapshot market={freeMarket} /> : <div className="p-3 font-mono text-xs animate-pulse">Loading free snapshot…</div>}
     </div>
   );
-
-  if (!bundle) return <div className="p-4 font-mono text-xs animate-pulse">Loading overview…</div>;
 
   const perp = bundle.instruments.find(t => t.kind === 'perp');
   const spot = bundle.indexPrice ?? perp?.markPrice ?? null;
@@ -86,24 +88,30 @@ export function CryptoOverviewView() {
           </div>
         </div>
       </div>
-      {freeMarket && (
-        <div className="rounded border border-sky-500/30 p-3" data-testid="free-market-snapshot">
-          <div className="flex flex-wrap items-center gap-2 font-mono text-xs font-bold uppercase">
-            <span>Free multi-venue snapshot</span>
-            <span className="rounded bg-sky-500/15 px-2 py-1 text-sky-300">Binance + Bybit</span>
-          </div>
-          <div className="mt-2 grid grid-cols-1 gap-2 font-mono text-xs md:grid-cols-2">
-            {freeMarket.venues.map(v => (
-              <div key={v.venue} className="rounded bg-muted/50 p-2">
-                <div className="font-bold">{v.venue}</div>
-                <div>Mark: {v.mark != null ? v.mark.toFixed(1) : '—'} · 24h: {v.change24hPct != null ? `${v.change24hPct.toFixed(2)}%` : '—'}</div>
-                <div>Funding 8h: {v.funding8h != null ? `${(v.funding8h * 100).toFixed(4)}%` : '—'} · OI: {v.openInterest != null ? v.openInterest.toLocaleString() : '—'}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2 text-[10px] text-muted-foreground">Public exchange data; free alternative to Velo, not Velo-normalized.</div>
-        </div>
-      )}
+      {freeError ? <FreeUnavailable /> : freeMarket && <FreeSnapshot market={freeMarket} />}
     </div>
   );
+}
+
+function FreeUnavailable() {
+  return <div className="rounded border border-destructive bg-destructive/10 p-3 font-mono text-xs" role="alert" data-testid="free-market-unavailable">
+    <strong>Free multi-venue snapshot unavailable</strong>
+    <div className="mt-1 text-muted-foreground">Public exchange data; free alternative to Velo, not Velo-normalized.</div>
+  </div>;
+}
+
+function FreeSnapshot({ market }: { market: FreeCryptoMarket }) {
+  return <div className="rounded border border-sky-500/30 p-3" data-testid="free-market-snapshot">
+    <div className="flex flex-wrap items-center gap-2 font-mono text-xs font-bold uppercase">
+      <span>Free multi-venue snapshot</span><span className="rounded bg-sky-500/15 px-2 py-1 text-sky-300">Binance + Bybit</span>
+    </div>
+    <div className="mt-2 grid grid-cols-1 gap-2 font-mono text-xs md:grid-cols-2">
+      {market.venues.map(v => <div key={v.venue} className="rounded bg-muted/50 p-2">
+        <div className="font-bold">{v.venue}</div>
+        <div>Mark: {v.mark != null ? v.mark.toFixed(1) : '—'} · Index: {v.index != null ? v.index.toFixed(1) : '—'} · Last: {v.last != null ? v.last.toFixed(1) : '—'}</div>
+        <div>Funding 8h: {v.funding8h != null ? `${(v.funding8h * 100).toFixed(4)}%` : '—'} · OI: {v.openInterest != null ? v.openInterest.toLocaleString() : '—'}</div>
+      </div>)}
+    </div>
+    <div className="mt-2 text-[10px] text-muted-foreground">Public exchange data; free alternative to Velo, not Velo-normalized.</div>
+  </div>;
 }

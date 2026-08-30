@@ -27,20 +27,35 @@ async function api(pathname, timeoutMs = 15_000) {
   return { status: res.status, body };
 }
 
-function ok(content, structured = {}) {
-  return {
-    content: [{ type: 'text', text: JSON.stringify(content, null, 2) }],
-    structured,
-    isError: false,
-  };
+function ok(content) {
+  const text = JSON.stringify(content, null, 2);
+  return { content: [{ type: 'text', text }], structuredContent: content, isError: false };
 }
 
 function err(code, detail) {
   return {
     content: [{ type: 'text', text: `error: ${code} — ${detail}` }],
-    structured: { error: code, detail },
+    structuredContent: { error: code, detail },
     isError: true,
   };
+}
+
+function validateArgs(schema, args) {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return 'arguments must be an object';
+  const properties = schema.properties ?? {};
+  for (const key of schema.required ?? []) if (!(key in args)) return `missing required property: ${key}`;
+  if (schema.additionalProperties === false) for (const key of Object.keys(args)) if (!(key in properties)) return `additional property not allowed: ${key}`;
+  for (const [key, rule] of Object.entries(properties)) if (key in args) {
+    const value = args[key];
+    if (rule.type === 'string' && typeof value !== 'string') return `${key} must be a string`;
+    if (rule.type === 'string') {
+      if (rule.minLength != null && value.length < rule.minLength) return `${key} is too short`;
+      if (rule.maxLength != null && value.length > rule.maxLength) return `${key} is too long`;
+      if (rule.enum && !rule.enum.includes(value)) return `${key} must be one of: ${rule.enum.join(', ')}`;
+      if (rule.pattern && !(new RegExp(rule.pattern).test(value))) return `${key} has invalid format`;
+    }
+  }
+  return null;
 }
 
 function requireSymbol(args, def = 'SPY') {
@@ -105,9 +120,7 @@ const TOOLS = [
     handler: async ({ symbol }) => {
       const sym = requireSymbol({ symbol });
       if (!sym) return err('INVALID_SYMBOL', String(symbol));
-      const suffix = sym.startsWith('BTC') || sym.startsWith('ETH')
-        ? `/api/deribit/market/${sym.slice(0, 3)}`
-        : `/api/options/${encodeURIComponent(sym)}`;
+      const suffix = sym === 'BTC' || sym === 'ETH' ? `/api/deribit/market/${sym}` : `/api/options/${encodeURIComponent(sym)}`;
       const { status, body } = await api(suffix);
       return status === 200 ? ok({ symbol: sym, data: body }) : err('PROVIDER_UNAVAILABLE', `${suffix} ${status}`);
     },
@@ -125,7 +138,8 @@ const TOOLS = [
     handler: async ({ symbol }) => {
       const sym = requireSymbol({ symbol });
       if (!sym) return err('INVALID_SYMBOL', String(symbol));
-      const { status, body } = await api(`/api/options/${encodeURIComponent(sym)}`);
+      const path = sym === 'BTC' || sym === 'ETH' ? `/api/deribit/market/${sym}` : `/api/options/${encodeURIComponent(sym)}`;
+      const { status, body } = await api(path);
       if (status !== 200) return err('PROVIDER_UNAVAILABLE', `options ${status}`);
       return ok({
         symbol: sym,
@@ -147,7 +161,8 @@ const TOOLS = [
     handler: async ({ symbol }) => {
       const sym = requireSymbol({ symbol });
       if (!sym) return err('INVALID_SYMBOL', String(symbol));
-      const { status, body } = await api(`/api/options/${encodeURIComponent(sym)}`);
+      const path = sym === 'BTC' || sym === 'ETH' ? `/api/deribit/market/${sym}` : `/api/options/${encodeURIComponent(sym)}`;
+      const { status, body } = await api(path);
       return status === 200 ? ok({ symbol: sym, chain: body }) : err('PROVIDER_UNAVAILABLE', `options ${status}`);
     },
   },
@@ -164,7 +179,8 @@ const TOOLS = [
     handler: async ({ symbol }) => {
       const sym = requireSymbol({ symbol });
       if (!sym) return err('INVALID_SYMBOL', String(symbol));
-      const { status, body } = await api(`/api/options/${encodeURIComponent(sym)}`);
+      const path = sym === 'BTC' || sym === 'ETH' ? `/api/deribit/market/${sym}` : `/api/options/${encodeURIComponent(sym)}`;
+      const { status, body } = await api(path);
       return status === 200 ? ok({ symbol: sym, chain: body, assumptions: ['OI-weight is a proxy, sign model calls +1/puts −1; not dealer inventory'] }) : err('PROVIDER_UNAVAILABLE', `options ${status}`);
     },
   },
@@ -202,6 +218,7 @@ const TOOLS = [
       const c = String(currency).toUpperCase();
       if (!['BTC', 'ETH'].includes(c)) return err('INVALID_SYMBOL', currency);
       const market = await api(`/api/deribit/market/${c}`);
+      if (market.status !== 200) return err('PROVIDER_UNAVAILABLE', `deribit market ${market.status}`);
       const funding = await api(`/api/deribit/funding-history?currency=${c}&days=7`);
       return ok({
         currency: c,
@@ -221,8 +238,11 @@ const TOOLS = [
     handler: async ({ currency }) => {
       const c = String(currency).toUpperCase();
       if (!['BTC', 'ETH'].includes(c)) return err('INVALID_SYMBOL', currency);
-      const { status, body } = await api(`/api/deribit/trades/${c}?hours=24&count=200`);
-      return status === 200 ? ok({ currency: c, trades: body }) : err('PROVIDER_UNAVAILABLE', `trades ${status}`);
+      const [trades, free] = await Promise.all([
+        api(`/api/deribit/trades/${c}?hours=24&count=200`), api(`/api/free-crypto/market/${c}`),
+      ]);
+      if (trades.status !== 200 && free.status !== 200) return err('PROVIDER_UNAVAILABLE', 'crypto flow unavailable');
+      return ok({ currency: c, trades: trades.status === 200 ? trades.body : null, freeSnapshot: free.status === 200 ? free.body : null });
     },
   },
   {
@@ -262,10 +282,21 @@ function readMessage(buffer) {
 export async function runMcpStdio() {
   const stdin = process.stdin;
   const stdout = process.stdout;
-  
-  stdin.resume();
-  // Read stdin fully (MCP servers may use non-blocking; here we assume newline framing).
   let input = '';
+  const write = (id, result, error) => stdout.write(JSON.stringify({ jsonrpc: '2.0', id, ...(error ? { error } : { result }) }) + '\n');
+  const handle = async (msg) => {
+    if (!msg || typeof msg !== 'object' || !Object.prototype.hasOwnProperty.call(msg, 'id')) return;
+    const id = msg.id;
+    if (msg.method === 'initialize') return write(id, { protocolVersion: '2025-11-25', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'terminal-readonly', version: '1.0.0' } });
+    if (msg.method === 'tools/list') return write(id, { tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) });
+    if (msg.method !== 'tools/call') return write(id, undefined, { code: -32601, message: `Method not found: ${msg.method}` });
+    const tool = TOOL_MAP.get(msg.params?.name);
+    if (!tool) return write(id, undefined, { code: -32602, message: `Unknown tool: ${msg.params?.name}` });
+    const invalid = validateArgs(tool.inputSchema, msg.params?.arguments ?? {});
+    if (invalid) return write(id, undefined, { code: -32602, message: invalid });
+    try { write(id, await tool.handler(msg.params.arguments)); }
+    catch (e) { write(id, undefined, { code: -32000, message: String(e?.message ?? e) }); }
+  };
   stdin.setEncoding('utf8');
   stdin.on('data', (chunk) => {
     input += chunk;
@@ -274,49 +305,16 @@ export async function runMcpStdio() {
     for (const raw of messages) {
       if (!raw.trim()) continue;
       let msg;
-      try { msg = JSON.parse(raw); } catch { continue; }
-      const id = msg.id;
-      const reply = {};
-      reply.jsonrpc = '2.0';
-      reply.id = id;
-      const m = msg.method;
-      if (m === 'initialize') {
-        reply.result = {
-          protocolVersion: '2025-11-25',
-          capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'terminal-readonly', version: '1.0.0' },
-        };
-      } else if (m === 'tools/list') {
-        reply.result = {
-          tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
-        };
-      } else if (m === 'tools/call') {
-        const tool = TOOL_MAP.get(msg.params?.name);
-        const input = msg.params?.arguments ?? {};
-        if (!tool) {
-          reply.error = { code: -32602, message: `Unknown tool: ${msg.params?.name}` };
-        } else {
-          tool.handler(input)
-            .then((result) => {
-              stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
-            })
-            .catch((e) => {
-              stdout.write(JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32000, message: String(e?.message ?? e) } }) + '\n');
-            });
-          return; // async reply
-        }
-      } else {
-        reply.error = { code: -32601, message: `Method not found: ${m}` };
-      }
-      stdout.write(JSON.stringify(reply) + '\n');
+      try { msg = JSON.parse(raw); } catch { write(null, undefined, { code: -32700, message: 'Parse error' }); continue; }
+      void handle(msg);
     }
   });
-  stdin.on('end', () => {});
+  stdin.resume();
 }
 
 if (process.argv[1] && process.argv[1].endsWith('mcp-server.js')) {
   runMcpStdio().catch((e) => {
-    stderr.write(String(e?.stack ?? e) + '\n');
+    process.stderr.write(String(e?.stack ?? e) + '\n');
     process.exit(1);
   });
 }

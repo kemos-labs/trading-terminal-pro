@@ -20,7 +20,7 @@ interface Briefing {
     rates: { available: boolean; provider: string; sofr: number | null; effr: number | null; usy2: number | null; usy10: number | null; spread_2s10s_bps: number | null; asOf: string | null };
     crypto: {
       available: boolean; provider: string; indexPrice: number | null; funding8h: number | null; optionCount: number | null; asOf: number | null;
-      freeFallback: { available: boolean; provider: string; index?: number | null; venues?: string[]; asOf?: number | null };
+      freeFallback: { available: boolean; provider: string; venues?: { venue: string; mark: number | null; index: number | null; last: number | null }[]; asOf?: number | null }; 
     };
     ksa: { available: boolean; provider: string; tasi: number | null; tasiChangePct: number | null; delayed: boolean | null; asOf: string | null };
   };
@@ -237,7 +237,7 @@ export function HomeBriefing() {
               <Row k="Options listed" v={d.crypto.optionCount != null ? String(d.crypto.optionCount) : '—'} />
               <div className="mt-1 border-t border-border/50 pt-1 text-type-2xs text-muted-foreground">
                 {d.crypto.freeFallback.available
-                  ? <span>Free fallback: {d.crypto.freeFallback.provider} · {fmtPrice(d.crypto.freeFallback.index ?? null, 1)}</span>
+                  ? <span>Free fallback: {d.crypto.freeFallback.provider} · {(d.crypto.freeFallback.venues ?? []).map((v) => `${v.venue}: ${fmtPrice(v.mark ?? v.index ?? v.last, 1)}`).join(' · ') || 'observed prices unavailable'}</span>
                   : <span className="text-muted-foreground/70">Free fallback: unavailable</span>}
               </div>
             </>

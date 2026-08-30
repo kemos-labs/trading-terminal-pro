@@ -14,7 +14,6 @@ export interface FreeCryptoVenue {
 export interface FreeCryptoMarket {
   currency: 'BTC' | 'ETH';
   symbol: string;
-  index: number | null;
   venues: FreeCryptoVenue[];
   fetchedAt: number;
   source: 'free-exchanges';

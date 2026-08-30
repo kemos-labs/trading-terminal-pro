@@ -61,7 +61,7 @@ const errorResponse = {
             type: 'string',
             enum: [
               'PROVIDER_UNAVAILABLE', 'ENTITLEMENT_MISSING', 'STALE_ONLY',
-              'INSUFFICIENT_COVERAGE', 'INVALID_SYMBOL', 'RATE_LIMITED',
+              'INSUFFICIENT_COVERAGE', 'INVALID_SYMBOL', 'UNSUPPORTED_CURRENCY', 'FREE_CRYPTO_UNAVAILABLE', 'RATE_LIMITED',
               'no_api_key', 'budget_exhausted',
             ],
           },
@@ -206,8 +206,18 @@ export function buildOpenApiDocument(registry) {
         get: {
           operationId: 'getFreeCryptoSnapshot', tags: ['crypto'],
           summary: 'Free multi-venue snapshot — public exchange data; free alternative to Velo, not Velo-normalized',
-          parameters: [currencyParam],
-          responses: { 200: jsonOk({ type: 'object' }, 'snapshot'), 502: errorResponse },
+          parameters: [{ ...currencyParam, schema: { type: 'string', enum: ['BTC', 'ETH'] } }],
+          responses: {
+            200: jsonOk({ type: 'object', additionalProperties: false, required: ['currency', 'symbol', 'venues', 'fetchedAt', 'source', 'note'], properties: {
+              currency: { type: 'string', enum: ['BTC', 'ETH'] }, symbol: { type: 'string' },
+              venues: { type: 'array', minItems: 1, items: { type: 'object', additionalProperties: false, required: ['venue', 'symbol', 'last', 'mark', 'index', 'funding8h', 'openInterest', 'volume24hUsd', 'change24hPct', 'fetchedAt'], properties: {
+                venue: { type: 'string', enum: ['Binance Futures', 'Bybit Linear'] }, symbol: { type: 'string' },
+                last: { type: ['number', 'null'] }, mark: { type: ['number', 'null'] }, index: { type: ['number', 'null'] }, funding8h: { type: ['number', 'null'] }, openInterest: { type: ['number', 'null'] }, volume24hUsd: { type: ['number', 'null'] }, change24hPct: { type: ['number', 'null'] }, fetchedAt: { type: 'integer' },
+              } } },
+              fetchedAt: { type: 'integer' }, source: { type: 'string', const: 'free-exchanges' }, note: { type: 'string' },
+            } }, 'snapshot'),
+            400: errorResponse, 502: errorResponse,
+          },
         },
       },
       '/api/venues/options/{currency}': {

@@ -30,16 +30,24 @@ async function getJson(url) {
     });
     if (!res.ok) throw new Error(`Free crypto upstream HTTP ${res.status}`);
     const json = await res.json();
-    if (!json || typeof json !== 'object') throw new Error('Free crypto upstream returned invalid JSON');
+    if (!json || typeof json !== 'object' || Array.isArray(json)) throw new Error('Free crypto upstream returned invalid JSON');
     return json;
   } finally {
     clearTimeout(timer);
   }
 }
 
-function finite(value) {
-  const n = Number(value);
+export function finite(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const n = Number(value.trim());
   return Number.isFinite(n) ? n : null;
+}
+
+function validVenue(venue) {
+  return venue && (venue.mark !== null || venue.index !== null || venue.last !== null)
+    ? venue
+    : null;
 }
 
 async function fetchBinance(symbol) {
@@ -48,18 +56,14 @@ async function fetchBinance(symbol) {
     getJson(`${VENUES.binance}/fapi/v1/premiumIndex?symbol=${symbol}`),
     getJson(`${VENUES.binance}/fapi/v1/openInterest?symbol=${symbol}`),
   ]);
-  return {
-    venue: 'Binance Futures',
-    symbol,
-    last: finite(ticker.lastPrice),
-    mark: finite(premium.markPrice),
-    index: finite(premium.indexPrice),
-    funding8h: finite(premium.lastFundingRate),
-    openInterest: finite(oi.openInterest),
-    volume24hUsd: finite(ticker.quoteVolume),
-    change24hPct: finite(ticker.priceChangePercent),
-    fetchedAt: Date.now(),
+  const venue = {
+    venue: 'Binance Futures', symbol,
+    last: finite(ticker.lastPrice), mark: finite(premium.markPrice), index: finite(premium.indexPrice),
+    funding8h: finite(premium.lastFundingRate), openInterest: finite(oi.openInterest),
+    volume24hUsd: finite(ticker.quoteVolume), change24hPct: finite(ticker.priceChangePercent), fetchedAt: Date.now(),
   };
+  if (!validVenue(venue)) throw new Error('Binance returned unusable price data');
+  return venue;
 }
 
 async function fetchBybit(symbol) {
@@ -67,18 +71,15 @@ async function fetchBybit(symbol) {
   const json = await getJson(url);
   const row = Array.isArray(json.result?.list) ? json.result.list[0] : null;
   if (!row) throw new Error('Bybit returned no ticker');
-  return {
-    venue: 'Bybit Linear',
-    symbol,
-    last: finite(row.lastPrice),
-    mark: finite(row.markPrice),
-    index: finite(row.indexPrice),
-    funding8h: finite(row.fundingRate),
-    openInterest: finite(row.openInterest),
-    volume24hUsd: finite(row.turnover24h),
-    change24hPct: finite(row.price24hPcnt != null ? Number(row.price24hPcnt) * 100 : null),
-    fetchedAt: Date.now(),
+  const price24h = finite(row.price24hPcnt);
+  const venue = {
+    venue: 'Bybit Linear', symbol,
+    last: finite(row.lastPrice), mark: finite(row.markPrice), index: finite(row.indexPrice),
+    funding8h: finite(row.fundingRate), openInterest: finite(row.openInterest),
+    volume24hUsd: finite(row.turnover24h), change24hPct: price24h === null ? null : price24h * 100, fetchedAt: Date.now(),
   };
+  if (!validVenue(venue)) throw new Error('Bybit returned unusable price data');
+  return venue;
 }
 
 export async function fetchFreeCryptoMarket(currency) {
@@ -92,14 +93,11 @@ export async function fetchFreeCryptoMarket(currency) {
   const venues = results
     .filter((r) => r.status === 'fulfilled')
     .map((r) => r.value);
-  if (venues.length === 0) throw new Error('All free crypto venues unavailable');
+  if (venues.length === 0) throw Object.assign(new Error('All free crypto venues unavailable'), { status: 502 });
 
-  const validIndexes = venues.map((v) => v.index ?? v.mark ?? v.last).filter((v) => v != null);
-  const index = validIndexes.length ? validIndexes.reduce((a, b) => a + b, 0) / validIndexes.length : null;
   const value = {
     currency: c,
     symbol,
-    index,
     venues,
     fetchedAt: Date.now(),
     source: 'free-exchanges',

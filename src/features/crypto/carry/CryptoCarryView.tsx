@@ -23,52 +23,11 @@ export function CryptoCarryView() {
     return () => { cancelled = true; };
   }, []);
 
-  if (error) return (
-    <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
-      <div className="font-bold">Provider unavailable</div>
-      <div className="mt-1 text-muted-foreground">{error}</div>
-    </div>
-  );
-
-  if (!bundle) return <div className="p-4 font-mono text-xs animate-pulse">Loading carry…</div>;
-
-  const perp = bundle.instruments.find(t => t.kind === 'perp');
-  const spot = bundle.indexPrice ?? perp?.markPrice ?? null;
-  const now = Date.now();
-
-  // Native 8h funding from the perp quote; annualization via canonical math (×1095), labelled as run-rate.
-  const funding = bundle.funding8h != null
-    ? toFundingSnapshot('Deribit', `${bundle.currency}-PERPETUAL`, bundle.funding8h, perp?.timestamp ?? bundle.fetchedAt, {})
-    : null;
-
-  // Dated futures: all valid NON-EXPIRED futures with an observed price.
-  const datedFutures = bundle.instruments
-    .filter(t => t.kind === 'future' && t.expiryMs != null && t.expiryMs > now && t.markPrice != null && t.markPrice > 0)
-    .sort((a, b) => a.expiryMs! - b.expiryMs!);
-  const nearest = datedFutures[0] ?? null;
-  const basis = spot != null && nearest
-    ? computeBasis(spot, nearest.markPrice!, nearest.expiryMs!, now, { instrument: nearest.instrument })
-    : null;
-
-  /** Basis TERM STRUCTURE — simple annualized carry per dated future (observed marks). */
-  const basisTerm = useMemo(() => {
-    if (spot == null) return [];
-    return datedFutures.slice(0, 12).map((f) => {
-      const b = computeBasis(spot, f.markPrice!, f.expiryMs!, now, { instrument: f.instrument });
-      return {
-        label: new Date(f.expiryMs!).toISOString().slice(5, 10),
-        dte: Math.round((f.expiryMs! - now) / 864e5),
-        annPct: b != null ? b.simpleAnnualized * 100 : null,
-        pct: b != null ? b.percentage * 100 : null,
-      };
-    });
-  }, [datedFutures, spot, now]);
-
   /** Funding history — Deribit public get_funding_history (server-cached). */
   const [fundingHistory, setFundingHistory] = useState<{ t: number; rate8h: number }[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/deribit/funding-history?currency=${bundle.currency}&days=30`)
+    fetch(`/api/deribit/funding-history?currency=${bundle?.currency ?? 'BTC'}&days=30`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (cancelled) return;
@@ -80,7 +39,26 @@ export function CryptoCarryView() {
       })
       .catch(() => { if (!cancelled) setFundingHistory(null); });
     return () => { cancelled = true; };
-  }, [bundle.currency]);
+  }, [bundle?.currency]);
+
+  const now = Date.now();
+  const datedFutures = (bundle?.instruments ?? [])
+    .filter(t => t.kind === 'future' && t.expiryMs != null && t.expiryMs > now && t.markPrice != null && t.markPrice > 0)
+    .sort((a, b) => a.expiryMs! - b.expiryMs!);
+  /** Basis TERM STRUCTURE — simple annualized carry per dated future (observed marks). */
+  const basisTerm = useMemo(() => {
+    const spotC = bundle?.indexPrice ?? bundle?.instruments.find(t => t.kind === 'perp')?.markPrice ?? null;
+    if (spotC == null) return [];
+    return datedFutures.slice(0, 12).map((f) => {
+      const b = computeBasis(spotC, f.markPrice!, f.expiryMs!, now, { instrument: f.instrument });
+      return {
+        label: new Date(f.expiryMs!).toISOString().slice(5, 10),
+        dte: Math.round((f.expiryMs! - now) / 864e5),
+        annPct: b != null ? b.simpleAnnualized * 100 : null,
+        pct: b != null ? b.percentage * 100 : null,
+      };
+    });
+  }, [datedFutures, now]);
 
   const basisDomain = useMemo(
     () => tightDomain(basisTerm.map((p) => p.annPct), 0.12, { minPadAbs: 0.5 }),
@@ -90,6 +68,31 @@ export function CryptoCarryView() {
     () => tightDomain((fundingHistory ?? []).map((r) => r.rate8h), 0.15, { minPadAbs: 0.005 }),
     [fundingHistory],
   );
+
+
+
+
+  if (error) return (
+    <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
+      <div className="font-bold">Provider unavailable</div>
+      <div className="mt-1 text-muted-foreground">{error}</div>
+    </div>
+  );
+
+  if (!bundle) return <div className="p-4 font-mono text-xs animate-pulse">Loading carry…</div>;
+
+  const perp = bundle.instruments.find(t => t.kind === 'perp');
+  const spot = bundle.indexPrice ?? perp?.markPrice ?? null;
+
+  // Native 8h funding from the perp quote; annualization via canonical math (×1095), labelled as run-rate.
+  const funding = bundle.funding8h != null
+    ? toFundingSnapshot('Deribit', `${bundle.currency}-PERPETUAL`, bundle.funding8h, perp?.timestamp ?? bundle.fetchedAt, {})
+    : null;
+
+  const nearest = datedFutures[0] ?? null;
+  const basis = spot != null && nearest
+    ? computeBasis(spot, nearest.markPrice!, nearest.expiryMs!, now, { instrument: nearest.instrument })
+    : null;
 
   return (
     <div data-testid="carry-workstation" className="space-y-3">

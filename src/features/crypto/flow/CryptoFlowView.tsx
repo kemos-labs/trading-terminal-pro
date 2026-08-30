@@ -22,6 +22,45 @@ export function CryptoFlowView() {
     return () => { cancelled = true; };
   }, []);
 
+  // Aggregates: call/put × buy/sell taker counts + native premium shares.
+  const agg = useMemo(() => {
+    const g = { buy: 0, sell: 0 };
+    const p = { buy: 0, sell: 0 };
+    for (const t of trades ?? []) {
+      const isCall = /-C\d+/.test(t.instrument);
+      const bucket = isCall ? g : p;
+      if (t.side === 'buy') bucket.buy += 1;
+      else bucket.sell += 1;
+    }
+    return { calls: g, puts: p };
+  }, [trades]);
+
+  // Trade timeline: per-hour call/put taker counts (bubble proxy via bar height).
+  const timeline = useMemo(() => {
+    const byHour = new Map<string, { call: number; put: number }>();
+    for (const t of trades ?? []) {
+      if (t.timestamp == null) continue;
+      const h = new Date(t.timestamp).toISOString().slice(11, 13) + 'h';
+      const e = byHour.get(h) ?? { call: 0, put: 0 };
+      if (/-C\d+/.test(t.instrument)) e.call += 1;
+      else e.put += 1;
+      byHour.set(h, e);
+    }
+    return [...byHour.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([h, v]) => ({ hour: h, ...v }));
+  }, [trades]);
+
+  // Expiry distribution (top 6 by trade count).
+  const byExpiry = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of trades ?? []) {
+      const mm = t.instrument.match(/(\d+[A-Z])\d?-/);
+      const key = mm?.[1] ?? 'other';
+      m.set(key, (m.get(key) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => ({ expiry: k, trades: n }));
+  }, [trades]);
+
+
   if (error) return (
     <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
       <div className="font-bold">Provider unavailable</div>
@@ -43,44 +82,6 @@ export function CryptoFlowView() {
   const nativeCcy = trades.find(t => t.nativeCurrency)?.nativeCurrency ?? 'BTC (inverse)';
   const totalNative = trades.reduce((s, t) => s + (t.premiumNative ?? 0), 0);
   const buyNative = trades.filter(t => t.side === 'buy').reduce((s, t) => s + (t.premiumNative ?? 0), 0);
-
-  // Aggregates: call/put × buy/sell taker counts + native premium shares.
-  const agg = useMemo(() => {
-    const g = { buy: 0, sell: 0 };
-    const p = { buy: 0, sell: 0 };
-    for (const t of trades) {
-      const isCall = /-C\d+/.test(t.instrument);
-      const bucket = isCall ? g : p;
-      if (t.side === 'buy') bucket.buy += 1;
-      else bucket.sell += 1;
-    }
-    return { calls: g, puts: p };
-  }, [trades]);
-
-  // Trade timeline: per-hour call/put taker counts (bubble proxy via bar height).
-  const timeline = useMemo(() => {
-    const byHour = new Map<string, { call: number; put: number }>();
-    for (const t of trades) {
-      if (t.timestamp == null) continue;
-      const h = new Date(t.timestamp).toISOString().slice(11, 13) + 'h';
-      const e = byHour.get(h) ?? { call: 0, put: 0 };
-      if (/-C\d+/.test(t.instrument)) e.call += 1;
-      else e.put += 1;
-      byHour.set(h, e);
-    }
-    return [...byHour.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([h, v]) => ({ hour: h, ...v }));
-  }, [trades]);
-
-  // Expiry distribution (top 6 by trade count).
-  const byExpiry = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const t of trades) {
-      const mm = t.instrument.match(/(\d+[A-Z])\d?-/);
-      const key = mm?.[1] ?? 'other';
-      m.set(key, (m.get(key) ?? 0) + 1);
-    }
-    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => ({ expiry: k, trades: n }));
-  }, [trades]);
 
   return (
     <div data-testid="flow-workstation" className="space-y-3">

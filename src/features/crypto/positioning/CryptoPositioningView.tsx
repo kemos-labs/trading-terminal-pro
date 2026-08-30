@@ -30,56 +30,37 @@ export function CryptoPositioningView() {
     return () => { cancelled = true; };
   }, []);
 
-  if (error) return (
-    <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
-      <div className="font-bold">Provider unavailable</div>
-      <div className="mt-1 text-muted-foreground">{error}</div>
-    </div>
-  );
 
-  if (!bundle) return <div className="p-4 font-mono text-xs animate-pulse">Loading positioning…</div>;
 
-  const spot = bundle.indexPrice ?? bundle.instruments.find(t => t.kind === 'perp')?.markPrice ?? null;
-  const options = bundle.instruments.filter(t => t.kind === 'option' && t.strike != null && t.expiryMs != null);
-
-  if (options.length === 0) return (
-    <div className="rounded border border-dashed p-8 text-center font-mono text-xs" data-testid="positioning-empty">
-      <div className="font-bold">No OI data</div>
-      <div className="mt-1 text-muted-foreground">Deribit returned no active options. Check venue or retry.</div>
-    </div>
-  );
-
-  // Canonical Greeks from OBSERVED mark IV + ACT/365 expiry + venue index.
-  // Rows missing OI or mark IV contribute null exposure — never zero, never volume fallback.
-  const now = Date.now();
-  const rows: PositionRow[] = options.map((t: NormalizedTicker) => {
-    const T = t.expiryMs != null && t.expiryMs > now ? yearFractionAct365(now, t.expiryMs) : null;
+  const nowTs0 = Date.now();
+  const spot = (bundle?.indexPrice ?? bundle?.instruments.find(t => t.kind === 'perp')?.markPrice ?? null) as number | null;
+  const options = (bundle?.instruments ?? []).filter(t => t.kind === 'option' && t.strike != null && t.expiryMs != null);
+  const rows = useMemo((): PositionRow[] => (options ?? []).map((t: NormalizedTicker) => {
+    const nowTs = Date.now();
+    const T = t.expiryMs != null && t.expiryMs > nowTs ? yearFractionAct365(nowTs, t.expiryMs) : null;
     const tradable = t.openInterest != null && t.markIv != null && T != null && T > 0 && spot != null;
     if (!tradable) {
       return { optionType: t.optionType === 'put' ? 'put' : 'call', strike: t.strike!, expiryMs: t.expiryMs!, oi: t.openInterest, gamma: 0, delta: 0, vannaRaw: 0, charmRaw: 0, spot: spot ?? 0, available: false };
     }
     const g = greeksEuropean(t.optionType === 'put' ? 'put' : 'call', spot!, t.strike!, T, 0 as never, 0 as never, t.markIv as never);
     return { optionType: t.optionType === 'put' ? 'put' : 'call', strike: t.strike!, expiryMs: t.expiryMs!, oi: t.openInterest, gamma: g.gamma, delta: g.delta, vannaRaw: g.vanna, charmRaw: g.charm, spot: spot!, available: true };
-  });
-
-  const tradableCount = rows.filter(r => r.oi != null && r.gamma !== 0 || (r.oi != null && r.gamma === 0 && r.spot > 0)).length;
-  const { total } = aggregateExposure(rows, (r) => (r.optionType === 'put' ? -1 : 1));
+    }), [options]);
 
   // Strike × expiry exposure matrix — metric-switchable, spot-centered (never first-N).
   // Sign model: calls +1 / puts −1 applied to OI-weighted canonical greeks.
   const strikes = useMemo(() => {
-    const all = [...new Set(options.map(t => t.strike!))].sort((a, b) => a - b);
+    const all = [...new Set((options ?? []).map(t => t.strike!))].sort((a, b) => a - b);
     if (spot == null) return all.slice(0, 16);
     const windowed = all.filter((k) => Math.abs(k - spot) / spot <= 0.15);
     return (windowed.length >= 6 ? windowed : all).slice(0, 16);
   }, [options, spot]);
   const expiries = useMemo(
-    () => [...new Set(options.map(t => t.expiryMs!))].sort((a, b) => a - b).slice(0, 6),
+    () => [...new Set((options ?? []).map(t => t.expiryMs!))].sort((a, b) => a - b).slice(0, 6),
     [options],
   );
   const signOf = (t: NormalizedTicker) => (t.optionType === 'put' ? -1 : 1);
 
-  const matrixCells: HeatmapCellData[][] = useMemo(() => expiries.map((exp) =>
+  const matrixCells: HeatmapCellData[][] = useMemo(() => (expiries ?? []).map((exp) =>
     strikes.map((strike) => {
       const cells = options.filter(t => t.strike === strike && t.expiryMs === exp);
       const matchingRows = rows.filter(r => r.strike === strike && r.expiryMs === exp);
@@ -118,8 +99,8 @@ export function CryptoPositioningView() {
     }),
   ), [expiries, strikes, options, rows, spot, metric, bundle]);
 
-  const matrixRows: HeatmapAxisKey[] = expiries.map((e) => ({
-    key: String(e), label: `${Math.round((e - now) / 864e5)}d`, num: Math.round((e - now) / 864e5),
+  const matrixRows: HeatmapAxisKey[] = (expiries ?? []).map((e) => ({
+    key: String(e), label: `${Math.round((e - nowTs0) / 864e5)}d`, num: Math.round((e - nowTs0) / 864e5),
   }));
   const matrixCols: HeatmapAxisKey[] = strikes.map((k) => ({
     key: String(k), label: k >= 1000 ? `${(k / 1000).toFixed(1)}k` : String(k), num: k,
@@ -130,8 +111,30 @@ export function CryptoPositioningView() {
 
   const computableCount = matrixCells.flat().filter((c) => c.value != null).length;
   const matrixTotal = matrixRows.length * matrixCols.length;
+
+  if (error) return (
+    <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
+      <div className="font-bold">Provider unavailable</div>
+      <div className="mt-1 text-muted-foreground">{error}</div>
+    </div>
+  );
+
+  if (!bundle) return <div className="p-4 font-mono text-xs animate-pulse">Loading positioning…</div>;
+
+  if (options.length === 0) return (
+    <div className="rounded border border-dashed p-8 text-center font-mono text-xs" data-testid="positioning-empty">
+      <div className="font-bold">No OI data</div>
+      <div className="mt-1 text-muted-foreground">Deribit returned no active options. Check venue or retry.</div>
+    </div>
+  );
+
+  // Canonical Greeks from OBSERVED mark IV + ACT/365 expiry + venue index.
+  // Rows missing OI or mark IV contribute null exposure — never zero, never volume fallback.
+
+  const tradableCount = rows.filter(r => r.oi != null && r.gamma !== 0 || (r.oi != null && r.gamma === 0 && r.spot > 0)).length;
+  const { total } = aggregateExposure(rows, (r) => (r.optionType === 'put' ? -1 : 1));
+
   const gexComputable = computableCount;
-  void matrixTotal;
 
   return (
     <div data-testid="positioning-workstation" className="space-y-3">

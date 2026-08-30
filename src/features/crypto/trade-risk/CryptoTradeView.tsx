@@ -11,6 +11,7 @@ export function CryptoTradeView() {
   const [legs, setLegs] = useState<{ strike: number; side: 'call' | 'put'; qty: number }[]>([]);
   const [showModel, setShowModel] = useState(false);
   const [stale, setStale] = useState(false);
+  const [expiryIdx, setExpiryIdx] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,7 +42,6 @@ export function CryptoTradeView() {
   const expiries = [...new Set(
     bundle.instruments.filter(t => t.kind === 'option' && t.expiryMs != null && t.expiryMs > now).map(t => t.expiryMs!),
   )].sort((a, b) => a - b);
-  const [expiryIdx, setExpiryIdx] = useState(0);
   const selectedExpiry = expiries[expiryIdx] ?? expiries[0] ?? null;
 
   if (forward == null || selectedExpiry == null) return (

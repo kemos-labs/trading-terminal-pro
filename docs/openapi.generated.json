@@ -1,0 +1,1785 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Terminal REST API",
+    "version": "1.0.0",
+    "description": "Read-only market analytics. All market responses use the common envelope (schemaVersion, requestId, symbol, asOf, fetchedAt, source, provenanceByField, unitsByField, freshness, coverage, assumptions, warnings, data). Provider keys never leave the server."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "system",
+      "description": "Health, cache, workflows"
+    },
+    {
+      "name": "equities",
+      "description": "Option chains, quotes, enrichment"
+    },
+    {
+      "name": "crypto",
+      "description": "Deribit authoritative + free multi-venue snapshot"
+    },
+    {
+      "name": "ksa",
+      "description": "Tadawul board"
+    },
+    {
+      "name": "academy",
+      "description": "Publication index"
+    }
+  ],
+  "x-workflows": [
+    {
+      "id": "home",
+      "desk": "home",
+      "title": "Home · Morning Brief",
+      "purpose": "Provider health, per-desk snapshots (vol/positioning/rates/crypto/KSA) and function launcher",
+      "deepLink": "/?desk=home",
+      "code": "HOME",
+      "apiOps": [
+        "getHomeBriefing",
+        "getHealth"
+      ],
+      "mcpTools": [
+        "terminal.get_health",
+        "terminal.get_provider_status"
+      ]
+    },
+    {
+      "id": "vol-sub-surface",
+      "desk": "vol",
+      "title": "Vol · Surface",
+      "purpose": "Observed IV matrix by strike × expiry with bid/ask/mid layers and optional 3D model mesh",
+      "deepLink": "/?desk=vol&sec=vol-sub-surface",
+      "code": "SURF",
+      "apiOps": [
+        "getOptionsChain",
+        "getVolatilitySurface"
+      ],
+      "mcpTools": [
+        "terminal.get_volatility_surface"
+      ]
+    },
+    {
+      "id": "vol-sub-smile",
+      "desk": "vol",
+      "title": "Vol · Smile",
+      "purpose": "Selected-expiry smile/skew: bid/ask/venue mark/solved mid/model layers",
+      "deepLink": "/?desk=vol&sec=vol-sub-smile",
+      "code": "SMILE",
+      "apiOps": [
+        "getOptionsChain"
+      ],
+      "mcpTools": [
+        "terminal.get_volatility_surface"
+      ]
+    },
+    {
+      "id": "vol-sub-term",
+      "desk": "vol",
+      "title": "Vol · Term",
+      "purpose": "ATM term structure, constant-delta term where supported, forward vol, IV/RV/VRP history",
+      "deepLink": "/?desk=vol&sec=vol-sub-term",
+      "code": "TERM",
+      "apiOps": [
+        "getOptionsChain"
+      ],
+      "mcpTools": [
+        "terminal.get_volatility_surface"
+      ]
+    },
+    {
+      "id": "vol-sub-greeks",
+      "desk": "vol",
+      "title": "Vol · Greeks",
+      "purpose": "Full Greeks: 2D profiles and lazy 3D Greek surface with observed/model separation",
+      "deepLink": "/?desk=vol&sec=vol-sub-greeks",
+      "code": "GRK",
+      "apiOps": [
+        "getOptionsChain",
+        "getGreeks"
+      ],
+      "mcpTools": [
+        "terminal.get_greeks"
+      ]
+    },
+    {
+      "id": "vol-sub-quality",
+      "desk": "vol",
+      "title": "Vol · Surface Fit",
+      "purpose": "SVI fit quality: residuals, observed/model masks, coverage, arbitrage checks, calibration time",
+      "deepLink": "/?desk=vol&sec=vol-sub-quality",
+      "code": "FIT",
+      "apiOps": [
+        "getOptionsChain"
+      ],
+      "mcpTools": [
+        "terminal.get_volatility_surface"
+      ]
+    },
+    {
+      "id": "pos-sub-chain",
+      "desk": "positioning",
+      "title": "Flow · Book",
+      "purpose": "Dealer exposure book: GEX/DEX/Vanna/Charm heatmaps, strike/expiry profiles, flip estimate",
+      "deepLink": "/?desk=positioning&sec=pos-sub-chain",
+      "code": "GEX",
+      "apiOps": [
+        "getOptionsChain",
+        "getPositioning"
+      ],
+      "mcpTools": [
+        "terminal.get_positioning"
+      ]
+    },
+    {
+      "id": "pos-sub-tools",
+      "desk": "positioning",
+      "title": "Flow · Tools",
+      "purpose": "Key levels, walls, max pain (derived, methodology-labelled), edge and strategy context",
+      "deepLink": "/?desk=positioning&sec=pos-sub-tools",
+      "code": "LVL",
+      "apiOps": [
+        "getPositioning"
+      ],
+      "mcpTools": [
+        "terminal.get_positioning"
+      ]
+    },
+    {
+      "id": "trade-sub-structure",
+      "desk": "desk",
+      "title": "Trade · Structure",
+      "purpose": "Multi-leg structure builder on observed execution sides, combo Greeks, payoff, breakeven",
+      "deepLink": "/?desk=desk&sec=trade-sub-structure",
+      "code": "MM",
+      "apiOps": [
+        "getOptionsChain",
+        "getGreeks"
+      ],
+      "mcpTools": [
+        "terminal.get_options_chain",
+        "terminal.get_greeks"
+      ]
+    },
+    {
+      "id": "trade-sub-pnl",
+      "desk": "desk",
+      "title": "Trade · PnL/Scenario",
+      "purpose": "PnL/scenario: historical replay when real history exists, spot/vol/time/rate shocks, attribution",
+      "deepLink": "/?desk=desk&sec=trade-sub-pnl",
+      "code": "PnL",
+      "apiOps": [
+        "getEquityHistory"
+      ],
+      "mcpTools": [
+        "terminal.get_market_snapshot"
+      ]
+    },
+    {
+      "id": "trade-sub-risk",
+      "desk": "desk",
+      "title": "Trade · Hedge/Risk",
+      "purpose": "Delta hedge plan and flow, path-vol scenario from ATM IV, roll/basis comparisons, limits",
+      "deepLink": "/?desk=desk&sec=trade-sub-risk",
+      "code": "HDG",
+      "apiOps": [
+        "getOptionsChain"
+      ],
+      "mcpTools": [
+        "terminal.get_market_snapshot"
+      ]
+    },
+    {
+      "id": "crypto-v2-overview",
+      "desk": "crypto",
+      "title": "Crypto · Overview",
+      "purpose": "Deribit options health plus independent free multi-venue perp snapshot",
+      "deepLink": "/?desk=crypto&view=overview",
+      "code": "OVR",
+      "apiOps": [
+        "getDeribitMarket",
+        "getFreeCryptoSnapshot"
+      ],
+      "mcpTools": [
+        "terminal.get_market_snapshot"
+      ]
+    },
+    {
+      "id": "crypto-v2-volatility",
+      "desk": "crypto",
+      "title": "Crypto · Volatility",
+      "purpose": "Crypto ATM/delta term, forward vol, smile/skew, 2D matrix, optional 3D, DVOL where supported",
+      "deepLink": "/?desk=crypto&view=volatility",
+      "code": "VOL",
+      "apiOps": [
+        "getDeribitMarket"
+      ],
+      "mcpTools": [
+        "terminal.get_volatility_surface"
+      ]
+    },
+    {
+      "id": "crypto-v2-positioning",
+      "desk": "crypto",
+      "title": "Crypto · Positioning",
+      "purpose": "Crypto GEX/DEX/Vanna/Charm heatmaps and profiles, spot-centered strikes",
+      "deepLink": "/?desk=crypto&view=positioning",
+      "code": "POS",
+      "apiOps": [
+        "getDeribitMarket"
+      ],
+      "mcpTools": [
+        "terminal.get_positioning"
+      ]
+    },
+    {
+      "id": "crypto-v2-flow",
+      "desk": "crypto",
+      "title": "Crypto · Flow",
+      "purpose": "Trade timeline/bubbles, call/put and buy/sell aggregates, expiry/strike distribution, tape",
+      "deepLink": "/?desk=crypto&view=flow",
+      "code": "FLOW",
+      "apiOps": [
+        "getDeribitTrades"
+      ],
+      "mcpTools": [
+        "terminal.get_crypto_flow"
+      ]
+    },
+    {
+      "id": "crypto-v2-carry",
+      "desk": "crypto",
+      "title": "Crypto · Carry",
+      "purpose": "Cross-venue funding with normalized annualization, perp premium, dated basis term structure",
+      "deepLink": "/?desk=crypto&view=carry",
+      "code": "CARRY",
+      "apiOps": [
+        "getDeribitFundingHistory"
+      ],
+      "mcpTools": [
+        "terminal.get_crypto_carry"
+      ]
+    },
+    {
+      "id": "crypto-v2-trade-risk",
+      "desk": "crypto",
+      "title": "Crypto · Trade & Risk",
+      "purpose": "Crypto chain, multi-leg builder, Greeks, payoff/scenario/hedge — Deribit authoritative",
+      "deepLink": "/?desk=crypto&view=trade-risk",
+      "code": "T&R",
+      "apiOps": [
+        "getDeribitMarket"
+      ],
+      "mcpTools": [
+        "terminal.get_options_chain"
+      ]
+    },
+    {
+      "id": "rates-mode-funding",
+      "desk": "rates",
+      "title": "Rates · Funding",
+      "purpose": "SOFR/EFFR/IORB/RRP corridor, history, spreads, funding-pressure interpretation",
+      "deepLink": "/?desk=rates&sec=rates-mode-funding",
+      "code": "FUND",
+      "apiOps": [
+        "getRatesCurve"
+      ],
+      "mcpTools": [
+        "terminal.get_rates_curve"
+      ]
+    },
+    {
+      "id": "rates-mode-ust",
+      "desk": "rates",
+      "title": "Rates · UST",
+      "purpose": "Treasury curve, curve changes, key slopes, auction/issuance context when sourced",
+      "deepLink": "/?desk=rates&sec=rates-mode-ust",
+      "code": "UST",
+      "apiOps": [
+        "getRatesCurve"
+      ],
+      "mcpTools": [
+        "terminal.get_rates_curve"
+      ]
+    },
+    {
+      "id": "rates-mode-stir",
+      "desk": "rates",
+      "title": "Rates · STIR",
+      "purpose": "SR1/SR3/Fed Funds strips, packs/butterflies, exact SERFF/basis spreads in bp",
+      "deepLink": "/?desk=rates&sec=rates-mode-stir",
+      "code": "STIR",
+      "apiOps": [
+        "getStirCurve"
+      ],
+      "mcpTools": [
+        "terminal.get_stir_curve"
+      ]
+    },
+    {
+      "id": "rates-mode-world",
+      "desk": "rates",
+      "title": "Rates · World",
+      "purpose": "Global curves, differentials, FX/carry relationships with clear source and unit rules",
+      "deepLink": "/?desk=rates&sec=rates-mode-world",
+      "code": "WORLD",
+      "apiOps": [
+        "getRatesCurve"
+      ],
+      "mcpTools": [
+        "terminal.get_rates_curve"
+      ]
+    },
+    {
+      "id": "ksa-sub-board",
+      "desk": "ksa",
+      "title": "KSA · Board",
+      "purpose": "Tadawul board: grouped summary, breadth, sectors, leaders, depth via SAHMK shared cache",
+      "deepLink": "/?desk=ksa&sec=ksa-sub-board",
+      "code": "BRD",
+      "apiOps": [
+        "getKsaBoard"
+      ],
+      "mcpTools": [
+        "terminal.get_provider_status"
+      ]
+    },
+    {
+      "id": "academy-sub-start",
+      "desk": "academy",
+      "title": "Academy · Home",
+      "purpose": "Academy start-here track: reading plan and core lessons",
+      "deepLink": "/?desk=academy&sec=academy-sub-start",
+      "code": "HOME",
+      "apiOps": [
+        "getAcademyIndex"
+      ],
+      "mcpTools": [
+        "terminal.search_academy"
+      ]
+    },
+    {
+      "id": "academy-sub-options",
+      "desk": "academy",
+      "title": "Academy · Options",
+      "purpose": "Options essays: mechanics, positioning and vol lessons",
+      "deepLink": "/?desk=academy&sec=academy-sub-options",
+      "code": "OPT",
+      "apiOps": [
+        "getAcademyIndex"
+      ],
+      "mcpTools": [
+        "terminal.search_academy"
+      ]
+    },
+    {
+      "id": "academy-sub-macro",
+      "desk": "academy",
+      "title": "Academy · Macro",
+      "purpose": "Macro and rates-plumbing essays",
+      "deepLink": "/?desk=academy&sec=academy-sub-macro",
+      "code": "MAC",
+      "apiOps": [
+        "getAcademyIndex"
+      ],
+      "mcpTools": [
+        "terminal.search_academy"
+      ]
+    },
+    {
+      "id": "academy-sub-news",
+      "desk": "academy",
+      "title": "Academy · News",
+      "purpose": "Curated market news with source links (untrusted display content)",
+      "deepLink": "/?desk=academy&sec=academy-sub-news",
+      "code": "NEWS",
+      "apiOps": [
+        "getEquityNews"
+      ],
+      "mcpTools": []
+    },
+    {
+      "id": "academy-sub-glossary",
+      "desk": "academy",
+      "title": "Academy · Glossary",
+      "purpose": "Glossary of market mechanics terms",
+      "deepLink": "/?desk=academy&sec=academy-sub-glossary",
+      "code": "GLOS",
+      "apiOps": [
+        "getAcademyIndex"
+      ],
+      "mcpTools": [
+        "terminal.search_academy"
+      ]
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "getHealth",
+        "tags": [
+          "system"
+        ],
+        "summary": "Liveness",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "ok"
+                    },
+                    "timestamp": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cache/status": {
+      "get": {
+        "operationId": "getCacheStatus",
+        "tags": [
+          "system"
+        ],
+        "summary": "Provider budgets + cache stats (no credentials, no query history)",
+        "responses": {
+          "200": {
+            "description": "budgets/entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows": {
+      "get": {
+        "operationId": "getWorkflows",
+        "tags": [
+          "system"
+        ],
+        "summary": "Machine-readable workflow registry (desks, deep links, related ops/tools)",
+        "responses": {
+          "200": {
+            "description": "registry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "workflows"
+                  ],
+                  "properties": {
+                    "workflows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/options/{symbol}": {
+      "get": {
+        "operationId": "getOptionsChain",
+        "tags": [
+          "equities"
+        ],
+        "summary": "Observed equity chain (yfinance, delayed)",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+            },
+            "description": "Observed equity chain (yfinance, delayed)"
+          },
+          {
+            "name": "probe",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "max",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "chain (observed; missing null)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "schemaVersion",
+                    "data"
+                  ],
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "fetchedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "source": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "provenanceByField": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "unitsByField": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "freshness": {
+                      "type": "string",
+                      "enum": [
+                        "live",
+                        "delayed",
+                        "stale",
+                        "unavailable"
+                      ]
+                    },
+                    "coverage": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "numerator": {
+                          "type": "integer"
+                        },
+                        "denominator": {
+                          "type": "integer"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "missing": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "assumptions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "symbol",
+                        "spot",
+                        "quotes"
+                      ],
+                      "properties": {
+                        "symbol": {
+                          "type": "string"
+                        },
+                        "spot": {
+                          "type": "number"
+                        },
+                        "quotes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        },
+                        "_cache": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/yf/history/{symbol}": {
+      "get": {
+        "operationId": "getEquityHistory",
+        "tags": [
+          "equities"
+        ],
+        "summary": "Daily OHLCV (yfinance, delayed)",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+            },
+            "description": "Observed equity chain (yfinance, delayed)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "bars",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/yf/info/{symbol}": {
+      "get": {
+        "operationId": "getEquityInfo",
+        "tags": [
+          "equities"
+        ],
+        "summary": "Profile + observed last print (yfinance)",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+            },
+            "description": "Observed equity chain (yfinance, delayed)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/finnhub/quote": {
+      "get": {
+        "operationId": "getEquityQuote",
+        "tags": [
+          "equities"
+        ],
+        "summary": "Quote (Finnhub, shared budget)",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "quote",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/finnhub/news": {
+      "get": {
+        "operationId": "getEquityNews",
+        "tags": [
+          "equities"
+        ],
+        "summary": "Company + general headlines (Finnhub)",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "headlines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/desk/pack": {
+      "get": {
+        "operationId": "getDeskPack",
+        "tags": [
+          "equities"
+        ],
+        "summary": "Shared desk pack (one canonical snapshot)",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "pack",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/home/briefing": {
+      "get": {
+        "operationId": "getHomeBriefing",
+        "tags": [
+          "system"
+        ],
+        "summary": "Home morning briefing — per-desk availability",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "briefing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/deribit/market/{currency}": {
+      "get": {
+        "operationId": "getDeribitMarket",
+        "tags": [
+          "crypto"
+        ],
+        "summary": "Deribit catalogue/quote join",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BTC",
+                "ETH"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "bundle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/deribit/trades/{currency}": {
+      "get": {
+        "operationId": "getDeribitTrades",
+        "tags": [
+          "crypto"
+        ],
+        "summary": "Recent public option trades (taker side)",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BTC",
+                "ETH"
+              ]
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "trades",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/deribit/funding-history": {
+      "get": {
+        "operationId": "getDeribitFundingHistory",
+        "tags": [
+          "crypto"
+        ],
+        "summary": "Perp funding history",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BTC",
+                "ETH"
+              ]
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                1,
+                7,
+                30,
+                90
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "funding points",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/free-crypto/market/{currency}": {
+      "get": {
+        "operationId": "getFreeCryptoSnapshot",
+        "tags": [
+          "crypto"
+        ],
+        "summary": "Free multi-venue snapshot — public exchange data; free alternative to Velo, not Velo-normalized",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BTC",
+                "ETH"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/venues/options/{currency}": {
+      "get": {
+        "operationId": "getVenueOptions",
+        "tags": [
+          "crypto"
+        ],
+        "summary": "Multi-venue options volume/OI (Deribit+OKX+Bybit, public)",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BTC",
+                "ETH"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "venues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ksa/board": {
+      "get": {
+        "operationId": "getKsaBoard",
+        "tags": [
+          "ksa"
+        ],
+        "summary": "Shared Tadawul board (SAHMK server-only; delayed on free tier)",
+        "responses": {
+          "200": {
+            "description": "board",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ksa/session": {
+      "get": {
+        "operationId": "getKsaSession",
+        "tags": [
+          "ksa"
+        ],
+        "summary": "Riyadh session snapshot",
+        "responses": {
+          "200": {
+            "description": "session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/docs/index.json": {
+      "get": {
+        "operationId": "getAcademyIndex",
+        "tags": [
+          "academy"
+        ],
+        "summary": "Academy publication index",
+        "responses": {
+          "200": {
+            "description": "index",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "operationId": "getOpenApiDocument",
+        "tags": [
+          "system"
+        ],
+        "summary": "This document",
+        "responses": {
+          "200": {
+            "description": "openapi",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

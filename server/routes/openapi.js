@@ -1,0 +1,258 @@
+/**
+ * OpenAPI 3.1 + workflow registry publication (Phase 11).
+ * - GET /api/openapi.json — OpenAPI 3.1, JSON Schema 2020-12-compatible,
+ *   additionalProperties:false, stable operationIds, typed errors.
+ * - GET /api/workflows — machine-readable workflow registry (docs/registry artifact).
+ */
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(__dirname, '../..');
+
+function loadRegistry() {
+  const raw = readFileSync(join(ROOT, 'docs/registry/workflows.json'), 'utf8');
+  return JSON.parse(raw);
+}
+
+function envelopeSchema(data) {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['schemaVersion', 'data'],
+    properties: {
+      schemaVersion: { type: 'integer', const: 1 },
+      requestId: { type: 'string' },
+      symbol: { type: 'string' },
+      asOf: { type: 'string', format: 'date-time' },
+      fetchedAt: { type: 'string', format: 'date-time' },
+      source: { type: 'array', items: { type: 'string' } },
+      provenanceByField: { type: 'object', additionalProperties: { type: 'string' } },
+      unitsByField: { type: 'object', additionalProperties: { type: 'string' } },
+      freshness: { type: 'string', enum: ['live', 'delayed', 'stale', 'unavailable'] },
+      coverage: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          numerator: { type: 'integer' },
+          denominator: { type: 'integer' },
+          state: { type: 'string' },
+          missing: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      assumptions: { type: 'array', items: { type: 'string' } },
+      warnings: { type: 'array', items: { type: 'string' } },
+      data,
+    },
+  };
+}
+
+const errorResponse = {
+  description: 'Typed error envelope',
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['error'],
+        properties: {
+          error: {
+            type: 'string',
+            enum: [
+              'PROVIDER_UNAVAILABLE', 'ENTITLEMENT_MISSING', 'STALE_ONLY',
+              'INSUFFICIENT_COVERAGE', 'INVALID_SYMBOL', 'RATE_LIMITED',
+              'no_api_key', 'budget_exhausted',
+            ],
+          },
+          detail: { type: 'string' },
+          provider: { type: 'string' },
+        },
+      },
+    },
+  },
+};
+
+function jsonOk(schema, description) {
+  return { description, content: { 'application/json': { schema } } };
+}
+
+const symbolParam = (summary = 'Observed equity chain (yfinance, delayed)') => ({
+  name: 'symbol',
+  in: 'path',
+  required: true,
+  schema: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' },
+  description: summary,
+});
+const currencyParam = {
+  name: 'currency',
+  in: 'path',
+  required: true,
+  schema: { type: 'string', enum: ['BTC', 'ETH'] },
+};
+
+export function buildOpenApiDocument(registry) {
+  const r = registry || loadRegistry();
+  return {
+    openapi: '3.1.0',
+    info: {
+      title: 'Terminal REST API',
+      version: '1.0.0',
+      description: 'Read-only market analytics. All market responses use the common envelope (schemaVersion, requestId, symbol, asOf, fetchedAt, source, provenanceByField, unitsByField, freshness, coverage, assumptions, warnings, data). Provider keys never leave the server.',
+    },
+    servers: [{ url: '/', description: 'This server' }],
+    tags: [
+      { name: 'system', description: 'Health, cache, workflows' },
+      { name: 'equities', description: 'Option chains, quotes, enrichment' },
+      { name: 'crypto', description: 'Deribit authoritative + free multi-venue snapshot' },
+      { name: 'ksa', description: 'Tadawul board' },
+      { name: 'academy', description: 'Publication index' },
+    ],
+    'x-workflows': r.workflows,
+    paths: {
+      '/api/health': {
+        get: {
+          operationId: 'getHealth', tags: ['system'], summary: 'Liveness',
+          responses: { 200: jsonOk({ type: 'object', additionalProperties: false, required: ['status'], properties: { status: { const: 'ok' }, timestamp: { type: 'number' } } }, 'ok') },
+        },
+      },
+      '/api/cache/status': {
+        get: {
+          operationId: 'getCacheStatus', tags: ['system'],
+          summary: 'Provider budgets + cache stats (no credentials, no query history)',
+          responses: { 200: jsonOk({ type: 'object' }, 'budgets/entries') },
+        },
+      },
+      '/api/workflows': {
+        get: {
+          operationId: 'getWorkflows', tags: ['system'],
+          summary: 'Machine-readable workflow registry (desks, deep links, related ops/tools)',
+          responses: { 200: jsonOk({ type: 'object', additionalProperties: false, required: ['workflows'], properties: { workflows: { type: 'array', items: { type: 'object' } } } }, 'registry') },
+        },
+      },
+      '/api/options/{symbol}': {
+        get: {
+          operationId: 'getOptionsChain', tags: ['equities'],
+          summary: symbolParam().description,
+          parameters: [symbolParam(), { name: 'probe', in: 'query', schema: { type: 'string', enum: ['1'] } }, { name: 'max', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 12 } }],
+          responses: {
+            200: jsonOk(envelopeSchema({ type: 'object', additionalProperties: false, required: ['symbol', 'spot', 'quotes'], properties: { symbol: { type: 'string' }, spot: { type: 'number' }, quotes: { type: 'array', items: { type: 'object' } }, _cache: { type: 'object' } } }), 'chain (observed; missing null)'),
+            400: errorResponse, 502: errorResponse,
+          },
+        },
+      },
+      '/api/yf/history/{symbol}': {
+        get: {
+          operationId: 'getEquityHistory', tags: ['equities'], summary: 'Daily OHLCV (yfinance, delayed)',
+          parameters: [symbolParam()], responses: { 200: jsonOk({ type: 'object' }, 'bars'), 502: errorResponse },
+        },
+      },
+      '/api/yf/info/{symbol}': {
+        get: {
+          operationId: 'getEquityInfo', tags: ['equities'], summary: 'Profile + observed last print (yfinance)',
+          parameters: [symbolParam()], responses: { 200: jsonOk({ type: 'object' }, 'info'), 502: errorResponse },
+        },
+      },
+      '/api/finnhub/quote': {
+        get: {
+          operationId: 'getEquityQuote', tags: ['equities'], summary: 'Quote (Finnhub, shared budget)',
+          parameters: [{ name: 'symbol', in: 'query', required: true, schema: { type: 'string' } }],
+          responses: { 200: jsonOk({ type: 'object' }, 'quote'), 502: errorResponse, 503: errorResponse },
+        },
+      },
+      '/api/finnhub/news': {
+        get: {
+          operationId: 'getEquityNews', tags: ['equities'], summary: 'Company + general headlines (Finnhub)',
+          parameters: [{ name: 'symbol', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 30 } }],
+          responses: { 200: jsonOk({ type: 'object' }, 'headlines'), 502: errorResponse, 503: errorResponse },
+        },
+      },
+      '/api/desk/pack': {
+        get: {
+          operationId: 'getDeskPack', tags: ['equities'], summary: 'Shared desk pack (one canonical snapshot)',
+          parameters: [{ name: 'symbol', in: 'query', schema: { type: 'string' } }],
+          responses: { 200: jsonOk({ type: 'object' }, 'pack') },
+        },
+      },
+      '/api/home/briefing': {
+        get: {
+          operationId: 'getHomeBriefing', tags: ['system'], summary: 'Home morning briefing — per-desk availability',
+          parameters: [{ name: 'symbol', in: 'query', schema: { type: 'string' } }],
+          responses: { 200: jsonOk({ type: 'object' }, 'briefing') },
+        },
+      },
+      '/api/deribit/market/{currency}': {
+        get: {
+          operationId: 'getDeribitMarket', tags: ['crypto'], summary: 'Deribit catalogue/quote join',
+          parameters: [currencyParam],
+          responses: { 200: jsonOk({ type: 'object' }, 'bundle'), 400: errorResponse, 502: errorResponse },
+        },
+      },
+      '/api/deribit/trades/{currency}': {
+        get: {
+          operationId: 'getDeribitTrades', tags: ['crypto'], summary: 'Recent public option trades (taker side)',
+          parameters: [currencyParam, { name: 'hours', in: 'query', schema: { type: 'integer' } }, { name: 'count', in: 'query', schema: { type: 'integer' } }],
+          responses: { 200: jsonOk({ type: 'object' }, 'trades'), 400: errorResponse },
+        },
+      },
+      '/api/deribit/funding-history': {
+        get: {
+          operationId: 'getDeribitFundingHistory', tags: ['crypto'], summary: 'Perp funding history',
+          parameters: [{ name: 'currency', in: 'query', schema: { type: 'string', enum: ['BTC', 'ETH'] } }, { name: 'days', in: 'query', schema: { type: 'integer', enum: [1, 7, 30, 90] } }],
+          responses: { 200: jsonOk({ type: 'object' }, 'funding points'), 400: errorResponse },
+        },
+      },
+      '/api/free-crypto/market/{currency}': {
+        get: {
+          operationId: 'getFreeCryptoSnapshot', tags: ['crypto'],
+          summary: 'Free multi-venue snapshot — public exchange data; free alternative to Velo, not Velo-normalized',
+          parameters: [currencyParam],
+          responses: { 200: jsonOk({ type: 'object' }, 'snapshot'), 502: errorResponse },
+        },
+      },
+      '/api/venues/options/{currency}': {
+        get: {
+          operationId: 'getVenueOptions', tags: ['crypto'], summary: 'Multi-venue options volume/OI (Deribit+OKX+Bybit, public)',
+          parameters: [currencyParam],
+          responses: { 200: jsonOk({ type: 'object' }, 'venues'), 400: errorResponse, 502: errorResponse },
+        },
+      },
+      '/api/ksa/board': {
+        get: {
+          operationId: 'getKsaBoard', tags: ['ksa'], summary: 'Shared Tadawul board (SAHMK server-only; delayed on free tier)',
+          responses: { 200: jsonOk({ type: 'object' }, 'board'), 402: errorResponse, 502: errorResponse, 503: errorResponse },
+        },
+      },
+      '/api/ksa/session': {
+        get: {
+          operationId: 'getKsaSession', tags: ['ksa'], summary: 'Riyadh session snapshot',
+          responses: { 200: jsonOk({ type: 'object' }, 'session') },
+        },
+      },
+      '/docs/index.json': {
+        get: {
+          operationId: 'getAcademyIndex', tags: ['academy'], summary: 'Academy publication index',
+          responses: { 200: jsonOk({ type: 'object' }, 'index') },
+        },
+      },
+      '/api/openapi.json': {
+        get: {
+          operationId: 'getOpenApiDocument', tags: ['system'], summary: 'This document',
+          responses: { 200: jsonOk({ type: 'object' }, 'openapi') },
+        },
+      },
+    },
+  };
+}
+
+export function registerOpenApiRoutes(fastify) {
+  fastify.get('/api/workflows', async () => {
+    const reg = loadRegistry();
+    return { workflows: reg.workflows, version: reg.version };
+  });
+  fastify.get('/api/openapi.json', async (_req, reply) => {
+    reply.header('content-type', 'application/json; charset=utf-8');
+    reply.header('cache-control', 'public, max-age=300');
+    return buildOpenApiDocument();
+  });
+}

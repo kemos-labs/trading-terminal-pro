@@ -32,9 +32,9 @@ export function CryptoCarryView() {
       .then((d) => {
         if (cancelled) return;
         const rows = Array.isArray(d?.points) ? d.points : [];
-        setFundingHistory(rows.map((r: { timestamp?: number; current_funding_8h?: number; funding_8h?: number }) => ({
-          t: r.timestamp ?? 0,
-          rate8h: (r.current_funding_8h ?? r.funding_8h ?? 0) * 100,
+        setFundingHistory(rows.map((r: { timestamp?: number; t?: number; rate8h?: number; current_funding_8h?: number }) => ({
+          t: r.timestamp ?? r.t ?? 0,
+          rate8h: (r.rate8h ?? r.current_funding_8h ?? 0) * 100,
         })).filter((r: { t: number }) => r.t > 0));
       })
       .catch(() => { if (!cancelled) setFundingHistory(null); });
@@ -60,10 +60,16 @@ export function CryptoCarryView() {
     });
   }, [datedFutures, now]);
 
-  const basisDomain = useMemo(
-    () => tightDomain(basisTerm.map((p) => p.annPct), 0.12, { minPadAbs: 0.5 }),
-    [basisTerm],
-  );
+  const basisDomain = useMemo(() => {
+    const vals = basisTerm.map((p) => p.annPct).filter((v): v is number => v != null).sort((a, b) => a - b);
+    if (vals.length < 2) return tightDomain(vals, 0.12, { minPadAbs: 0.5 });
+    // Robust domain: 10th–90th percentile padded, so one ultrashort outlier can't
+    // compress the whole curve; outlier dot still renders via clamping guard below.
+    const lo = vals[Math.floor(vals.length * 0.1)]!;
+    const hi = vals[Math.ceil(vals.length * 0.9) - 1] ?? vals[vals.length - 1]!;
+    const pad = Math.max((hi - lo) * 0.15, 0.5);
+    return [lo - pad, hi + pad] as [number, number];
+  }, [basisTerm]);
   const fundingDomain = useMemo(
     () => tightDomain((fundingHistory ?? []).map((r) => r.rate8h), 0.15, { minPadAbs: 0.005 }),
     [fundingHistory],
@@ -173,6 +179,14 @@ export function CryptoCarryView() {
                 <XAxis dataKey="t" tick={{ ...chartAxisTick, fontSize: 9 }} tickFormatter={(t) => new Date(Number(t)).toISOString().slice(5, 10)} height={22} minTickGap={28} />
                 <YAxis tick={chartAxisTick} width={56} domain={fundingDomain as [number, number]} tickFormatter={(v) => `${Number(v).toFixed(3)}%`} />
                 <ReferenceLine y={0} stroke={CHART.axisLine} strokeDasharray="4 3" />
+                {funding?.rawRate8h != null && (
+                  <ReferenceLine
+                    y={funding.rawRate8h * 100}
+                    stroke={CHART.series.rate}
+                    strokeDasharray="6 3"
+                    label={{ value: 'current 8h', position: 'insideTopRight', fill: 'var(--muted-foreground)', fontSize: 9 }}
+                  />
+                )}
                 <Line type="linear" dataKey="rate" stroke={CHART.series.up} strokeWidth={1.75} dot={false} isAnimationActive={false} name="8h rate %" />
               </LineChart>
             </ResponsiveContainer>

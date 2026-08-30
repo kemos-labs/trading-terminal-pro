@@ -11,6 +11,12 @@ describe('CryptoCarryView — Phase 7 contract guards', () => {
     expect(text).toContain('basis-term-unavailable');
     expect(text).toContain('funding-history-unavailable');
     expect(text).toContain('get_funding_history');
+    // Field mapping for the funding-history endpoint (points[].rate8h)
+    expect(text).toContain('r.rate8h ?? r.current_funding_8h');
+    // Current-funding reference line on the history chart
+    expect(text).toContain('current 8h');
+    // Robust percentile-clamped basis domain
+    expect(text).toContain('vals.length * 0.1');
     expect(text).toContain('no synthetic missing expiry');
     // Straight segments for discrete futures
     expect(text).toContain('type="linear"');

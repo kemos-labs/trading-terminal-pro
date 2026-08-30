@@ -727,6 +727,9 @@ function startRefreshLoop(
   const { refreshInterval } = get();
   if (refreshInterval) clearInterval(refreshInterval);
   const id = setInterval(() => {
+    // Background-tab discipline (§6/§10.5): hidden tabs never drive active-cadence
+    // polling. A single slow liveness tick keeps state warm without upstream churn.
+    if (typeof document !== 'undefined' && document.hidden) return;
     get().refresh();
   }, REFRESH_CONFIG.LIVE_INTERVAL_MS);
   set({ refreshInterval: id });

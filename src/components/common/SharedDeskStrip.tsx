@@ -78,7 +78,10 @@ export function SharedDeskStrip({
         });
     };
     load();
-    const id = window.setInterval(load, 60_000);
+    const id = window.setInterval(() => {
+      if (document.hidden) return; // background-tab discipline
+      load();
+    }, 60_000);
     return () => {
       cancelled = true;
       window.clearInterval(id);

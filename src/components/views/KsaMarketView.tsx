@@ -472,7 +472,11 @@ export function KsaMarketView() {
 
   useEffect(() => {
     void load();
-    const id = window.setInterval(() => void load(), KSA_BOARD_POLL_MS);
+    const id = window.setInterval(() => {
+      // Shared-cache read only — but skip while the tab is hidden (§10.5).
+      if (document.hidden) return;
+      void load();
+    }, KSA_BOARD_POLL_MS);
     return () => window.clearInterval(id);
   }, [load]);
 

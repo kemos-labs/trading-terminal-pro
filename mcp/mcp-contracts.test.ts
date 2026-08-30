@@ -165,6 +165,7 @@ describe('MCP read-only server (contract)', () => {
 
   it('unknown tool name → protocol error (never auto-substitutes)', async () => {
     await expect(client.call('tools/call', { name: 'terminal.place_order', arguments: {} })).rejects.toThrow(/Unknown tool/);
+    expect(client.lines.at(-1)?.error?.code).toBe(-32602);
   });
 
   it('tool outputs never contain NaN/Infinity', async () => {
@@ -181,6 +182,7 @@ describe('MCP read-only server (contract)', () => {
     expect(results).toHaveLength(2);
     client.send('{bad json}\n'); const parse = await client.waitLine(line => line?.error?.code === -32700); expect(parse.error.code).toBe(-32700);
     await expect(client.call('no/such/method', {})).rejects.toThrow();
+    expect(client.lines.at(-1)?.error?.code).toBe(-32601);
   });
 
   it('rejects all strict schema violations and never substitutes SPY', async () => {

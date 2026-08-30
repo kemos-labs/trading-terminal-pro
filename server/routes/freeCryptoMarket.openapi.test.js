@@ -18,12 +18,15 @@ describe('free crypto OpenAPI response contracts', () => {
   it('validates actual 200, 400, and 502 responses against documented schemas', async () => {
     const app = Fastify(); await registerFreeCryptoMarketRoutes(app);
     const doc = buildOpenApiDocument().paths['/api/free-crypto/market/{currency}'].get;
-    const success = new Ajv({ strict: false }).compile(doc.responses[200].content['application/json'].schema);
+    const ajv = new Ajv({ strict: false });
+    const success = ajv.compile(doc.responses[200].content['application/json'].schema);
+    const badSchema = ajv.compile(doc.responses[400].content['application/json'].schema);
+    const unavailableSchema = ajv.compile(doc.responses[502].content['application/json'].schema);
     global.fetch = async (url) => ok(url);
     const good = await app.inject('/api/free-crypto/market/BTC'); expect(good.statusCode).toBe(200); expect(success(good.json())).toBe(true);
-    const bad = await app.inject('/api/free-crypto/market/DOGE'); expect(bad.statusCode).toBe(400); expect(doc.responses[400].content['application/json'].schema.properties.error.const).toBe('UNSUPPORTED_CURRENCY');
+    const bad = await app.inject('/api/free-crypto/market/DOGE'); expect(bad.statusCode).toBe(400); expect(badSchema(bad.json())).toBe(true); expect(bad.json().error).toBe('UNSUPPORTED_CURRENCY');
     resetFreeCryptoMarketCache(); global.fetch = async () => { throw new Error('down'); }; const unavailable = await app.inject('/api/free-crypto/market/BTC');
-    expect(unavailable.statusCode).toBe(502); expect(doc.responses[502].content['application/json'].schema.properties.error.const).toBe('FREE_CRYPTO_UNAVAILABLE');
+    expect(unavailable.statusCode).toBe(502); expect(unavailableSchema(unavailable.json())).toBe(true); expect(unavailable.json().error).toBe('FREE_CRYPTO_UNAVAILABLE');
     await app.close();
   });
 });

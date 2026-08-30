@@ -20,7 +20,7 @@ interface Briefing {
     rates: { available: boolean; provider: string; sofr: number | null; effr: number | null; usy2: number | null; usy10: number | null; spread_2s10s_bps: number | null; asOf: string | null };
     crypto: {
       available: boolean; provider: string; indexPrice: number | null; funding8h: number | null; optionCount: number | null; asOf: number | null;
-      freeFallback: { available: boolean; provider: string; venues?: { venue: string; mark: number | null; index: number | null; last: number | null }[]; asOf?: number | null }; 
+      freeFallback: { available: boolean; provider: string; venues?: { venue: string; mark: number | null; index: number | null; last: number | null }[]; asOf?: number | null };
     };
     ksa: { available: boolean; provider: string; tasi: number | null; tasiChangePct: number | null; delayed: boolean | null; asOf: string | null };
   };

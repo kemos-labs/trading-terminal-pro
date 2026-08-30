@@ -185,6 +185,8 @@ test.describe('accessibility', () => {
     await mockDeribit(page);
     await page.goto('/?desk=crypto&view=positioning');
     await page.waitForSelector('[data-testid="positioning-workstation"]', { timeout: 8000 });
-    await expect(page.getByText(/Accessible table fallback/i)).toBeVisible();
+    // Canonical HeatmapEngine renders a <details> table fallback; verify the toggle + table.
+    await page.getByText(/Table view \(accessible fallback\)/i).click();
+    await expect(page.getByRole('table', { hidden: true })).toBeAttached();
   });
 });

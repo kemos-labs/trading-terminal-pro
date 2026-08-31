@@ -16,6 +16,7 @@ import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { buildServer } from '../server/app.js';
+import { compileRuntimeRoutes, parsePattern, resolves as resolveEntry } from './route-parity-lib.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const srcDir = join(root, 'src');
@@ -32,20 +33,6 @@ function walk(dir, files = []) {
   return files;
 }
 
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function routeRegex(route) {
-  const bare = route.split('?')[0];
-  const parts = bare.split('/').map((segment) => {
-    if (segment === '*') return '.*';
-    if (segment.startsWith(':')) return '[^/]+';
-    return escapeRegex(segment);
-  });
-  return new RegExp(`^${parts.join('/')}/?$`);
-}
-
 function clientSample(pattern) {
   const bare = pattern.split('?')[0];
   return bare
@@ -59,11 +46,11 @@ try {
   const runtimeRoutes = fastify.runtimeRouteManifest
     .filter((route) => route.url.startsWith('/api') || route.url.startsWith('/docs'));
   const runtimePatterns = [...new Set(runtimeRoutes.map((route) => route.url))].sort();
-  const compiled = runtimePatterns.map((route) => ({ route, regex: routeRegex(route) }));
+  // Method-aware: one compiled entry per (method, path) pair.
+  const compiled = compileRuntimeRoutes(runtimeRoutes);
 
-  function resolves(pattern) {
-    const sample = clientSample(pattern);
-    return compiled.some(({ regex }) => regex.test(sample));
+  function resolves(pattern, method) {
+    return resolveEntry(compiled, pattern, method);
   }
 
   const errors = [];
@@ -132,6 +119,21 @@ try {
         : [];
     }
 
+    /** Parse the fetch options argument to extract the HTTP method (default GET). */
+    function optionsMethod(node) {
+      if (!node) return 'GET';
+      const arg = node.arguments?.[1];
+      if (!arg) return 'GET';
+      let method = null;
+      for (const prop of arg.properties ?? []) {
+        if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === 'method') {
+          const v = evaluate(prop.initializer);
+          if (typeof v === 'string' && /^(GET|POST|PUT|PATCH|DELETE|HEAD)$/i.test(v)) method = v.toUpperCase();
+        }
+      }
+      return method ?? 'GET';
+    }
+
     function inspect(node) {
       const isFetch = ts.isCallExpression(node)
         && ts.isIdentifier(node.expression)
@@ -143,6 +145,8 @@ try {
       if (isFetch || isEventSource) {
         const argument = node.arguments?.[0];
         const evaluated = evaluate(argument);
+        // EventSource is always a GET; fetch defaults to GET unless options say otherwise.
+        const method = isEventSource ? 'GET' : optionsMethod(node);
         const annotations = annotationsFor(node);
         const patterns = annotations.length > 0
           ? annotations
@@ -156,9 +160,11 @@ try {
           errors.push(`${label}: dynamic network URL requires a route-parity annotation`);
         } else {
           for (const pattern of patterns) {
-            calls.push({ label, pattern });
-            if (!resolves(pattern)) {
-              errors.push(`${label}: ${pattern} has no matching Fastify runtime route`);
+            const { method: patMethod, path } = parsePattern(pattern);
+            const callMethod = method ?? patMethod;
+            calls.push({ label, method: callMethod, pattern: path });
+            if (!resolves(path, callMethod)) {
+              errors.push(`${label}: ${callMethod} ${path} has no matching Fastify runtime route (method-aware)`);
             }
           }
         }

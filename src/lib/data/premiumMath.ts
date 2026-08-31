@@ -313,7 +313,7 @@ export function scannerRows(chain: PremiumChain & { symbol?: string }, filters: 
 /** Top-N rows by standing open interest — honest stand-in for trade-tape movers. */
 export function largestOiRows(rows: ScannerRow[], n = 5): ScannerRow[] {
   return rows
-    .filter((r) => r.openInterest > 0)
+    .filter((r): r is ScannerRow & { openInterest: number } => r.openInterest != null && r.openInterest > 0)
     .sort((a, b) => b.openInterest - a.openInterest)
     .slice(0, Math.max(0, n));
 }

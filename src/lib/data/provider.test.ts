@@ -71,7 +71,10 @@ describe('LiveProvider auto chain source', () => {
     // FMP quote ok (spot), yfinance /api/options returns a chain, FMP options 403.
     mockFetch
       .mockResolvedValueOnce(quote(500)) // FMP quote
-      .mockResolvedValueOnce(res(yfChain())) // /api/options (yfinance)
+      .mockResolvedValueOnce(res({ schemaVersion: 1, asOf: new Date().toISOString(), data: {
+        symbol: 'SPY', spot: SPOT, expirations: [EXPIRY],
+        quotes: yfChain().quotes.map((q) => ({ ...q, right: q.type, markIv: q.iv })),
+      } })) // /api/v1/market/options (canonical yfinance adapter)
       .mockResolvedValueOnce(res({ 'Error Message': 'Subscription does not include this endpoint' }, false)); // FMP options
 
     const snap = await provider.getSnapshot('SPY', { chainMode: 'auto' });
@@ -84,7 +87,7 @@ describe('LiveProvider auto chain source', () => {
   it('auto mode falls back to FMP chain when yfinance is down', async () => {
     mockFetch
       .mockResolvedValueOnce(quote(500)) // FMP quote
-      .mockRejectedValueOnce(new Error('yfinance unavailable')) // /api/options fails
+      .mockRejectedValueOnce(new Error('yfinance unavailable')) // canonical options route fails
       .mockResolvedValueOnce(res(fmpChain())); // FMP options ok
 
     const snap = await provider.getSnapshot('SPY', { chainMode: 'auto' });

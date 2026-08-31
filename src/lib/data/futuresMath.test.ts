@@ -229,20 +229,20 @@ describe('useDeribitFutures (mocked fetch through the proxy client)', () => {
       const url = String(input);
       const json = (body: unknown) =>
         ({ ok: true, status: 200, json: async () => body }) as Response;
-      if (url.includes('/api/deribit-market/instruments')) {
-        return json({
-          currency: 'BTC',
-          instruments: INSTRUMENTS,
-          count: INSTRUMENTS.length,
-          fetchedAt,
-          source: 'deribit',
-        });
-      }
-      if (url.includes('/api/deribit-market/tickers')) {
-        return json({ currency: 'BTC', tickers: TICKERS, count: 4, fetchedAt });
-      }
-      if (url.includes('/api/deribit-market/index-price')) {
-        return json({ currency: 'BTC', index_price: INDEX, estimated_delivery_price: INDEX, fetchedAt });
+      if (url.includes('/api/v1/market/crypto/BTC')) {
+        const tickers = new Map(Object.values(TICKERS).map((t) => [t.instrument_name, t]));
+        return json({ schemaVersion: 1, fetchedAt: new Date(fetchedAt).toISOString(), data: {
+          currency: 'BTC', indexPrice: INDEX, funding8h: null,
+          instruments: INSTRUMENTS.map((i) => {
+            const t = tickers.get(i.instrument_name);
+            return { instrument: i.instrument_name, baseCurrency: i.base_currency, quoteCurrency: i.quote_currency,
+              contractSize: i.contract_size, settlementPeriod: i.settlement_period,
+              kind: i.settlement_period === 'perpetual' ? 'perp' : 'future', expiryMs: i.expiration_timestamp,
+              isInverse: i.instrument_type === 'reversed', bid: t?.best_bid_price ?? null, ask: t?.best_ask_price ?? null,
+              mark: t?.mark_price ?? null, last: t?.last_price ?? null, indexPrice: t?.index_price ?? INDEX,
+              openInterest: t?.open_interest ?? null, volume: t?.volume ?? null, funding8h: t?.funding_8h ?? null };
+          }),
+        }});
       }
       return json({ error: 'unexpected route' });
     });

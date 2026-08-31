@@ -8,6 +8,7 @@ import {
   useBoardFocus,
   useRegisterBoard,
   type FocusableBoardApi,
+  type BoardFocusId,
 } from '../../../hooks/useBoardFocus';
 import { StirSpreadCurve, toCurvePoints } from './StirSpreadCurve';
 
@@ -24,7 +25,7 @@ function BoardRows({
 }: {
   rows: SerffRow[];
   onOpenImply: (i: ImplyRead) => void;
-  boardId: string;
+  boardId: BoardFocusId;
 }) {
   const dataRef = useRef(rows);
   dataRef.current = rows;

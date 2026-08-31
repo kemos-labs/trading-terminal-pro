@@ -5,7 +5,7 @@
 import { useCallback, useEffect } from 'react';
 import { useTerminalStore } from '../store/terminalStore';
 
-export type BoardFocusId = 'chain' | 'stir-sr3' | 'serff' | 'calendar' | 'dealer-bars';
+export type BoardFocusId = 'chain' | 'stir-sr3' | 'serff' | 'serff-proxy' | 'calendar' | 'dealer-bars';
 
 export type BoardFocusState = {
   boardId: BoardFocusId | null;

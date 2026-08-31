@@ -10,7 +10,7 @@
     "build": "tsc -b && vite build",
     "start": "node server.js",
     "start:prod": "bash scripts/start-production.sh",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc -b --noEmit --pretty false",
     "lint": "oxlint",
     "report:routes": "node scripts/route-parity.mjs --write --list",
     "report:bundle": "node scripts/bundle-report.mjs",

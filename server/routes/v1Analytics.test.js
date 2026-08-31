@@ -115,6 +115,9 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     const body = response.json();
     expect(validateContract('providerStatusResponse', body)).toMatchObject({ valid: true });
     expect(body.data.cache.entries).toBeTypeOf('number');
+    expect(body.data.cache.hits).toBeTypeOf('number');
+    expect(body.data.cache.misses).toBeTypeOf('number');
+    expect(body.data.cache.inflight).toBe(0);
     expect(body.data.providerModes.crypto?.mode).toBeTruthy();
   });
 

@@ -305,3 +305,31 @@ Start with C0 in this order:
   `/api/v1` crypto routes — fixed in C2/C6.
 - Evidence: type-check PASS; lint PASS; vitest 235/236 focused PASS;
   check-secrets PASS. Full suite 744 passed / 2 pre-existing failed.
+
+### C2 — IN PROGRESS / core tranche DONE (commits `e44c3e4`, `8870f4d`, 2026-08-31)
+
+- Route parity is method-aware (HTTP method + normalized path), with EventSource
+  GET handling, method-prefixed dynamic annotations, pure helper library, and
+  negative wrong-method fixtures.
+- `/api/v1` funding/trade request schemas reject invalid enum/range values with
+  canonical `INVALID_REQUEST` 400 envelopes; no silent defaults/clamping.
+- Added validated canonical operations for provider/cache status, rates STIR and
+  nullable term structure, crypto carry/flow, Academy index, and KSA board.
+  REST handlers share existing provider adapters/cache and preserve unavailable
+  states; OpenAPI has 13 strict v1 operations and 62 runtime paths.
+- Evidence: focused route/v1/analytics tests 21 passed; route parity PASS
+  (38 frontend declarations/62 runtime patterns); OpenAPI PASS (63 operations);
+  type-check/lint/secrets/diff checks PASS. Remaining C2 work: surface/Greeks/
+  positioning canonical analytics and full service/type migration.
+
+### C3 — IN PROGRESS (commit `403f968`, 2026-08-31)
+
+- Corrected Velo semantics: credentials/base URL are configuration only, not
+  entitlement. Any unverified Velo presence yields `velo-config-unverified`;
+  Binance Futures + Bybit Linear remain available and independently labelled.
+  Updated health warning, strict contract enum, and negative entitlement tests.
+- Evidence: entitlement/v1/analytics focused tests 18 passed; type-check/lint/
+  secret scan/diff checks PASS.
+- Remaining C3: end-to-end cache metadata (`hit`, age, stale, coalesced,
+  providerError), direct/aggregate provider ownership, bounded canonical keys,
+  persistent quota scope, circuit/partial-failure and hidden-tab cadence tests.

@@ -62,9 +62,9 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
         providerModes: modes,
         cache: {
           entries: stats.entries ?? 0,
-          hits: stats.hits ?? 0,
-          misses: stats.misses ?? 0,
-          inflight: stats.inflight ?? 0,
+          hits: stats.metrics?.freshHits ?? 0,
+          misses: stats.metrics?.misses ?? 0,
+          inflight: stats.inFlight ?? 0,
         },
       },
     });

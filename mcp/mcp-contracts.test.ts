@@ -113,9 +113,10 @@ describe('MCP read-only server (contract)', () => {
   }, 10_000);
 
   it('tools/list exposes exactly the 12 read-only tools with explicit schemas', async () => {
-    const res = (await client.call('tools/list', {})) as { tools: { name: string; inputSchema: { additionalProperties?: boolean; properties?: Record<string, unknown> } }[] };
+    const res = (await client.call('tools/list', {})) as { tools: { name: string; inputSchema: { additionalProperties?: boolean; properties?: Record<string, unknown> }; outputSchema?: { type?: string; additionalProperties?: boolean; required?: string[] } }[] };
     expect(res.tools).toHaveLength(12);
     const names = res.tools.map((t) => t.name).sort();
+    expect(res.tools.every((tool) => tool.outputSchema?.type === 'object' && tool.outputSchema.additionalProperties === false && tool.outputSchema.required?.includes('structuredContent'))).toBe(true);
     expect(names).toEqual([
       'terminal.get_crypto_carry',
       'terminal.get_crypto_flow',

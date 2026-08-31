@@ -267,6 +267,17 @@ const TOOLS = [
   },
 ];
 
+const TOOL_OUTPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['content', 'structuredContent', 'isError'],
+  properties: {
+    content: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'text'], properties: { type: { const: 'text' }, text: { type: 'string' } } } },
+    structuredContent: {},
+    isError: { type: 'boolean' },
+  },
+};
+
 const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
 
 /** MCP 2025-11-25 stdio transport: parse one JSON-RPC message. */
@@ -290,7 +301,7 @@ export async function runMcpStdio() {
     if (!msg || typeof msg !== 'object' || !Object.prototype.hasOwnProperty.call(msg, 'id')) return;
     const id = msg.id;
     if (msg.method === 'initialize') return write(id, { protocolVersion: '2025-11-25', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'terminal-readonly', version: '1.0.0' } });
-    if (msg.method === 'tools/list') return write(id, { tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) });
+    if (msg.method === 'tools/list') return write(id, { tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema, outputSchema: TOOL_OUTPUT_SCHEMA })) });
     if (msg.method !== 'tools/call') return write(id, undefined, { code: -32601, message: `Method not found: ${msg.method}` });
     const tool = TOOL_MAP.get(msg.params?.name);
     if (!tool) return write(id, undefined, { code: -32602, message: `Unknown tool: ${msg.params?.name}` });

@@ -7,16 +7,8 @@
  * Input/output schemas are explicit JSON Schema; outputs carry structured
  * content with source/timestamp/units/coverage/provenance/warnings.
  */
-import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, '..');
-
-function registry() {
-  return JSON.parse(readFileSync(join(ROOT, 'packages/contracts/src/workflows.json'), 'utf8'));
-}
+import contracts from '../packages/contracts/src/v1-contracts.schema.json' with { type: 'json' };
+import { assertContract } from '../packages/contracts/src/runtime.js';
 
 /** Shared JSON fetch against the local REST API (single cache/broker on that side). */
 async function api(pathname, timeoutMs = 15_000) {
@@ -27,7 +19,19 @@ async function api(pathname, timeoutMs = 15_000) {
   return { status: res.status, body };
 }
 
-function ok(content) {
+function assertJsonSafe(value) {
+  if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('MCP output contains a non-finite number');
+  if (Array.isArray(value)) value.forEach(assertJsonSafe);
+  else if (value && typeof value === 'object') Object.values(value).forEach(assertJsonSafe);
+}
+
+function okContract(content, contractNames) {
+  assertJsonSafe(content);
+  const names = Array.isArray(contractNames) ? contractNames : [contractNames];
+  const accepted = names.some((name) => {
+    try { assertContract(name, content); return true; } catch { return false; }
+  });
+  if (!accepted) throw new Error(`MCP structuredContent failed contract: ${names.join(' | ')}`);
   const text = JSON.stringify(content, null, 2);
   return { content: [{ type: 'text', text }], structuredContent: content, isError: false };
 }
@@ -35,8 +39,18 @@ function ok(content) {
 function err(code, detail) {
   return {
     content: [{ type: 'text', text: `error: ${code} — ${detail}` }],
-    structuredContent: { error: code, detail },
     isError: true,
+  };
+}
+
+function contractOutputSchema(contractNames) {
+  const names = Array.isArray(contractNames) ? contractNames : [contractNames];
+  return {
+    $schema: contracts.$schema,
+    ...(names.length === 1
+      ? { $ref: `#/$defs/${names[0]}` }
+      : { anyOf: names.map((name) => ({ $ref: `#/$defs/${name}` })) }),
+    $defs: contracts.$defs,
   };
 }
 
@@ -72,9 +86,10 @@ const TOOLS = [
     inputSchema: {
       type: 'object', additionalProperties: false, properties: {},
     },
+    outputContracts: ['healthResponse'],
     handler: async () => {
-      const { status, body } = await api('/api/health');
-      return status === 200 ? ok(body) : err('PROVIDER_UNAVAILABLE', `health ${status}`);
+      const { status, body } = await api('/api/v1/system/health');
+      return status === 200 ? okContract(body, 'healthResponse') : err('PROVIDER_UNAVAILABLE', `health ${status}`);
     },
   },
   {
@@ -83,9 +98,10 @@ const TOOLS = [
     inputSchema: {
       type: 'object', additionalProperties: false, properties: {},
     },
+    outputContracts: ['providerStatusResponse'],
     handler: async () => {
-      const { status, body } = await api('/api/cache/status');
-      return status === 200 ? ok(body) : err('PROVIDER_UNAVAILABLE', `cache/status ${status}`);
+      const { status, body } = await api('/api/v1/provider/status');
+      return status === 200 ? okContract(body, 'providerStatusResponse') : err('PROVIDER_UNAVAILABLE', `provider/status ${status}`);
     },
   },
   {
@@ -98,15 +114,16 @@ const TOOLS = [
       },
       required: ['symbol'],
     },
+    outputContracts: ['optionsResponse', 'cryptoMarketResponse'],
     handler: async ({ symbol }) => {
       const sym = requireSymbol({ symbol });
       const upper = String(symbol).toUpperCase();
       if (upper === 'BTC' || upper === 'ETH') {
-        const { status, body } = await api(`/api/deribit/market/${upper}`);
-        return status === 200 ? ok({ currency: upper, market: body }) : err('PROVIDER_UNAVAILABLE', `deribit ${status}`);
+        const { status, body } = await api(`/api/v1/market/crypto/${upper}`);
+        return status === 200 ? okContract(body, 'cryptoMarketResponse') : err('PROVIDER_UNAVAILABLE', `deribit ${status}`);
       }
-      const { status, body } = await api(`/api/options/${encodeURIComponent(sym)}`);
-      return status === 200 ? ok({ symbol: sym, chain: body }) : err('PROVIDER_UNAVAILABLE', `options ${status}`);
+      const { status, body } = await api(`/api/v1/market/options/${encodeURIComponent(sym)}`);
+      return status === 200 ? okContract(body, 'optionsResponse') : err('PROVIDER_UNAVAILABLE', `options ${status}`);
     },
   },
   {
@@ -119,12 +136,14 @@ const TOOLS = [
       },
       required: ['symbol'],
     },
+    outputContracts: ['optionsResponse', 'cryptoMarketResponse'],
     handler: async ({ symbol }) => {
       const sym = requireSymbol({ symbol });
       if (!sym) return err('INVALID_SYMBOL', String(symbol));
-      const suffix = sym === 'BTC' || sym === 'ETH' ? `/api/deribit/market/${sym}` : `/api/options/${encodeURIComponent(sym)}`;
+      const suffix = sym === 'BTC' || sym === 'ETH' ? `/api/v1/market/crypto/${sym}` : `/api/v1/market/options/${encodeURIComponent(sym)}`;
       const { status, body } = await api(suffix);
-      return status === 200 ? ok({ symbol: sym, data: body }) : err('PROVIDER_UNAVAILABLE', `${suffix} ${status}`);
+      const contract = sym === 'BTC' || sym === 'ETH' ? 'cryptoMarketResponse' : 'optionsResponse';
+      return status === 200 ? okContract(body, contract) : err('PROVIDER_UNAVAILABLE', `${suffix} ${status}`);
     },
   },
   {
@@ -137,17 +156,14 @@ const TOOLS = [
       },
       required: ['symbol'],
     },
+    outputContracts: ['optionsResponse', 'cryptoMarketResponse'],
     handler: async ({ symbol }) => {
       const sym = requireSymbol({ symbol });
       if (!sym) return err('INVALID_SYMBOL', String(symbol));
-      const path = sym === 'BTC' || sym === 'ETH' ? `/api/deribit/market/${sym}` : `/api/options/${encodeURIComponent(sym)}`;
+      const path = sym === 'BTC' || sym === 'ETH' ? `/api/v1/market/crypto/${sym}` : `/api/v1/market/options/${encodeURIComponent(sym)}`;
       const { status, body } = await api(path);
       if (status !== 200) return err('PROVIDER_UNAVAILABLE', `options ${status}`);
-      return ok({
-        symbol: sym,
-        observation: body,
-        note: 'Surface analytics are computed client-side from observed quotes; the observed matrix and SVI model layer remain separate. Model never fills observed cells.',
-      });
+      return okContract(body, sym === 'BTC' || sym === 'ETH' ? 'cryptoMarketResponse' : 'optionsResponse');
     },
   },
   {
@@ -160,12 +176,13 @@ const TOOLS = [
       },
       required: ['symbol'],
     },
+    outputContracts: ['optionsResponse', 'cryptoMarketResponse'],
     handler: async ({ symbol }) => {
       const sym = requireSymbol({ symbol });
       if (!sym) return err('INVALID_SYMBOL', String(symbol));
-      const path = sym === 'BTC' || sym === 'ETH' ? `/api/deribit/market/${sym}` : `/api/options/${encodeURIComponent(sym)}`;
+      const path = sym === 'BTC' || sym === 'ETH' ? `/api/v1/market/crypto/${sym}` : `/api/v1/market/options/${encodeURIComponent(sym)}`;
       const { status, body } = await api(path);
-      return status === 200 ? ok({ symbol: sym, chain: body }) : err('PROVIDER_UNAVAILABLE', `options ${status}`);
+      return status === 200 ? okContract(body, sym === 'BTC' || sym === 'ETH' ? 'cryptoMarketResponse' : 'optionsResponse') : err('PROVIDER_UNAVAILABLE', `options ${status}`);
     },
   },
   {
@@ -178,12 +195,13 @@ const TOOLS = [
       },
       required: ['symbol'],
     },
+    outputContracts: ['optionsResponse', 'cryptoMarketResponse'],
     handler: async ({ symbol }) => {
       const sym = requireSymbol({ symbol });
       if (!sym) return err('INVALID_SYMBOL', String(symbol));
-      const path = sym === 'BTC' || sym === 'ETH' ? `/api/deribit/market/${sym}` : `/api/options/${encodeURIComponent(sym)}`;
+      const path = sym === 'BTC' || sym === 'ETH' ? `/api/v1/market/crypto/${sym}` : `/api/v1/market/options/${encodeURIComponent(sym)}`;
       const { status, body } = await api(path);
-      return status === 200 ? ok({ symbol: sym, chain: body, assumptions: ['OI-weight is a proxy, sign model calls +1/puts −1; not dealer inventory'] }) : err('PROVIDER_UNAVAILABLE', `options ${status}`);
+      return status === 200 ? okContract(body, sym === 'BTC' || sym === 'ETH' ? 'cryptoMarketResponse' : 'optionsResponse') : err('PROVIDER_UNAVAILABLE', `options ${status}`);
     },
   },
   {
@@ -192,9 +210,10 @@ const TOOLS = [
     inputSchema: {
       type: 'object', additionalProperties: false, properties: {},
     },
+    outputContracts: ['ratesTermStructureResponse'],
     handler: async () => {
-      const { status, body } = await api('/api/macrovol/rates/summary');
-      return status === 200 ? ok(body) : err('PROVIDER_UNAVAILABLE', `rates/summary ${status}`);
+      const { status, body } = await api('/api/v1/rates/term-structure');
+      return status === 200 ? okContract(body, 'ratesTermStructureResponse') : err('PROVIDER_UNAVAILABLE', `rates/term-structure ${status}`);
     },
   },
   {
@@ -203,9 +222,10 @@ const TOOLS = [
     inputSchema: {
       type: 'object', additionalProperties: false, properties: {},
     },
+    outputContracts: ['ratesStirResponse'],
     handler: async () => {
-      const { status, body } = await api('/api/macrovol/stir/strip');
-      return status === 200 ? ok(body) : err('PROVIDER_UNAVAILABLE', `stir/strip ${status}`);
+      const { status, body } = await api('/api/v1/rates/stir');
+      return status === 200 ? okContract(body, 'ratesStirResponse') : err('PROVIDER_UNAVAILABLE', `rates/stir ${status}`);
     },
   },
   {
@@ -216,17 +236,12 @@ const TOOLS = [
       properties: { currency: { type: 'string', enum: ['BTC', 'ETH'] } },
       required: ['currency'],
     },
+    outputContracts: ['cryptoCarryResponse'],
     handler: async ({ currency }) => {
       const c = String(currency).toUpperCase();
       if (!['BTC', 'ETH'].includes(c)) return err('INVALID_SYMBOL', currency);
-      const market = await api(`/api/deribit/market/${c}`);
-      if (market.status !== 200) return err('PROVIDER_UNAVAILABLE', `deribit market ${market.status}`);
-      const funding = await api(`/api/deribit/funding-history?currency=${c}&days=7`);
-      return ok({
-        currency: c,
-        market: market.body,
-        fundingHistory: funding.status === 200 ? funding.body : null,
-      });
+      const { status, body } = await api(`/api/v1/crypto/carry/${c}`);
+      return status === 200 ? okContract(body, 'cryptoCarryResponse') : err('PROVIDER_UNAVAILABLE', `crypto carry ${status}`);
     },
   },
   {
@@ -237,14 +252,12 @@ const TOOLS = [
       properties: { currency: { type: 'string', enum: ['BTC', 'ETH'] } },
       required: ['currency'],
     },
+    outputContracts: ['cryptoFlowResponse'],
     handler: async ({ currency }) => {
       const c = String(currency).toUpperCase();
       if (!['BTC', 'ETH'].includes(c)) return err('INVALID_SYMBOL', currency);
-      const [trades, free] = await Promise.all([
-        api(`/api/deribit/trades/${c}?hours=24&count=200`), api(`/api/free-crypto/market/${c}`),
-      ]);
-      if (trades.status !== 200 && free.status !== 200) return err('PROVIDER_UNAVAILABLE', 'crypto flow unavailable');
-      return ok({ currency: c, trades: trades.status === 200 ? trades.body : null, freeSnapshot: free.status === 200 ? free.body : null });
+      const { status, body } = await api(`/api/v1/crypto/flow/${c}?hours=24&count=200`);
+      return status === 200 ? okContract(body, 'cryptoFlowResponse') : err('PROVIDER_UNAVAILABLE', `crypto flow ${status}`);
     },
   },
   {
@@ -255,28 +268,25 @@ const TOOLS = [
       properties: { q: { type: 'string', minLength: 1, maxLength: 120 } },
       required: ['q'],
     },
+    outputContracts: ['academyIndexResponse'],
     handler: async ({ q }) => {
-      const reg = registry();
       const ql = String(q).toLowerCase();
-      const hits = reg.workflows
-        .filter((w) => w.desk === 'academy' || w.code)
-        .sort((a, b) => a.title.localeCompare(b.title));
-      const pages = hits.filter((w) => w.title.toLowerCase().includes(ql) || w.purpose.toLowerCase().includes(ql));
-      return ok({ query: q, results: pages.slice(0, 12), note: 'index-level search only; article text is untrusted display content' });
+      const { status, body } = await api('/api/v1/academy/index');
+      if (status !== 200) return err('PROVIDER_UNAVAILABLE', `academy/index ${status}`);
+      const matches = (body.data?.children ?? []).filter((item) => {
+        const haystack = [item.title, item.source, item.categoryLabel, ...(item.tags ?? [])].join(' ').toLowerCase();
+        return haystack.includes(ql);
+      }).slice(0, 12);
+      const result = {
+        ...body,
+        coverage: { numerator: matches.length, denominator: body.data?.children?.length ?? 0, state: matches.length > 0 ? 'partial' : 'unavailable', missing: [] },
+        warnings: [...(body.warnings ?? []), 'Index-level search only; article bodies are untrusted display content.'],
+        data: { title: `Academy search: ${String(q)}`, children: matches },
+      };
+      return okContract(result, 'academyIndexResponse');
     },
   },
 ];
-
-const TOOL_OUTPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['content', 'structuredContent', 'isError'],
-  properties: {
-    content: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'text'], properties: { type: { const: 'text' }, text: { type: 'string' } } } },
-    structuredContent: {},
-    isError: { type: 'boolean' },
-  },
-};
 
 const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
 
@@ -301,7 +311,7 @@ export async function runMcpStdio() {
     if (!msg || typeof msg !== 'object' || !Object.prototype.hasOwnProperty.call(msg, 'id')) return;
     const id = msg.id;
     if (msg.method === 'initialize') return write(id, { protocolVersion: '2025-11-25', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'terminal-readonly', version: '1.0.0' } });
-    if (msg.method === 'tools/list') return write(id, { tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema, outputSchema: TOOL_OUTPUT_SCHEMA })) });
+    if (msg.method === 'tools/list') return write(id, { tools: TOOLS.map(({ name, description, inputSchema, outputContracts }) => ({ name, description, inputSchema, outputSchema: contractOutputSchema(outputContracts) })) });
     if (msg.method !== 'tools/call') return write(id, undefined, { code: -32601, message: `Method not found: ${msg.method}` });
     const tool = TOOL_MAP.get(msg.params?.name);
     if (!tool) return write(id, undefined, { code: -32602, message: `Unknown tool: ${msg.params?.name}` });

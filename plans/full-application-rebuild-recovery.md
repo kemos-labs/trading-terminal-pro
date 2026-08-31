@@ -261,3 +261,26 @@ Start with C0 in this order:
 3. Remove credential-presence logging and stale visible MacroVol strings in touched paths.
 4. Run focused Python/TS tests, type-check, lint, secret scan, and diff check.
 5. Commit one concern. Continue immediately to C1; do not return a tranche-complete report.
+
+## Execution ledger (live)
+
+### C0 — DONE (commit `7567e10`, 2026-08-31)
+
+- SERFF corrected to same-month `SR1 − ZQ` (1:1) with exact-leg availability and
+  Unavailable states; four-leg SR3 → `calendar-of-calendars`; SR3−ZQ note no
+  longer claims SERFF; cash-EFFR rows moved to `derived-proxy` group
+  (non-listed, non-executable).
+- `interpolate_r` returns `null` on empty curve; `/api/rates/term-structure`
+  propagates `available`/`curve_coverage`/`warnings`; IV/Greeks calculators
+  fail closed on missing rate (no `0.04`/`0.05` stubs).
+- `compound_sofr_rate` rewritten to CME Actual/360 publication-interval form
+  `Π(1 + r_i·n_i/360)`; 9 golden vectors (business days, weekend, holiday,
+  leap day, quarter boundary, incomplete quarter, missing fixing, flat,
+  daily-publication) with independently derived expected values.
+- Worker security/branding: credential-presence print removed, title →
+  "Rates Worker", wildcard CORS rejected even when configured,
+  `RATES_WORKER_URL` (loopback-validated) with `MACROVOL_API_URL` deprecated
+  alias (`server/ratesWorkerUrl.js`), stale reset-token comment corrected.
+- Evidence: pytest 40 passed/2 skipped; vitest rates suites 21 passed;
+  type-check PASS; lint PASS; check-secrets PASS (incl. self-test);
+  `git diff --check` clean.

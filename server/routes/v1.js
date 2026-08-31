@@ -177,9 +177,7 @@ export function registerV1Routes(fastify) {
       provenanceByField: { 'data.status': 'terminal-api', 'data.timestamp': 'terminal-api-clock' },
       unitsByField: { 'data.timestamp': 'unix-ms' },
       assumptions: [],
-      warnings: providerModes.crypto.mode === 'free-alternatives'
-        ? ['VELO_NOT_CONFIGURED: crypto multi-venue panels use labelled public exchange alternatives.']
-        : ['VELO_CONFIG_UNVERIFIED: configuration presence is not entitlement; free Binance/Bybit alternatives remain active until a capability probe verifies Velo.'],
+      warnings: ['VELO_UNVERIFIED: crypto multi-venue panels use labelled public exchange alternatives until a server-side capability and redistribution probe verifies Velo.'],
       data: { status: 'ok', timestamp: now, providerModes },
     });
     return sendContract(request, reply, 'healthResponse', envelope);

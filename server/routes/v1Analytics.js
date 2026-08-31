@@ -68,11 +68,11 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
       freshness: 'live',
       coverage: coverage(1, 1),
       provenanceByField: {
-        'data.providerModes': 'server-env-and-probe',
+        'data.providerModes': 'public-provider-policy',
         'data.cache': 'api/upstreamCache',
       },
       unitsByField: { 'data.cache.entries': 'count', 'data.cache.hits': 'count', 'data.cache.misses': 'count' },
-      assumptions: ['Velo modes reflect configuration plus server-side entitlement facts, never credential presence alone.'],
+      assumptions: ['Velo remains unverified until a server-side capability and redistribution probe succeeds; configuration presence is not exposed.'],
       warnings: [],
       data: {
         providerModes: modes,

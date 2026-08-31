@@ -13,16 +13,15 @@ describe('provider entitlement selection', () => {
     expect(crypto).not.toHaveProperty('veloConfigured');
   });
 
-  it('keeps the free fallback active when a partial Velo configuration is present', () => {
-    const mode = providerEntitlements({ VELO_API_KEY: 'test-key' }).crypto;
-    expect(mode.mode).toBe('velo-config-unverified');
-    expect(mode.fallbackProviders).toEqual(['Binance Futures', 'Bybit Linear']);
-    expect(mode.normalization).toMatch(/unverified/);
+  it('does not disclose partial Velo configuration through public mode fields', () => {
+    const absent = providerEntitlements({}).crypto;
+    const partial = providerEntitlements({ VELO_API_KEY: 'test-key' }).crypto;
+    expect(partial).toEqual(absent);
   });
 
-  it('does not claim complete Velo configuration is active without a capability probe', () => {
-    const mode = providerEntitlements({ VELO_API_TOKEN: 'test-token', VELO_API_BASE_URL: 'https://example.test' }).crypto;
-    expect(mode.mode).toBe('velo-config-unverified');
-    expect(mode.fallbackProviders).toEqual(['Binance Futures', 'Bybit Linear']);
+  it('does not disclose apparently complete configuration without a capability probe', () => {
+    const absent = providerEntitlements({}).crypto;
+    const configured = providerEntitlements({ VELO_API_TOKEN: 'test-token', VELO_API_BASE_URL: 'https://example.test' }).crypto;
+    expect(configured).toEqual(absent);
   });
 });

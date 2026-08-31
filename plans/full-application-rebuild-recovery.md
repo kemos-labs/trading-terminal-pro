@@ -1,88 +1,263 @@
-# Full-application rebuild recovery plan
+# Full-application rebuild recovery plan — audited continuation v2
 
-Date: 2026-08-30
+Date: 2026-08-31
 Branch: `codex/full-application-rebuild`
-Rollback point: `e6753aeafb57369137d0afea6c5364bcb1b6fc3f`
+Worktree: `/home/kalde/trading-terminal-pro-rebuild`
+Rollback/diff baseline: `e6753aeafb57369137d0afea6c5364bcb1b6fc3f`
+Audited continuation baseline: `81d457ab36b4d9520148a07ed504301f62d7f782`
 Authoritative specification: `/home/kalde/Documents/Codex/2026-08-29/he-finished-and-review-his-answer/MASTER_FULL_APPLICATION_REBUILD_PROMPT.md`
 
-## Verdict entering recovery
+## Current verdict
 
-The branch is **not complete** and must not be promoted as a passing rebuild. The former PASS report is not reproducible: it omits required `/api/v1` contracts, runtime response validation, TypeScript server/MCP migration, rates-worker isolation, Velo entitlement handling, genuine real-server success-path tests, and complete OpenAPI/MCP coverage. Its own retained screenshots show expired crypto expiries, empty required workflows, a missing 3D Greeks surface, and loading/partial states presented as visual success.
+**FAIL — recovery in progress.** HEAD `81d457a` is a useful foundation, not a promotable rebuild. The owner checkout is clean and preserved. Continue in the existing worktree; do not recreate or reset it.
 
-Owner checkout changes are preserved by making all recovery edits only in `/home/kalde/trading-terminal-pro-rebuild`.
+The prior tranche correctly improved runtime route discovery, added six strict v1 operations, bounded several provider caches, added entitlement-state detection, moved `macrovol-api/` to `services/rates-worker/`, removed default wildcard CORS, and added rate-board ratio fields. Those changes remain subject to the corrections below.
+
+## Audited corrections that supersede older recovery notes
+
+### SERFF correction — P0
+
+The previous R4 requirement incorrectly called `(SR3M5-SR3U5)-(SR3M6-SR3U6)` SERFF. That is a four-leg SR3 calendar-of-calendars/curve-curvature structure, **not SERFF**.
+
+Authoritative behavior:
+
+- CME/Bloomberg `SERFF` is the One-Month SOFR versus 30-Day Fed Funds inter-commodity spread for the same delivery month: `SR1 - ZQ`, ratio `1:1`.
+- State the contract price-display convention and rate-sign convention explicitly.
+- If either exact leg is absent, SERFF is Unavailable.
+- `SR1 implied rate - cash EFFR` may be shown only as a labelled derived proxy, never as listed/observed SERFF.
+- `SR3 - ZQ` is a different spread family and must use contract-provided legs/ratio/code.
+- Four-leg SR3 structures may remain under Calendars/Curve Curvature with kind `calendar-of-calendars`; remove the SERFF name and kind.
+
+Primary sources:
+
+- https://www.cmegroup.com/trading/interest-rates/intercommodity-spread.html
+- https://www.cmegroup.com/education/articles-and-reports/understanding-sofr-futures
+
+### Velo correction — P0
+
+Credential or base-URL presence is not a verified entitlement. `velo-configuration-detected` must never disable the public Binance/Bybit fallback. Only an authenticated server-side capability probe plus recorded license/quota/redistribution facts can enter `velo-active`. Until then the mode is `free-alternatives` plus a configuration warning.
+
+### Billing-state correction — P0/P1
+
+Preserve the deliberate pre-key public mode, but do not encode missing Stripe configuration as a real entitlement grant. Contracts must distinguish `billing-disabled-public` from `entitled`. When billing is enabled, unknown entitlement fails closed. Do not alter Stripe Connect, dynamic payment-method, scoped RAW webhook, or reset-token invariants.
+
+### Bundle/3D correction — P0
+
+The 3D analytical chunk exception is valid only if the user explicitly opens 3D and measurements prove it is absent from initial and ordinary Vol workflow loads. `SurfaceMatrixView` currently mounts the 3D tool automatically, so the exception is not yet earned.
+
+## Current evidence and rejected claims
+
+| Area | Evidence at `81d457a` | Verdict |
+|---|---|---|
+| Runtime route discovery | 55 runtime patterns; frontend path parsing | Partial: matcher ignores HTTP method |
+| Canonical REST | 6 `/api/v1` operations with output AJV validation | Partial: incomplete domain coverage; request params not runtime-validated |
+| OpenAPI | 3.1 document generated; 55 paths/56 operations | Partial: most legacy responses unconstrained; only 6 strict v1 operations |
+| MCP | 12 read-only tool names; input validation | Reject completion: no output schemas/validation; analytics tools return raw chains/legacy payloads |
+| Provider cache | shared LRU/single-flight and selected quota tests | Partial: stale metadata discarded; direct legacy provider bypasses; quota ledger process-local |
+| Velo | credential-presence detection only | Not an entitlement check or connector |
+| Rates worker | moved and loopback start command added | Partial: still broad MacroVol/Greeks/Crypto service; old branding/env names; hard-coded rate fallback |
+| SERFF | ratio field and two tests | Incorrect product classification and synthetic substitutions |
+| Real-server E2E | 2 tests: contracts and Academy | Reject whole-app evidence |
+| Visual suite | screenshots for workflow matrix | Mostly route-intercepted fixtures; several primary charts empty/sparse |
+| 3D IV | restored with lazy module import | Partial: auto-mounted; no explicit entry; oversized exception unproven |
+| 3D Greeks | screenshot explicitly says removed | Missing required capability |
+| Strict TypeScript | UI strict TS; contracts have TS facade | Fastify and MCP remain JavaScript |
 
 ## Dependency graph
 
 ```text
-R1 evidence + gate integrity
-  ├─> R2 canonical contracts + runtime route inventory
-  │     ├─> R3 provider/cache/quota/entitlement correctness
-  │     ├─> R4 Rates + SERFF analytical correctness
-  │     └─> R5 Crypto + options analytical correctness
-  ├─> R6 unified shell/Home/registry/visual repair
-  └─> R7 deterministic real-server + visual/accessibility coverage
+C0 freeze evidence and correct false semantics
+  ├─> C1 data/math truth shields
+  ├─> C2 method-aware routes + strict canonical services
+  │     ├─> C3 provider broker/cache/quota/Velo
+  │     └─> C4 complete REST/OpenAPI/MCP + TypeScript migration
+  ├─> C5 product and visual rebuild across all eight desks
+  └─> C6 deterministic real-server fixture harness
 
-R2,R3,R4,R5,R6,R7
-  └─> R8 TypeScript service/MCP migration + complete OpenAPI/MCP
-          └─> R9 all mandatory gates + independent reviews + final evidence
+C1,C2,C3,C4,C5,C6
+  └─> C7 tree/ownership cleanup and bundle/performance proof
+       └─> C8 full gates twice + independent reviews + final evidence
 ```
 
-## Nodes
+## C0 — Freeze evidence and remove false semantics
 
-### R1 — Evidence and gate integrity
-- Record falsifiable audit findings and screenshot verdicts.
-- Repair broken workflow-registry generation.
-- Replace hardcoded route claims with Fastify runtime discovery.
-- Make `test:e2e:real-server` and `test:visual` distinct commands.
-- Never call mocked or partial-state coverage a success-path pass.
+1. Record the `81d457a` audit in `docs/recovery-evidence/` with exact P0/P1 findings and screenshot paths.
+2. Correct SERFF names/kinds/data construction in:
+   - `services/rates-worker/services/rate_risk.py`
+   - `services/rates-worker/main.py`
+   - `src/components/macrovol/rates/SerffBoard.tsx`
+   - `src/lib/macrovol/api.ts`
+   - related fixtures/tests/docs.
+3. Move four-leg SR3 rows to `calendar-of-calendars`; never include them in `serff_board`.
+4. Add golden tests for same-month `SR1 - ZQ`, ratio `1:1`, exact missing-leg unavailability, derived cash proxy separation, sign convention, and UI labels.
+5. Remove `return 0.04` from `interpolate_r`; change return type to nullable/unavailable and propagate it through `/api/rates/term-structure` and consumers.
+6. Fix SR3 settlement compounding so a fixing with day count `n_i` contributes `1 + r_i*n_i/360`, not repeated daily compounding. Add weekend, holiday, leap-day, quarter-boundary, incomplete-quarter, and missing-fixing golden vectors.
+7. Remove production credential-presence printing and update stale MacroVol naming/comments immediately where user-visible.
 
-### R2 — Canonical contracts and routes
-- Add shared JSON Schemas for success/error envelopes, provenance, freshness, assumptions, and coverage.
-- Add `/api/v1` canonical endpoints and documented legacy adapters.
-- Validate serialized server and MCP responses.
-- Generate complete OpenAPI from the route/contract authority.
+Exit: focused Python/TS tests pass, no false SERFF label remains, no hard-coded rate fallback, secret scan passes.
 
-### R3 — Providers, cache, quota, Velo
-- Enforce one cached snapshot per provider/resource with keyed single-flight.
-- Preserve last successful snapshots separately from failure cache entries.
-- Return honest stale/error metadata and expose measured cache/quota state.
-- Implement Velo entitlement/key detection; use labelled free adapters only when not entitled.
+## C1 — Data, math, nullability, and execution truth
 
-### R4 — Rates
-- Move/isolate the private worker as `services/rates-worker` with loopback-only access.
-- Verify SR3 expiry filtering/order, implied-rate/price semantics, DTE labels, and no fabricated history.
-- Implement exact SERFF `(SR3M5 − SR3U5) − (SR3M6 − SR3U6)` with ratio, bp units, sign note, and explicit unavailability.
+1. Replace `openInterest || 0` in premium/exposure paths with discriminated missing/partial state. A real observed zero remains zero.
+2. Replace indicator warmup `NaN` with `null` or prove a typed internal-only finite array that cannot cross rendering/serialization boundaries. Add recursive no-NaN/Infinity tests for UI data, REST, exports, and MCP.
+3. Make portfolio entry a discriminated executable basis:
+   - long option: observed positive ask + `entryBasis:'ask'`;
+   - short option: observed positive bid + `entryBasis:'bid'`;
+   - explicit user entry: `entryBasis:'user'`;
+   - otherwise unavailable, never midpoint/last/mark substitution.
+4. Audit GEX/DEX/Vanna/Charm units and transformations across TypeScript and Python. Keep raw Greeks separate from `/1%`, `/day`, `/vol point`, contract multiplier, spot multiplier, and sign-model display adapters.
+5. Add cross-language golden matrices, finite differences, boundary/property tests, null OI tests, crossed/one-sided quote tests, expired contract tests, and missing-event-time tests.
 
-### R5 — Crypto/options math
-- Fix expiry/right parsing and reject expired contracts.
-- Fix GEX/DEX/Vanna/Charm units, selection scope, source spot, and missing-data semantics.
-- Keep missing OI/history/futures as null, never zero.
-- Implement non-empty volatility, positioning, flow, carry, and trade/risk success states.
+Exit: all production outputs finite or null, execution-side law structurally enforced, math review accepts units/provenance.
 
-### R6 — Product shell and visuals
-- Use one shell/navigation/command/deep-link registry across all eight desks.
-- Finish Home morning brief and launcher without internal IDs or oversized empty regions.
-- Restore lazy 3D Greeks and canonical 2D fallback.
-- Remove the separate Crypto mini-application shell.
-- Correct mobile clipping, target sizes, duplicate labels, chart legends/axes, and visual hierarchy.
+## C2 — Method-aware route parity and canonical domain services
 
-### R7 — Honest end-to-end coverage
-- Add deterministic adapter-boundary fixtures behind a real local Fastify server; do not use browser route mocks for the real-server suite.
-- Test populated success, partial, unavailable, loading, and error states.
-- Assert exact workflow roots, semantics, data quality, no console/runtime errors, and WCAG rules including color contrast.
-- Capture retained screenshots at all four required viewports.
+1. Make `scripts/route-parity.mjs` compare HTTP method plus normalized path. Infer `GET` only when fetch options are absent; parse literal method values; treat EventSource as GET; require annotations for unresolved dynamic method/path.
+2. Add Fastify request schemas from the shared schema authority to every `/api/v1` operation. Invalid funding days/hours/count/instrument values return typed 400 instead of silently defaulting.
+3. Expand canonical domain services and `/api/v1` operations for:
+   - provider/cache status;
+   - market snapshot;
+   - option chain;
+   - observed/model volatility surface;
+   - Greeks;
+   - positioning/exposure;
+   - rates summary/curve;
+   - STIR/SR3/SERFF;
+   - crypto carry;
+   - crypto flow;
+   - KSA board where entitlement permits;
+   - Academy index/search/article metadata.
+4. Each envelope carries instrument identity, event time, fetch time, source list, per-field provenance/units, freshness, coverage, assumptions, warnings, and cache state.
+5. `asOf` is the provider event/observation time, not merely fetch completion. When fields have different events, provide field-level times or an explicit mixed-snapshot warning.
+6. Response schemas are strict, runtime-validated, and fail before serialization. Requests and errors use the same authority.
+7. Legacy URLs become thin adapters over canonical services; no provider or math duplication.
 
-### R8 — Service/MCP/OpenAPI architecture
-- Migrate Fastify and MCP to strict TypeScript.
-- Make MCP analytical and read-only, with strict input/output schemas and no trading/account tools.
-- Cover all public v1 operations in OpenAPI and registry references.
+Exit: method-aware parity negative tests pass; every workflow registry `apiOps` reference resolves to a runtime/OpenAPI operation; invalid requests fail typed 4xx.
 
-### R9 — Promotion
-- Run every command listed in the master prompt twice where required.
-- Run secret scans, npm/pip audits, route/OpenAPI/MCP/integration/E2E/visual gates, bundle budgets, `git diff --check`, and clean-worktree verification.
-- Obtain fresh independent visual, security/API, math/provenance, and final falsification reviews. A failed reviewer runtime is a blocker, not a waived gate.
-- Replace the old PASS document only with reproducible evidence tied to final HEAD.
+## C3 — Provider broker, stale truth, quota, and Velo
 
-## Promotion rule
+1. Build provider-owned adapters and a shared broker; remove direct uncached calls in `server/routes/deskFeeds.js` and the Deribit index route.
+2. Preserve `{fromCache, ageMs, stale, coalesced, providerError}` through free-crypto, Deribit, rates, Home, v1, and MCP. Do not return only `.data`.
+3. Cache only validated successful snapshots. Keep last-good snapshots separate from current failure state. Enforce explicit maximum stale windows and visible stale reasons.
+4. Canonicalize equivalent queries and bound every cache dimension. Add adversarial cardinality tests.
+5. Make quota accounting deployment-appropriate and persistent or explicitly scoped; expose safe remaining budget/health without keys or sensitive query history.
+6. Add N-client single-flight tests for direct provider routes and aggregate snapshots, cold/fresh/stale/error paths, partial venue failure, circuit open/half-open, and background-tab cadence.
+7. Velo modes:
+   - `free-alternatives`: always available when no verified connector;
+   - `velo-config-unverified`: warning only; free alternative remains active;
+   - `velo-active`: only after authenticated capability/license probe and recorded terms;
+   - `velo-unavailable`: connector failed; independent free data remains available.
+8. Never print, return, screenshot, document, or commit credential values or presence booleans to public clients unless explicitly safe and necessary. Operational detail is access-controlled.
 
-A node may be promoted only after its focused tests pass and `scripts/check-secrets.sh` passes. The overall verdict remains **FAIL / recovery in progress** until R9 is complete.
+Exit: quota/cache tests prove one cold fill, stale truth survives end to end, incomplete Velo config never disables free data.
+
+## C4 — Strict TypeScript, complete OpenAPI, and analytical MCP
+
+1. Incrementally migrate Fastify composition/routes/services and MCP from `.js` to strict `.ts`; keep commits small and behavior-parity tested.
+2. Generate types/validators/OpenAPI/MCP schemas from one JSON Schema 2020-12 authority; remove hand-maintained schema drift.
+3. OpenAPI describes every runtime public operation with request, success, and typed error schemas, method/path/auth/rate/cache ownership, deprecation, and stable operation ID.
+4. MCP `tools/list` publishes strict input and output schemas. Validate `structuredContent` before return.
+5. MCP calls domain services directly in-process or through an internal typed service boundary—not provider-native legacy routes. REST and MCP share analytics.
+6. Implement actual analytical outputs for volatility surface, Greeks, positioning, rates/STIR, crypto carry/flow, and Academy search. Returning a raw chain plus a note is not completion.
+7. Add malformed/oversized input, malformed output, timeout, provider-down, partial, quota-sharing, no-NaN, forbidden-tool, concurrency, protocol/framing, and REST/MCP parity tests.
+8. Keep MCP strictly read-only: no order/account/withdrawal/Stripe/auth/reset/secret tools.
+
+Exit: all registry MCP references resolve; all tool inputs and outputs validate; strict TypeScript passes without `any` escape hatches at contract boundaries.
+
+## C5 — Whole-product and professional visual rebuild
+
+### Global shell and Home
+
+- One shell/registry/deep-link/command system for all eight desks.
+- Home renders immediately with a useful morning brief and launcher; optional provider failure cannot block it.
+- Remove user-visible MacroVol/VOLATERM labels and internal IDs.
+- Distinguish global API health from each independent provider/desk state.
+
+### Volatility and Greeks
+
+- Keep observed IV matrix, smile/skew, term/forward vol, fit diagnostics, and history.
+- Add explicit `Open 3D` controls. Do not mount React Three Fiber until activated.
+- Restore professional 3D IV and 3D Greeks, with observed nodes/holes, separate model mesh, axes/moneyness mode, camera presets, contours, ATM ridge, exact tooltip, keyboard controls, and 2D/table fallback.
+- Replace screenshot text that says 3D Greeks was removed.
+
+### Positioning and Flow
+
+- Spot/forward-centered GEX/DEX/Vanna/Charm heatmaps and profiles with fixed zero-centered diverging scale, missing-cell hatch, exact tooltip, scope controls, and accessible table.
+- OI coverage is visible; scenario weight modes are explicit.
+- Session change needs actual time series/event times; a single frame is not session flow.
+
+### Trade & Risk
+
+- Preserve three coherent workflows: Structure, PnL/Scenario, Hedge/Risk.
+- Prove capability parity for valuable deleted tools through visible controls and real calculations, not source-string tests.
+- Enforce executable entry bases and unavailable states.
+
+### Rates
+
+- Populate the SR3 implied-rate chart with deterministic recorded contracts, actual reference-quarter dates, current/prior settlement, straight segments, adaptive ticks, and complete tooltips.
+- Implement exact SERFF/other spread classifications from C0.
+- Add DOM/canvas geometry assertions proving no axis/title/legend/tooltip overlap at all four viewports.
+
+### Crypto
+
+- Flatten the nested mini-shell into the global terminal chrome.
+- Each of six workflows needs a primary decision visual: regime/venue comparison, vol matrix/term structure, positioning heatmap/profile, option-flow timeline/distribution, funding+basis term/history, and payoff/Greeks/risk.
+- Keep Deribit option authority and independent free Binance/Bybit snapshot. No giant dead regions or contradictory Live/unavailable states.
+
+### KSA and Academy
+
+- KSA uses shared cached snapshots, explicit delayed/session/event/fetch time, provider-down/entitlement states, and no fake breadth/value proxy.
+- Academy serves real JSON/static content, search/filter/deep links, sanitized untrusted article display, useful loading/error/empty states, and no giant empty canvas.
+
+Exit: product owner can manually review every deep link; visual reviewer accepts actual screenshots/live app for populated and failure states.
+
+## C6 — Deterministic real-server and visual fixture harness
+
+1. Add adapter-boundary fixture mode to the real Fastify process. Browser interception remains forbidden in this suite.
+2. Fixtures are recorded/normalized, deterministic, time-frozen, schema-validated, and explicitly test-only. They cover equities, rates/STIR/SERFF, Deribit, free crypto partial venues, KSA, and Academy.
+3. Exercise all 27 registry workflows through their exact deep links and exact workflow-root test IDs.
+4. Cover populated success, loading, empty, stale, partial, malformed-provider, provider-down, and entitlement states.
+5. Run every workflow at 1440x900, 1280x800, 1024x768, and 390x844 against the real server.
+6. Fail on unhandled requests, unexpected 4xx/5xx, console error/warn, page error, error boundary, NaN/Infinity, horizontal overflow, clipped controls, overlap, and missing primary visual.
+7. Run WCAG 2A and 2AA including color contrast; no global rule disable. Any narrow exception requires owner approval and a documented alternative.
+8. Capture screenshots with HEAD/fixture/scenario/viewport in file name or sidecar manifest. A reviewer must inspect pixels, not just existence.
+
+Exit: `test:e2e:real-server` and `test:visual` are distinct, meaningful, all-workflow gates; screenshots are populated and independently accepted.
+
+## C7 — Ownership cleanup and performance proof
+
+1. Restrict `services/rates-worker` to rates/macro integrations that materially need Python. Migrate crypto spot/perp, equity IV/Greeks, SEC feed, and duplicate quantitative ownership to canonical TypeScript services unless a benchmark/validation document justifies retention.
+2. Introduce `RATES_WORKER_URL` with loopback validation; keep `MACROVOL_API_URL` only as a deprecated compatibility alias. Rename service title, start logs, docs, env examples, comments, tests, and user copy.
+3. Reject wildcard CORS even when an env variable is set. Bind `127.0.0.1` in every supported start path; test it.
+4. Complete the target `apps/` and `packages/` tree incrementally without big-bang moves. Enforce package ownership/import boundaries.
+5. 3D analytical chunk loads only after explicit action. Add network/performance assertions, cold-load timing, memory cleanup, context-loss fallback, and its own reviewed cap.
+6. Enforce normal initial/chunk/workflow budgets and cache-hit p95. Do not hide over-budget chunks behind unverified exceptions.
+7. Update hashed Python lock comments/paths and audit the exact deployment lock.
+
+Exit: ownership/import tests pass, no visible legacy branding, performance evidence validates analytical exceptions.
+
+## C8 — Promotion and independent falsification
+
+Run all master gates twice where specified, from clean HEAD. Record command, start/end time, exit code, test count, skip/warning count, artifact paths, and commit.
+
+Mandatory independent reviews:
+
+- route/API/OpenAPI/MCP contract review;
+- provider/quota/cache/security review;
+- quantitative math/provenance/units/nullability review;
+- visual/a11y review using live app and actual screenshots;
+- final adversarial reviewer that attempts to falsify every PASS claim.
+
+Any P0/P1 rejection returns to its owning node. A reviewer tool/usage failure is not approval and must be retried or replaced by an independent reviewer.
+
+Final PASS requires every mandatory gate, all workflow deep links, clean status, preserved owner checkout, and no open required limitation. Otherwise report FAIL/BLOCKED honestly and continue all other safe work.
+
+## Exact next action from `81d457a`
+
+Start with C0 in this order:
+
+1. Correct SERFF classification and tests.
+2. Remove hard-coded `0.04` and fix SR3 day-count compounding with golden vectors.
+3. Remove credential-presence logging and stale visible MacroVol strings in touched paths.
+4. Run focused Python/TS tests, type-check, lint, secret scan, and diff check.
+5. Commit one concern. Continue immediately to C1; do not return a tranche-complete report.

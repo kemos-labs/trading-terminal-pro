@@ -9,15 +9,12 @@ const truthyCredential = (value) => typeof value === 'string' && value.trim().le
 export function providerEntitlements(env = process.env) {
   const veloCredentialPresent = truthyCredential(env.VELO_API_KEY) || truthyCredential(env.VELO_API_TOKEN);
   const veloBaseUrlPresent = truthyCredential(env.VELO_API_BASE_URL);
-  const veloConfigured = veloCredentialPresent && veloBaseUrlPresent;
   const mode = veloCredentialPresent || veloBaseUrlPresent
     ? 'velo-config-unverified'
     : 'free-alternatives';
   return {
     crypto: {
       mode,
-      veloCredentialPresent,
-      veloConfigured,
       // Free alternatives never disappear merely because an unverified Velo
       // variable is present. They are independent and remain usable.
       fallbackProviders: ['Binance Futures', 'Bybit Linear'],

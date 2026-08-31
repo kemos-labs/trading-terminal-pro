@@ -154,8 +154,6 @@
               "additionalProperties": false,
               "required": [
                 "mode",
-                "veloCredentialPresent",
-                "veloConfigured",
                 "fallbackProviders",
                 "normalization"
               ],
@@ -168,12 +166,6 @@
                     "velo-active",
                     "velo-unavailable"
                   ]
-                },
-                "veloCredentialPresent": {
-                  "type": "boolean"
-                },
-                "veloConfigured": {
-                  "type": "boolean"
                 },
                 "fallbackProviders": {
                   "type": "array",
@@ -1563,12 +1555,26 @@
       ],
       "properties": {
         "notional": {
-          "type": "number"
+          "type": ["number", "null"]
         },
         "count": {
           "type": "integer",
           "minimum": 0
         }
+      }
+    },
+    "flowExpiryDistribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expiry", "calls", "puts", "buy", "sell", "block", "rfq"],
+      "properties": {
+        "expiry": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "calls": { "type": "integer", "minimum": 0 },
+        "puts": { "type": "integer", "minimum": 0 },
+        "buy": { "type": "integer", "minimum": 0 },
+        "sell": { "type": "integer", "minimum": 0 },
+        "block": { "type": "integer", "minimum": 0 },
+        "rfq": { "type": "integer", "minimum": 0 }
       }
     },
     "cryptoFlowData": {
@@ -1578,6 +1584,7 @@
         "currency",
         "hours",
         "aggregates",
+        "expiryDistribution",
         "count",
         "hasMore"
       ],
@@ -1638,6 +1645,10 @@
               }
             }
           }
+        },
+        "expiryDistribution": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/flowExpiryDistribution" }
         },
         "count": {
           "type": "integer",

@@ -119,6 +119,8 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     expect(body.data.cache.misses).toBeTypeOf('number');
     expect(body.data.cache.inflight).toBe(0);
     expect(body.data.providerModes.crypto?.mode).toBeTruthy();
+    expect(body.data.providerModes.crypto).not.toHaveProperty('veloCredentialPresent');
+    expect(body.data.providerModes.crypto).not.toHaveProperty('veloConfigured');
   });
 
   it('rates/stir surfaces exact same-month SR1-ZQ SERFF rows and separate proxies', async () => {
@@ -182,5 +184,22 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     expect(validateContract('errorResponse', body)).toMatchObject({ valid: true });
     expect(body.error.code).toBe('ENTITLEMENT_MISSING');
     if (prev !== undefined) process.env.SAHMK_API_KEY = prev;
+  });
+
+  it('ksa/board applies the same billing gate as the legacy endpoint', async () => {
+    const oldKey = process.env.SAHMK_API_KEY;
+    const oldStripe = process.env.STRIPE_SECRET_KEY;
+    process.env.SAHMK_API_KEY = 'configured-only-for-test';
+    process.env.STRIPE_SECRET_KEY = 'sk_test_configured';
+    try {
+      const response = await app.inject('/api/v1/ksa/board');
+      expect(response.statusCode).toBe(402);
+      const body = response.json();
+      expect(validateContract('errorResponse', body)).toMatchObject({ valid: true });
+      expect(body.error.code).toBe('ENTITLEMENT_MISSING');
+    } finally {
+      if (oldKey === undefined) delete process.env.SAHMK_API_KEY; else process.env.SAHMK_API_KEY = oldKey;
+      if (oldStripe === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = oldStripe;
+    }
   });
 });

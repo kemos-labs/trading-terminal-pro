@@ -60,11 +60,10 @@ function knownPriceIds(tiers) {
 const PRICE_CATALOG = loadPriceCatalog();
 const KNOWN_PRICE_IDS = knownPriceIds(PRICE_CATALOG);
 
-/** True when the record's price belongs to our catalog. Empty catalog ⇒ allow
- *  (billing configured but no tier mapping yet — don't lock out everyone). */
+/** True only when the record's price belongs to the configured catalog.
+ * An empty catalog is invalid billing configuration and must fail closed. */
 function priceGrantsAccess(priceId) {
-  if (!KNOWN_PRICE_IDS.size) return true;
-  return KNOWN_PRICE_IDS.has(priceId);
+  return KNOWN_PRICE_IDS.size > 0 && KNOWN_PRICE_IDS.has(priceId);
 }
 
 // ── Entitlements store (file-backed; swap for a DB when auth lands) ─────────
@@ -180,10 +179,13 @@ export function requestHasAccess(request) {
 
 export function gateInfoForRequest(request) {
   const enabled = billingEnabled();
+  const entitled = enabled && requestHasAccess(request);
   return {
     enabled,
     gatedDesks: enabled ? GATED_DESKS : [],
-    entitled: enabled ? requestHasAccess(request) : true,
+    // Public pre-key mode is deliberately distinct from a verified grant.
+    accessMode: enabled ? (entitled ? 'entitled' : 'unentitled') : 'billing-disabled-public',
+    entitled,
   };
 }
 

@@ -3,13 +3,14 @@ import { providerEntitlements } from './entitlements.js';
 
 describe('provider entitlement selection', () => {
   it('selects explicitly labelled public alternatives when Velo is absent', () => {
-    expect(providerEntitlements({}).crypto).toEqual({
+    const crypto = providerEntitlements({}).crypto;
+    expect(crypto).toEqual({
       mode: 'free-alternatives',
-      veloCredentialPresent: false,
-      veloConfigured: false,
       fallbackProviders: ['Binance Futures', 'Bybit Linear'],
       normalization: 'provider-native-not-velo-normalized',
     });
+    expect(crypto).not.toHaveProperty('veloCredentialPresent');
+    expect(crypto).not.toHaveProperty('veloConfigured');
   });
 
   it('keeps the free fallback active when a partial Velo configuration is present', () => {
@@ -22,7 +23,6 @@ describe('provider entitlement selection', () => {
   it('does not claim complete Velo configuration is active without a capability probe', () => {
     const mode = providerEntitlements({ VELO_API_TOKEN: 'test-token', VELO_API_BASE_URL: 'https://example.test' }).crypto;
     expect(mode.mode).toBe('velo-config-unverified');
-    expect(mode.veloConfigured).toBe(true);
     expect(mode.fallbackProviders).toEqual(['Binance Futures', 'Bybit Linear']);
   });
 });

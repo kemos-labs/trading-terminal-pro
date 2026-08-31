@@ -18,6 +18,7 @@ import { fetchFreeCryptoMarket } from '../providers/freeCrypto/client.js';
 import { academyIndexJson } from '../../api/academyCatalog.js';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gateInfoForRequest } from '../../api/stripeBilling.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const DOCS_ROOT = join(ROOT, 'docs');
@@ -26,6 +27,22 @@ function finiteOrNull(value) {
   if (value == null || value === '') return null;
   const number = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+const MONTHS = new Map([
+  ['JAN', 0], ['FEB', 1], ['MAR', 2], ['APR', 3], ['MAY', 4], ['JUN', 5],
+  ['JUL', 6], ['AUG', 7], ['SEP', 8], ['OCT', 9], ['NOV', 10], ['DEC', 11],
+]);
+
+function parseDeribitOption(instrument) {
+  const match = /^([A-Z]+)-(\d{1,2})([A-Z]{3})(\d{2})-(?:\d+(?:\.\d+)?)-([CP])$/i.exec(String(instrument));
+  if (!match) return { right: null, expiry: null };
+  const month = MONTHS.get(match[3].toUpperCase());
+  if (month == null) return { right: null, expiry: null };
+  const date = new Date(Date.UTC(2000 + Number(match[4]), month, Number(match[2])));
+  return Number.isFinite(date.getTime())
+    ? { right: match[5].toUpperCase() === 'C' ? 'call' : 'put', expiry: date.toISOString().slice(0, 10) }
+    : { right: null, expiry: null };
 }
 
 async function workerJson(suffix, query = '', ttlMs = 60_000) {
@@ -291,7 +308,7 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
         fundingPoints,
         datedFutureBasis: dated,
         freeFunding8h: finiteOrNull((freeBody?.venues ?? []).map((v) => v?.funding8h).find((x) => x != null)) ?? null,
-        freeIndexPrice: finiteOrNull((freeBody?.venues ?? []).map((v) => v?.indexPrice).find((x) => x != null)) ?? null,
+        freeIndexPrice: finiteOrNull((freeBody?.venues ?? []).map((v) => v?.index).find((x) => x != null)) ?? null,
         sources: {
           deribitFunding: funding.status === 'fulfilled',
           deribitMarket: market.status === 'fulfilled',
@@ -331,34 +348,43 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
       });
     }
     const trades = (body.trades ?? [])
-      .map((t) => ({
-        instrument: String(t.instrument ?? ''),
-        timestamp: finiteOrNull(t.timestamp),
-        price: finiteOrNull(t.price),
-        quantity: finiteOrNull(t.quantity),
-        side: t.side === 'buy' || t.side === 'sell' ? t.side : null,
-        right: /-C$/i.test(String(t.instrument ?? '')) ? 'call' : /-P$/i.test(String(t.instrument ?? '')) ? 'put' : null,
-        blockTrade: Boolean(t.blockTrade),
-        rfq: Boolean(t.rfq),
-      }))
-      .filter((t) => t.timestamp != null && t.side != null);
+      .map((t) => {
+        const instrument = String(t.instrument ?? '');
+        const parsed = parseDeribitOption(instrument);
+        return {
+          instrument,
+          timestamp: finiteOrNull(t.timestamp),
+          price: finiteOrNull(t.price),
+          quantity: finiteOrNull(t.quantity),
+          side: t.side === 'buy' || t.side === 'sell' ? t.side : null,
+          right: parsed.right,
+          expiry: parsed.expiry,
+          blockTrade: Boolean(t.blockTrade),
+          rfq: Boolean(t.rfq),
+        };
+      })
+      .filter((t) => t.timestamp != null && t.side != null && t.right != null && t.expiry != null);
     const agg = {
-      calls: { buy: { notional: 0, count: 0 }, sell: { notional: 0, count: 0 } },
-      puts: { buy: { notional: 0, count: 0 }, sell: { notional: 0, count: 0 } },
+      calls: { buy: { notional: null, count: 0 }, sell: { notional: null, count: 0 } },
+      puts: { buy: { notional: null, count: 0 }, sell: { notional: null, count: 0 } },
     };
     const byExpiry = new Map();
+    const warnings = [];
     for (const t of trades) {
-      const bucket = agg[t.right ?? 'calls'] ?? agg.calls;
+      const bucket = agg[t.right === 'put' ? 'puts' : 'calls'];
       const sideBucket = bucket[t.side];
       sideBucket.count += 1;
-      sideBucket.notional += (t.price ?? 0) * (t.quantity ?? 0);
-      const key = t.right ?? 'call';
-      const cur = byExpiry.get(key) ?? { calls: 0, puts: 0, buy: 0, sell: 0, block: 0, rfq: 0 };
+      if (t.price != null && t.quantity != null && t.price >= 0 && t.quantity >= 0) {
+        sideBucket.notional = (sideBucket.notional ?? 0) + t.price * t.quantity;
+      } else {
+        warnings.push(`${t.instrument}: premium notional unavailable (missing price or quantity)`);
+      }
+      const cur = byExpiry.get(t.expiry) ?? { expiry: t.expiry, calls: 0, puts: 0, buy: 0, sell: 0, block: 0, rfq: 0 };
       if (t.blockTrade) cur.block += 1;
       if (t.rfq) cur.rfq += 1;
       if (t.right === 'put') cur.puts += 1; else cur.calls += 1;
       if (t.side === 'buy') cur.buy += 1; else cur.sell += 1;
-      byExpiry.set(key, cur);
+      byExpiry.set(t.expiry, cur);
     }
     const now = Date.now();
     const envelope = baseEnvelope(request, {
@@ -373,11 +399,12 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
         'data.aggregates.*.count': 'trades',
       },
       assumptions: ['Side is taker direction; notional is premium (price × qty), not underlying notional.'],
-      warnings: [],
+      warnings: [...new Set(warnings)],
       data: {
         currency,
         hours,
         aggregates: agg,
+        expiryDistribution: [...byExpiry.values()].sort((a, b) => a.expiry.localeCompare(b.expiry)),
         count: trades.length,
         hasMore: Boolean(body.hasMore),
       },
@@ -418,8 +445,17 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
 
   // ── KSA board (entitlement-gated; server-only key) ─────────────────────
   fastify.get('/api/v1/ksa/board', async (request, reply) => {
-    const hasKey = Boolean(process.env.SAHMK_API_KEY);
-    if (!hasKey) {
+    const gate = gateInfoForRequest(request);
+    if (gate.enabled && !gate.entitled) {
+      return sendError(request, reply, {
+        statusCode: 402,
+        code: 'ENTITLEMENT_MISSING',
+        message: 'KSA board requires an entitled session.',
+        retryable: false,
+        provider: 'billing',
+      });
+    }
+    if (!process.env.SAHMK_API_KEY) {
       return sendError(request, reply, {
         statusCode: 403,
         code: 'ENTITLEMENT_MISSING',

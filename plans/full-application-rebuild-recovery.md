@@ -284,3 +284,24 @@ Start with C0 in this order:
 - Evidence: pytest 40 passed/2 skipped; vitest rates suites 21 passed;
   type-check PASS; lint PASS; check-secrets PASS (incl. self-test);
   `git diff --check` clean.
+
+### C1 — DONE (commit `6b8a962`)
+
+- `premiumMath`: missing OI → null premium/`oiMissing` flag; observed zero stays
+  0; scanner `openInterest`/`volume` nullable; expiry summaries carry
+  `oiCoverage` full/partial/missing. Tests: `premiumMath.test.ts` (6).
+- `indicators`: warmup → `null` (Unavailable), never NaN; recursive no-NaN
+  tests (`indicators.test.ts`, 4).
+- Portfolio `entryBasis` restricted to `ask|bid|user` and structurally
+  enforced across evaluateCombo/payoff/BE/combo-PnL: long requires observed
+  positive ask, short observed positive bid, `user` explicit override,
+  mid/last/mark substitution fails closed. `portfolio.test.ts` +7.
+- `exposure.ts`: non-finite row inputs fail closed (found by new no-NaN
+  property test); finite-difference GEX identity (`γQS²·0.01 = Δ(delta
+  notional) for +1% spot`) and per-1-vol-point vanna / per-day charm
+  assertions added. `positioning.units.test.ts` +3.
+- Pre-existing baseline failures recorded (reproduced at `81d457a`):
+  `futuresMath.test.ts` and `provider.test.ts` stale fixtures vs canonical
+  `/api/v1` crypto routes — fixed in C2/C6.
+- Evidence: type-check PASS; lint PASS; vitest 235/236 focused PASS;
+  check-secrets PASS. Full suite 744 passed / 2 pre-existing failed.

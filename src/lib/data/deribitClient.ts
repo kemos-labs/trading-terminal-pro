@@ -78,16 +78,6 @@ interface CanonicalInstrument {
   timestamp: number | null;
 }
 
-interface CanonicalMarketResponse {
-  currency: string;
-  indexPrice: number | null;
-  instruments: CanonicalInstrument[];
-  funding8h: number | null;
-  fetchedAt: number;
-  source: string;
-  error?: string;
-}
-
 interface CacheEntry {
   value: DeribitMarketBundle;
   expiry: number;
@@ -152,32 +142,59 @@ export async function fetchDeribitMarket(
   if (cached && cached.expiry > Date.now()) return cached.value;
 
   try {
-    const response = await fetch(`/api/deribit/market/${currency}`, {
+    const response = await fetch(`/api/v1/market/crypto/${currency}`, {
       headers: { Accept: 'application/json' },
     });
-    const data = (await response.json()) as CanonicalMarketResponse;
-    const indexPrice = finiteOrNull(data.indexPrice);
+    const payload = (await response.json()) as {
+      schemaVersion?: number;
+      fetchedAt?: string;
+      data?: {
+        currency?: string;
+        indexPrice?: number | null;
+        funding8h?: number | null;
+        instruments?: Array<Record<string, unknown>>;
+      };
+      error?: unknown;
+    };
+    const v1 = payload.data;
+    const indexPrice = finiteOrNull(v1?.indexPrice);
     if (
       !response.ok
-      || data.error
-      || data.source !== 'deribit'
-      || !Array.isArray(data.instruments)
+      || payload.schemaVersion !== 1
+      || payload.error
+      || !Array.isArray(v1?.instruments)
       || indexPrice == null
       || indexPrice <= 0
     ) {
       return null;
     }
+    const instruments: CanonicalInstrument[] = v1.instruments.map((row) => ({
+      instrument: String(row.instrument ?? ''),
+      kind: row.kind as CanonicalInstrument['kind'],
+      bidPrice: finiteOrNull(row.bid),
+      askPrice: finiteOrNull(row.ask),
+      markPrice: finiteOrNull(row.mark),
+      lastPrice: finiteOrNull(row.last),
+      bidIv: finiteOrNull(row.bidIv),
+      askIv: finiteOrNull(row.askIv),
+      markIv: finiteOrNull(row.markIv),
+      indexPrice: finiteOrNull(row.indexPrice),
+      openInterest: finiteOrNull(row.openInterest),
+      volume: finiteOrNull(row.volume),
+      funding8h: finiteOrNull(row.funding8h),
+      timestamp: finiteOrNull(row.timestamp),
+    })).filter((row) => row.instrument && ['option', 'future', 'perp'].includes(row.kind));
 
-    const options = data.instruments
+    const options = instruments
       .filter((row) => row.kind === 'option')
       .map((row) => toLegacyRow(row, indexPrice));
     if (options.length === 0) return null;
 
-    const futures = data.instruments
+    const futures = instruments
       .filter((row) => row.kind === 'future')
       .map((row) => toFutureRow(row, indexPrice));
-    const perpetual = data.instruments.find((row) => row.kind === 'perp') ?? null;
-    const funding8h = finiteOrNull(data.funding8h ?? perpetual?.funding8h);
+    const perpetual = instruments.find((row) => row.kind === 'perp') ?? null;
+    const funding8h = finiteOrNull(v1.funding8h ?? perpetual?.funding8h);
     const perpMark = finiteOrNull(perpetual?.markPrice);
     const perpIndex = finiteOrNull(perpetual?.indexPrice) ?? indexPrice;
     const perp: DeribitPerpTicker | null = perpetual && perpMark != null
@@ -201,7 +218,7 @@ export async function fetchDeribitMarket(
       futures,
       perp,
       fundingAnn: funding8h == null ? null : funding8h * 3 * 365,
-      fetchedAt: finiteOrNull(data.fetchedAt) ?? Date.now(),
+      fetchedAt: payload.fetchedAt ? new Date(payload.fetchedAt).getTime() : Date.now(),
       source: 'deribit',
     };
     cache.set(key, { value: bundle, expiry: Date.now() + 15_000 });

@@ -8,19 +8,21 @@ import { test, expect } from '@playwright/test';
 const EXPECTED_WORKFLOWS = 27;
 
 test('runtime contracts are served by the real Fastify process', async ({ request }) => {
-  const health = await request.get('/api/health');
+  const health = await request.get('/api/v1/system/health');
   expect(health.status()).toBe(200);
-  await expect(health.json()).resolves.toMatchObject({ status: 'ok' });
+  await expect(health.json()).resolves.toMatchObject({ schemaVersion: 1, data: { status: 'ok' } });
 
-  const workflows = await request.get('/api/workflows');
+  const workflows = await request.get('/api/v1/workflows');
   expect(workflows.status()).toBe(200);
   const workflowBody = await workflows.json();
-  expect(workflowBody.workflows).toHaveLength(EXPECTED_WORKFLOWS);
-  expect(workflowBody.desks).toHaveLength(8);
+  expect(workflowBody.data.workflows).toHaveLength(EXPECTED_WORKFLOWS);
+  expect(workflowBody.data.desks).toHaveLength(8);
 
   const openapi = await request.get('/api/openapi.json');
   expect(openapi.status()).toBe(200);
-  await expect(openapi.json()).resolves.toMatchObject({ openapi: '3.1.0' });
+  const openapiBody = await openapi.json();
+  expect(openapiBody).toMatchObject({ openapi: '3.1.0' });
+  expect(Object.keys(openapiBody.paths).length).toBeGreaterThanOrEqual(55);
 
   const academy = await request.get('/docs/index.json');
   expect(academy.status()).toBe(200);

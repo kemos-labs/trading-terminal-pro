@@ -68,6 +68,77 @@ async function loadQuotes(currency) {
   return quotes;
 }
 
+export async function getDeribitMarketSnapshot(currency) {
+  const catalogue = await loadCatalogue(currency);
+  const quotes = await loadQuotes(currency);
+  const { rows, coverage } = joinCatalogueWithQuotes(catalogue, quotes, Date.now());
+  const indexName = currency === 'BTC' ? 'btc_usd' : 'eth_usd';
+  const index = await deribitFetch(`get_index_price?index_name=${indexName}`).catch(() => null);
+  const perp = rows.find((row) => row.kind === 'perp');
+  return {
+    currency,
+    indexPrice: index?.index_price ?? perp?.indexPrice ?? null,
+    instruments: rows,
+    coverage,
+    funding8h: perp?.funding8h ?? null,
+    fetchedAt: Date.now(),
+    source: 'deribit',
+  };
+}
+
+export async function getDeribitTradesSnapshot(currency, hours = 24, count = 500) {
+  const start = Date.now() - hours * 3_600_000;
+  const result = await deribitFetch(
+    `get_last_trades_by_currency_and_time?currency=${currency}&kind=option&start_timestamp=${start}&count=${count}&sorting=desc`,
+  );
+  const rawTrades = Array.isArray(result?.trades) ? result.trades : [];
+  const catalogue = await loadCatalogue(currency);
+  const sizeByInstrument = new Map(catalogue.map((contract) => [contract.instrument, contract]));
+  const trades = rawTrades.map((trade) => normalizeTrade(trade, sizeByInstrument.get(String(trade.instrument_name))));
+  return {
+    currency,
+    trades,
+    count: trades.length,
+    hasMore: Boolean(result?.has_more),
+    fetchedAt: Date.now(),
+    source: 'deribit',
+  };
+}
+
+export async function getDeribitFundingSnapshot(currency, instrumentName, days) {
+  const end = Date.now();
+  const start = end - days * 86_400_000;
+  const result = await deribitFetch(
+    `get_funding_rate_history?instrument_name=${instrumentName}&start_timestamp=${start}&end_timestamp=${end}`,
+  );
+  const rows = Array.isArray(result) ? result : [];
+  const points = rows
+    .map((row) => {
+      const rate8h = Number(row?.interest_8h);
+      if (!Number.isFinite(rate8h)) return null;
+      const indexPrice = Number(row?.index_price);
+      return {
+        t: Number(row?.timestamp),
+        rate8h,
+        annualizedPct: rate8h * 3 * 365 * 100,
+        indexPrice: Number.isFinite(indexPrice) ? indexPrice : null,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.t - right.t);
+  const last = points.at(-1) ?? null;
+  return {
+    currency,
+    instrument_name: instrumentName,
+    days,
+    points,
+    latest: last ? { t: last.t, rate8h: last.rate8h, annualizedPct: last.annualizedPct } : null,
+    count: points.length,
+    fetchedAt: Date.now(),
+    source: 'deribit',
+  };
+}
+
 export async function registerDeribitMarketRoutes(fastify) {
   // Full normalized bundle — the single contract browser and server share.
   fastify.get('/api/deribit/market/:currency', async (request, reply) => {
@@ -77,22 +148,7 @@ export async function registerDeribitMarketRoutes(fastify) {
       return { error: 'currency must be BTC or ETH' };
     }
     try {
-      const catalogue = await loadCatalogue(currency);
-      const quotes = await loadQuotes(currency);
-      const { rows, coverage } = joinCatalogueWithQuotes(catalogue, quotes, Date.now());
-      const indexName = currency === 'BTC' ? 'btc_usd' : 'eth_usd';
-      const index = await deribitFetch(`get_index_price?index_name=${indexName}`).catch(() => null);
-      const perp = rows.find((r) => r.kind === 'perp');
-      const funding8h = perp?.funding8h ?? null;
-      return {
-        currency,
-        indexPrice: index?.index_price ?? perp?.indexPrice ?? null,
-        instruments: rows,
-        coverage,
-        funding8h,
-        fetchedAt: Date.now(),
-        source: 'deribit',
-      };
+      return await getDeribitMarketSnapshot(currency);
     } catch (err) {
       reply.code(502);
       return { error: 'Deribit market bundle failed', detail: String(err.message || err) };
@@ -125,16 +181,7 @@ export async function registerDeribitMarketRoutes(fastify) {
     const requestedCount = Number(request.query.count ?? 500);
     const count = Math.min(1000, Math.max(50, Number.isFinite(requestedCount) ? Math.floor(requestedCount) : 500));
     try {
-      const start = Date.now() - hours * 3_600_000;
-      const result = await deribitFetch(
-        `get_last_trades_by_currency_and_time?currency=${currency}&kind=option&start_timestamp=${start}&count=${count}&sorting=desc`,
-      );
-      const rawTrades = Array.isArray(result?.trades) ? result.trades : [];
-      // Join trades with catalogue contract_size for native-currency premium.
-      const catalogue = await loadCatalogue(currency);
-      const sizeByInstrument = new Map(catalogue.map((c) => [c.instrument, c]));
-      const trades = rawTrades.map((t) => normalizeTrade(t, sizeByInstrument.get(String(t.instrument_name))));
-      return { currency, trades, count: trades.length, hasMore: Boolean(result?.has_more), fetchedAt: Date.now(), source: 'deribit' };
+      return await getDeribitTradesSnapshot(currency, hours, count);
     } catch (err) {
       reply.code(502);
       return { error: 'Deribit trades failed', detail: String(err.message || err) };
@@ -176,27 +223,7 @@ export async function registerDeribitMarketRoutes(fastify) {
     const requestedDays = Number(q.days ?? 7);
     const days = [1, 7, 30, 90].includes(requestedDays) ? requestedDays : requestedDays > 90 ? 90 : 7;
     try {
-      const end = Date.now();
-      const start = end - days * 86_400_000;
-      const result = await deribitFetch(
-        `get_funding_rate_history?instrument_name=${instrumentName}&start_timestamp=${start}&end_timestamp=${end}`,
-      );
-      const rows = Array.isArray(result) ? result : [];
-      const points = rows
-        .map((r) => {
-          const rate8h = Number(r?.interest_8h);
-          if (!Number.isFinite(rate8h)) return null;
-          const idxPrice = Number(r?.index_price);
-          return { t: Number(r?.timestamp), rate8h, annualizedPct: rate8h * 3 * 365 * 100, indexPrice: Number.isFinite(idxPrice) ? idxPrice : null };
-        })
-        .filter(Boolean);
-      points.sort((a, b) => a.t - b.t);
-      const last = points.at(-1) ?? null;
-      return {
-        currency, instrument_name: instrumentName, days, points,
-        latest: last ? { t: last.t, rate8h: last.rate8h, annualizedPct: last.annualizedPct } : null,
-        count: points.length, fetchedAt: Date.now(), source: 'deribit',
-      };
+      return await getDeribitFundingSnapshot(currency, instrumentName, days);
     } catch (err) {
       reply.code(502);
       return { error: 'Deribit funding history failed', detail: String(err.message || err) };

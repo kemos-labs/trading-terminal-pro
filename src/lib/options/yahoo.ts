@@ -454,7 +454,7 @@ export async function fetchYahooSnapshot(
     return yfChainCache.value;
   }
   try {
-    const res = await fetch(`/api/options/${encodeURIComponent(symbol)}?max=${maxExpiries}`);
+    const res = await fetch(`/api/v1/market/options/${encodeURIComponent(symbol)}`);
     if (!res.ok) {
       // Negative cache so auto-refresh doesn't stampede a dead proxy.
       // 30s keeps rate-limited Render IP from re-hammering yfinance every loop.
@@ -462,7 +462,47 @@ export async function fetchYahooSnapshot(
       return null;
     }
 
-    const data: YahooResponse = await res.json();
+    const envelope = await res.json() as {
+      schemaVersion?: number;
+      asOf?: string;
+      data?: {
+        symbol?: string;
+        spot?: number | null;
+        expirations?: string[];
+        quotes?: Array<{
+          strike: number;
+          expiry: string;
+          right: 'call' | 'put';
+          bid: number | null;
+          ask: number | null;
+          last: number | null;
+          markIv: number | null;
+          volume: number | null;
+          openInterest: number | null;
+        }>;
+      };
+    };
+    const payload = envelope.data;
+    const data: YahooResponse | null = envelope.schemaVersion === 1 && payload && Array.isArray(payload.quotes)
+      ? {
+          symbol: payload.symbol ?? symbol.toUpperCase(),
+          spot: payload.spot ?? Number.NaN,
+          expirations: payload.expirations ?? [],
+          quotes: payload.quotes.map((quote) => ({
+            strike: quote.strike,
+            expiry: quote.expiry,
+            type: quote.right,
+            bid: quote.bid,
+            ask: quote.ask,
+            last: quote.last,
+            iv: quote.markIv,
+            volume: quote.volume,
+            openInterest: quote.openInterest,
+            provenance: 'observed',
+          })),
+          timestamp: envelope.asOf ? new Date(envelope.asOf).getTime() : now,
+        }
+      : null;
     if (!data || !Array.isArray(data.quotes) || data.quotes.length < 5) {
       yfChainCache = { key, value: null, expiry: now + 4_000, fetchedAt: now };
       return null;

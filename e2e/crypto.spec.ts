@@ -14,6 +14,12 @@ function loadFixture(name) {
   return JSON.parse(readFileSync(join(__dirname, '..', 'server', 'providers', 'deribit', 'fixtures', name), 'utf8')).result;
 }
 
+const MONTH_CODES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+function deribitExpiryCode(timestamp) {
+  const date = new Date(timestamp);
+  return `${String(date.getUTCDate()).padStart(2, '0')}${MONTH_CODES[date.getUTCMonth()]}${String(date.getUTCFullYear()).slice(-2)}`;
+}
+
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'laptop', width: 1280, height: 800 },
@@ -22,6 +28,15 @@ const VIEWPORTS = [
 ];
 
 const WORKFLOWS = ['overview', 'volatility', 'positioning', 'flow', 'carry', 'trade-risk'];
+
+function envelope(data, source = 'deribit') {
+  const denominator = Array.isArray(data?.instruments) ? data.instruments.length : Array.isArray(data?.trades) ? data.trades.length : 1;
+  return {
+    schemaVersion: 1, requestId: 'playwright', asOf: new Date().toISOString(), fetchedAt: new Date().toISOString(), source: [source],
+    provenanceByField: {}, unitsByField: {}, freshness: source === 'yfinance' ? 'delayed' : 'live',
+    coverage: { numerator: denominator, denominator, state: denominator > 0 ? 'complete' : 'unavailable', missing: [] }, assumptions: [], warnings: [], data,
+  };
+}
 
 async function mockDeribit(page) {
   // Keep the success path network-clean: every request used by the shell is mocked.
@@ -32,6 +47,7 @@ async function mockDeribit(page) {
   await page.route('**/api/yf/history/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'BTC-USD', data: [] }) }));
   await page.route('**/api/yf/info/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ symbol: 'BTC', data: {} }) }));
   await page.route('**/api/fmp/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
+  await page.route('**/api/free-crypto/**', async (route) => await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ currency: 'BTC', venues: [], fetchedAt: Date.now(), source: 'public-exchanges' }) }));
   await page.route('**/api/deribit/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ currency: 'BTC', indexPrice: 60150, instruments: [], coverage: 1, fetchedAt: Date.now(), source: 'deribit' }) });
   });
@@ -39,67 +55,71 @@ async function mockDeribit(page) {
   const instrumentsOption = loadFixture('get_instruments.option.json');
   const instrumentsFuture = loadFixture('get_instruments.future.json');
   const catalogue = [...instrumentsOption, ...instrumentsFuture];
+  const listedExpiries = [...new Set(catalogue.filter((row) => row.settlement_period !== 'perpetual').map((row) => row.expiration_timestamp))].sort();
+  const expiryByListed = new Map(listedExpiries.map((expiry, index) => [expiry, Date.now() + (30 + index * 30) * 86400000]));
   // Minimal market bundle using fixtures (reuse fixtures via joined data)
-  const instruments = catalogue.map((c) => ({
-    instrument: c.instrument_name,
-    baseCurrency: c.base_currency,
-    quoteCurrency: c.quote_currency,
-    settlementCurrency: c.settlement_currency,
-    contractSize: c.contract_size,
-    kind: c.settlement_period === 'perpetual' ? 'perp' : c.kind,
-    expiryMs: c.expiration_timestamp < 4102444800000 ? c.expiration_timestamp : null,
-    strike: c.strike ?? null,
-    optionType: c.option_type ?? null,
-    isInverse: !!c.is_inverse,
-    bidPrice: 0.05,
-    askPrice: 0.051,
-    markPrice: 0.05,
-    lastPrice: 0.05,
-    bidIv: 0.55,
-    askIv: 0.56,
-    markIv: 0.55,
-    indexPrice: 60150,
-    openInterest: 100,
-    volume: 10,
-    funding8h: c.instrument_name === 'BTC-PERPETUAL' ? 0.0001 : null,
-    timestamp: Date.now(),
-    hasQuote: true,
-    isStale: false,
-  }));
-  await page.route('**/api/deribit/market/*', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        currency: 'BTC',
-        indexPrice: 60150,
-        instruments,
-        coverage: 1,
-        funding8h: 0.0001,
-        fetchedAt: Date.now(),
-        source: 'deribit',
-      }),
-    });
+  const instruments = catalogue.map((c, index) => {
+    const kind = c.settlement_period === 'perpetual' ? 'perp' : c.kind;
+    const option = kind === 'option';
+    const mark = option ? 0.05 : kind === 'perp' ? 60150 : 61000 + index * 125;
+    const expiryMs = kind === 'perp' ? null : expiryByListed.get(c.expiration_timestamp);
+    const instrument = kind === 'perp'
+      ? `${c.base_currency}-PERPETUAL`
+      : option
+        ? `${c.base_currency}-${deribitExpiryCode(expiryMs)}-${c.strike}-${c.option_type === 'call' ? 'C' : 'P'}`
+        : `${c.base_currency}-${deribitExpiryCode(expiryMs)}`;
+    return {
+      instrument,
+      baseCurrency: c.base_currency,
+      quoteCurrency: c.quote_currency,
+      settlementCurrency: c.settlement_currency,
+      contractSize: c.contract_size,
+      kind,
+      expiryMs,
+      strike: c.strike ?? null,
+      optionType: c.option_type ?? null,
+      isInverse: !!c.is_inverse,
+      bidPrice: option ? 0.049 : mark - 5,
+      askPrice: option ? 0.051 : mark + 5,
+      markPrice: mark,
+      lastPrice: mark,
+      bidIv: option ? 0.55 : null,
+      askIv: option ? 0.56 : null,
+      markIv: option ? 0.55 : null,
+      indexPrice: 60150,
+      openInterest: 100,
+      volume: 10,
+      funding8h: kind === 'perp' ? 0.0001 : null,
+      timestamp: Date.now(),
+      hasQuote: true,
+      isStale: false,
+    };
   });
-  await page.route('**/api/deribit/trades/*', async (route) => {
-    const trades = loadFixture('get_last_trades.json').trades.map(t => ({
-      instrument: t.instrument_name,
-      timestamp: t.timestamp,
-      price: t.price,
-      quantity: t.amount,
-      side: t.direction,
-      markIv: t.mark_iv / 100,
-      premiumNative: t.price * t.amount,
-      contractSize: 1,
-      nativeCurrency: 'BTC',
-      blockTrade: !!t.block_trade,
-      rfq: false,
+  await page.route('**/api/v1/market/crypto/**', async (route) => {
+    const url = route.request().url();
+    if (url.includes('/funding')) {
+      const points = Array.from({ length: 12 }, (_, index) => ({ timestamp: Date.now() - (11 - index) * 8 * 3600000, rate8h: 0.00005 + index * 0.000002, annualizedPct: (0.00005 + index * 0.000002) * 1095 * 100, indexPrice: 60150 }));
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope({ currency: 'BTC', instrumentName: 'BTC-PERPETUAL', days: 30, points, latest: points.at(-1), count: points.length })) });
+    }
+    if (url.includes('/trades')) {
+      const expiry = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+      const trades = loadFixture('get_last_trades.json').trades.map((trade, index) => ({
+        instrument: `BTC-${deribitExpiryCode(new Date(`${expiry}T08:00:00Z`).getTime())}-60000-${index % 2 === 0 ? 'C' : 'P'}`,
+        timestamp: Date.now() - index * 60000, price: trade.price, quantity: trade.amount, side: trade.direction,
+        right: index % 2 === 0 ? 'call' : 'put', expiry, markIv: trade.mark_iv / 100,
+        premiumNative: trade.price * trade.amount, contractSize: 1, nativeCurrency: 'BTC', blockTrade: !!trade.block_trade, rfq: false,
+      }));
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope({ currency: 'BTC', trades, count: trades.length, hasMore: false })) });
+    }
+    const rows = instruments.map((ticker) => ({
+      instrument: ticker.instrument, baseCurrency: ticker.baseCurrency, quoteCurrency: ticker.quoteCurrency, settlementCurrency: ticker.settlementCurrency,
+      contractSize: ticker.contractSize, settlementPeriod: ticker.kind === 'perp' ? 'perpetual' : 'month', isInverse: ticker.isInverse,
+      kind: ticker.kind, expiryMs: ticker.expiryMs, strike: ticker.strike, right: ticker.optionType,
+      bid: ticker.bidPrice, ask: ticker.askPrice, mark: ticker.markPrice, last: ticker.lastPrice,
+      bidIv: ticker.bidIv, askIv: ticker.askIv, markIv: ticker.markIv, indexPrice: ticker.indexPrice,
+      openInterest: ticker.openInterest, volume: ticker.volume, funding8h: ticker.funding8h, timestamp: ticker.timestamp, tradable: ticker.hasQuote,
     }));
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ currency: 'BTC', trades, count: trades.length, hasMore: false, fetchedAt: Date.now(), source: 'deribit' }),
-    });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope({ currency: 'BTC', indexPrice: 60150, instruments: rows, count: rows.length, funding8h: 0.0001 })) });
   });
 }
 
@@ -134,8 +154,8 @@ for (const vp of VIEWPORTS) {
 
 test.describe('failure states', () => {
   test('provider-down renders error', async ({ page }) => {
-    await page.route('**/api/deribit/market/*', async (route) => {
-      await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'Deribit failed' }) });
+    await page.route('**/api/v1/market/crypto/*', async (route) => {
+      await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Deribit failed' } }) });
     });
     await page.goto('/?desk=crypto&view=volatility');
     await page.keyboard.press('4');
@@ -143,11 +163,11 @@ test.describe('failure states', () => {
   });
 
   test('loading then empty states', async ({ page }) => {
-    await page.route('**/api/deribit/market/*', async (route) => {
+    await page.route('**/api/v1/market/crypto/*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ currency: 'BTC', indexPrice: null, instruments: [], coverage: 0, funding8h: null, fetchedAt: Date.now(), source: 'deribit' }),
+        body: JSON.stringify(envelope({ currency: 'BTC', indexPrice: null, instruments: [], count: 0, funding8h: null })),
       });
     });
     await page.goto('/?desk=crypto&view=positioning');

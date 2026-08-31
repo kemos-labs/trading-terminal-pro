@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://terminal.local/contracts/v1",
+  "title": "Trading Terminal v1 response contracts",
+  "$defs": {
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator", "state", "missing"],
+      "properties": {
+        "numerator": { "type": "integer", "minimum": 0 },
+        "denominator": { "type": "integer", "minimum": 0 },
+        "state": { "type": "string", "enum": ["complete", "partial", "unavailable"] },
+        "missing": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "baseEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "requestId", "asOf", "fetchedAt", "source", "provenanceByField", "unitsByField", "freshness", "coverage", "assumptions", "warnings", "data"],
+      "properties": {
+        "schemaVersion": { "type": "integer", "const": 1 },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "asOf": { "type": "string", "format": "date-time" },
+        "fetchedAt": { "type": "string", "format": "date-time" },
+        "source": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "provenanceByField": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+        "unitsByField": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+        "freshness": { "type": "string", "enum": ["live", "delayed", "stale", "unavailable"] },
+        "coverage": { "$ref": "#/$defs/coverage" },
+        "assumptions": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "warnings": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "data": {}
+      }
+    },
+    "healthData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "timestamp"],
+      "properties": {
+        "status": { "type": "string", "const": "ok" },
+        "timestamp": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "desk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "hotkey", "defaultWorkflowId"],
+      "properties": {
+        "id": { "type": "string", "enum": ["home", "vol", "positioning", "desk", "crypto", "rates", "academy", "ksa"] },
+        "label": { "type": "string", "minLength": 1 },
+        "hotkey": { "type": "string", "pattern": "^[0-7]$" },
+        "defaultWorkflowId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "desk", "title", "purpose", "deepLink", "code", "apiOps", "mcpTools"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "desk": { "type": "string", "enum": ["home", "vol", "positioning", "desk", "crypto", "rates", "academy", "ksa"] },
+        "title": { "type": "string", "minLength": 1 },
+        "purpose": { "type": "string", "minLength": 1 },
+        "deepLink": { "type": "string", "pattern": "^/\\?desk=" },
+        "code": { "type": "string", "minLength": 1 },
+        "apiOps": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "mcpTools": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "workflowsData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "desks", "workflows"],
+      "properties": {
+        "version": { "type": "integer", "const": 1 },
+        "desks": { "type": "array", "minItems": 8, "maxItems": 8, "items": { "$ref": "#/$defs/desk" } },
+        "workflows": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/workflow" } }
+      }
+    },
+    "optionQuote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strike", "expiry", "right", "bid", "ask", "last", "markIv", "volume", "openInterest"],
+      "properties": {
+        "strike": { "type": "number", "exclusiveMinimum": 0 },
+        "expiry": { "type": "string", "format": "date" },
+        "right": { "type": "string", "enum": ["call", "put"] },
+        "bid": { "type": ["number", "null"], "minimum": 0 },
+        "ask": { "type": ["number", "null"], "minimum": 0 },
+        "last": { "type": ["number", "null"], "minimum": 0 },
+        "markIv": { "type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 10 },
+        "volume": { "type": ["number", "null"], "minimum": 0 },
+        "openInterest": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "optionsData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "spot", "expirations", "quotes", "count"],
+      "properties": {
+        "symbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,11}$" },
+        "spot": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "expirations": { "type": "array", "items": { "type": "string", "format": "date" }, "uniqueItems": true },
+        "quotes": { "type": "array", "items": { "$ref": "#/$defs/optionQuote" } },
+        "count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "cryptoInstrument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instrument", "baseCurrency", "quoteCurrency", "settlementCurrency", "contractSize", "settlementPeriod", "isInverse", "kind", "expiryMs", "strike", "right", "bid", "ask", "mark", "last", "bidIv", "askIv", "markIv", "indexPrice", "openInterest", "volume", "funding8h", "timestamp", "tradable"],
+      "properties": {
+        "instrument": { "type": "string", "minLength": 1 },
+        "baseCurrency": { "type": ["string", "null"] },
+        "quoteCurrency": { "type": ["string", "null"] },
+        "settlementCurrency": { "type": ["string", "null"] },
+        "contractSize": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "settlementPeriod": { "type": ["string", "null"] },
+        "isInverse": { "type": "boolean" },
+        "kind": { "type": "string", "enum": ["option", "future", "perp"] },
+        "expiryMs": { "type": ["integer", "null"], "minimum": 0 },
+        "strike": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "right": { "type": ["string", "null"], "enum": ["call", "put", null] },
+        "bid": { "type": ["number", "null"] },
+        "ask": { "type": ["number", "null"] },
+        "mark": { "type": ["number", "null"] },
+        "last": { "type": ["number", "null"] },
+        "bidIv": { "type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 10 },
+        "askIv": { "type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 10 },
+        "markIv": { "type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 10 },
+        "indexPrice": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "openInterest": { "type": ["number", "null"], "minimum": 0 },
+        "volume": { "type": ["number", "null"], "minimum": 0 },
+        "funding8h": { "type": ["number", "null"] },
+        "timestamp": { "type": ["integer", "null"], "minimum": 0 },
+        "tradable": { "type": "boolean" }
+      }
+    },
+    "cryptoMarketData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["currency", "indexPrice", "funding8h", "instruments", "count"],
+      "properties": {
+        "currency": { "type": "string", "enum": ["BTC", "ETH"] },
+        "indexPrice": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "funding8h": { "type": ["number", "null"] },
+        "instruments": { "type": "array", "items": { "$ref": "#/$defs/cryptoInstrument" } },
+        "count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "fundingPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestamp", "rate8h", "annualizedPct", "indexPrice"],
+      "properties": {
+        "timestamp": { "type": "integer", "minimum": 0 },
+        "rate8h": { "type": "number" },
+        "annualizedPct": { "type": "number" },
+        "indexPrice": { "type": ["number", "null"], "exclusiveMinimum": 0 }
+      }
+    },
+    "cryptoFundingData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["currency", "instrumentName", "days", "points", "latest", "count"],
+      "properties": {
+        "currency": { "type": "string", "enum": ["BTC", "ETH"] },
+        "instrumentName": { "type": "string", "pattern": "^(BTC|ETH)-PERPETUAL$" },
+        "days": { "type": "integer", "enum": [1, 7, 30, 90] },
+        "points": { "type": "array", "items": { "$ref": "#/$defs/fundingPoint" } },
+        "latest": { "anyOf": [{ "$ref": "#/$defs/fundingPoint" }, { "type": "null" }] },
+        "count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "cryptoTrade": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instrument", "timestamp", "price", "quantity", "side", "right", "expiry", "markIv", "premiumNative", "contractSize", "nativeCurrency", "blockTrade", "rfq"],
+      "properties": {
+        "instrument": { "type": "string", "minLength": 1 },
+        "timestamp": { "type": "integer", "minimum": 0 },
+        "price": { "type": "number", "minimum": 0 },
+        "quantity": { "type": "number", "exclusiveMinimum": 0 },
+        "side": { "type": "string", "enum": ["buy", "sell"] },
+        "right": { "type": ["string", "null"], "enum": ["call", "put", null] },
+        "expiry": { "type": ["string", "null"], "format": "date" },
+        "markIv": { "type": ["number", "null"], "minimum": 0, "maximum": 10 },
+        "premiumNative": { "type": ["number", "null"], "minimum": 0 },
+        "contractSize": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "nativeCurrency": { "type": "string", "enum": ["BTC", "ETH"] },
+        "blockTrade": { "type": "boolean" },
+        "rfq": { "type": "boolean" }
+      }
+    },
+    "cryptoTradesData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["currency", "trades", "count", "hasMore"],
+      "properties": {
+        "currency": { "type": "string", "enum": ["BTC", "ETH"] },
+        "trades": { "type": "array", "items": { "$ref": "#/$defs/cryptoTrade" } },
+        "count": { "type": "integer", "minimum": 0 },
+        "hasMore": { "type": "boolean" }
+      }
+    },
+    "healthResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/baseEnvelope" },
+        { "type": "object", "properties": { "data": { "$ref": "#/$defs/healthData" } } }
+      ]
+    },
+    "workflowsResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/baseEnvelope" },
+        { "type": "object", "properties": { "data": { "$ref": "#/$defs/workflowsData" } } }
+      ]
+    },
+    "optionsResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/baseEnvelope" },
+        { "type": "object", "properties": { "data": { "$ref": "#/$defs/optionsData" } } }
+      ]
+    },
+    "cryptoMarketResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/baseEnvelope" },
+        { "type": "object", "properties": { "data": { "$ref": "#/$defs/cryptoMarketData" } } }
+      ]
+    },
+    "cryptoFundingResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/baseEnvelope" },
+        { "type": "object", "properties": { "data": { "$ref": "#/$defs/cryptoFundingData" } } }
+      ]
+    },
+    "cryptoTradesResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/baseEnvelope" },
+        { "type": "object", "properties": { "data": { "$ref": "#/$defs/cryptoTradesData" } } }
+      ]
+    },
+    "errorResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "requestId", "asOf", "error"],
+      "properties": {
+        "schemaVersion": { "type": "integer", "const": 1 },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "asOf": { "type": "string", "format": "date-time" },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message", "retryable"],
+          "properties": {
+            "code": { "type": "string", "enum": ["INVALID_REQUEST", "INVALID_SYMBOL", "UNSUPPORTED_CURRENCY", "PROVIDER_UNAVAILABLE", "INSUFFICIENT_COVERAGE", "RATE_LIMITED", "ENTITLEMENT_MISSING", "INTERNAL_CONTRACT_ERROR"] },
+            "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+            "retryable": { "type": "boolean" },
+            "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+            "detail": { "type": "string", "minLength": 1, "maxLength": 500 }
+          }
+        }
+      }
+    }
+  }
+}

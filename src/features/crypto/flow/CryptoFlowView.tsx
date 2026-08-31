@@ -5,6 +5,12 @@ import {
 import { fetchDeribitTrades, type DeribitTrade } from '../../../api/deribit';
 import { CHART } from '../../../lib/chartTheme';
 
+function classifiedRight(trade: DeribitTrade): 'call' | 'put' | null {
+  if (trade.right === 'call' || trade.right === 'put') return trade.right;
+  const suffix = /-([CP])$/i.exec(trade.instrument)?.[1]?.toUpperCase();
+  return suffix === 'C' ? 'call' : suffix === 'P' ? 'put' : null;
+}
+
 export function CryptoFlowView() {
   const [trades, setTrades] = useState<DeribitTrade[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,15 +30,20 @@ export function CryptoFlowView() {
 
   // Aggregates: call/put × buy/sell taker counts + native premium shares.
   const agg = useMemo(() => {
-    const g = { buy: 0, sell: 0 };
-    const p = { buy: 0, sell: 0 };
-    for (const t of trades ?? []) {
-      const isCall = /-C\d+/.test(t.instrument);
-      const bucket = isCall ? g : p;
-      if (t.side === 'buy') bucket.buy += 1;
+    const calls = { buy: 0, sell: 0 };
+    const puts = { buy: 0, sell: 0 };
+    let unclassified = 0;
+    for (const trade of trades ?? []) {
+      const right = classifiedRight(trade);
+      if (right == null) {
+        unclassified += 1;
+        continue;
+      }
+      const bucket = right === 'call' ? calls : puts;
+      if (trade.side === 'buy') bucket.buy += 1;
       else bucket.sell += 1;
     }
-    return { calls: g, puts: p };
+    return { calls, puts, unclassified };
   }, [trades]);
 
   // Trade timeline: per-hour call/put taker counts (bubble proxy via bar height).
@@ -41,9 +52,10 @@ export function CryptoFlowView() {
     for (const t of trades ?? []) {
       if (t.timestamp == null) continue;
       const h = new Date(t.timestamp).toISOString().slice(11, 13) + 'h';
+      const right = classifiedRight(t);
+      if (right == null) continue;
       const e = byHour.get(h) ?? { call: 0, put: 0 };
-      if (/-C\d+/.test(t.instrument)) e.call += 1;
-      else e.put += 1;
+      e[right] += 1;
       byHour.set(h, e);
     }
     return [...byHour.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([h, v]) => ({ hour: h, ...v }));
@@ -53,8 +65,7 @@ export function CryptoFlowView() {
   const byExpiry = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of trades ?? []) {
-      const mm = t.instrument.match(/(\d+[A-Z])\d?-/);
-      const key = mm?.[1] ?? 'other';
+      const key = t.expiry ?? 'unclassified';
       m.set(key, (m.get(key) ?? 0) + 1);
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => ({ expiry: k, trades: n }));
@@ -79,16 +90,24 @@ export function CryptoFlowView() {
   );
 
   // Native premium: price (BTC) × amount (contracts) × contract_size. Settlement ccy, NOT USD.
-  const nativeCcy = trades.find(t => t.nativeCurrency)?.nativeCurrency ?? 'BTC (inverse)';
-  const totalNative = trades.reduce((s, t) => s + (t.premiumNative ?? 0), 0);
-  const buyNative = trades.filter(t => t.side === 'buy').reduce((s, t) => s + (t.premiumNative ?? 0), 0);
+  const nativeCcy = trades.find(t => t.nativeCurrency)?.nativeCurrency ?? 'native';
+  const premiumTrades = trades.filter((trade): trade is DeribitTrade & { premiumNative: number } => trade.premiumNative != null);
+  const totalNative = premiumTrades.length > 0
+    ? premiumTrades.reduce((sum, trade) => sum + trade.premiumNative, 0)
+    : null;
+  const buyNative = premiumTrades.some((trade) => trade.side === 'buy')
+    ? premiumTrades.filter((trade) => trade.side === 'buy').reduce((sum, trade) => sum + trade.premiumNative, 0)
+    : null;
+  const sellNative = premiumTrades.some((trade) => trade.side === 'sell')
+    ? premiumTrades.filter((trade) => trade.side === 'sell').reduce((sum, trade) => sum + trade.premiumNative, 0)
+    : null;
 
   return (
     <div data-testid="flow-workstation" className="space-y-3">
       <div className="flex flex-wrap gap-2 font-mono text-xs">
         <span className="rounded bg-muted px-2 py-1">Taker side only — not opening/closing, not dealer identity</span>
         <span className="rounded bg-muted px-2 py-1">Source: Deribit trades</span>
-        <span className="rounded bg-muted px-2 py-1">Coverage {trades.length} trades</span>
+        <span className="rounded bg-muted px-2 py-1">Coverage {trades.length - agg.unclassified}/{trades.length} classified trades</span>
         <span className="rounded bg-muted px-2 py-1">As of {asOf ? new Date(asOf).toISOString().slice(11, 19) + 'Z' : '—'}</span>
         {stale
           ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Stale</span>
@@ -172,7 +191,7 @@ export function CryptoFlowView() {
       <div className="rounded border p-2 font-mono text-[10px] text-muted-foreground">
         Premium is NATIVE settlement currency ({nativeCcy}): price × qty × contract_size — inverse options are
         coin-settled; no USD conversion is applied without an authoritative rate. Block/RFQ only where Deribit reports them.
-        Native total: {totalNative.toFixed(4)} · Buy-side: {buyNative.toFixed(4)} · Sell-side: {(totalNative - buyNative).toFixed(4)}
+        Native total: {totalNative != null ? totalNative.toFixed(4) : 'unavailable'} · Buy-side: {buyNative != null ? buyNative.toFixed(4) : 'unavailable'} · Sell-side: {sellNative != null ? sellNative.toFixed(4) : 'unavailable'}
       </div>
     </div>
   );

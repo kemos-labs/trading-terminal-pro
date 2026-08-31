@@ -107,16 +107,46 @@ async function marketSnapshot(
   const cached = cache.get(key);
   if (cached && cached.expiry > Date.now()) return cached.value;
   try {
-    const response = await fetch(`/api/deribit/market/${currency}`, {
+    const response = await fetch(`/api/v1/market/crypto/${currency}`, {
       headers: { Accept: 'application/json' },
     });
-    const data = (await response.json()) as CanonicalMarket;
-    if (
-      !response.ok
-      || data.error
-      || data.source !== 'deribit'
-      || !Array.isArray(data.instruments)
-    ) return null;
+    const payload = (await response.json()) as {
+      schemaVersion?: number;
+      fetchedAt?: string;
+      data?: {
+        currency?: DeribitCurrency;
+        indexPrice?: number | null;
+        funding8h?: number | null;
+        instruments?: Array<Record<string, unknown>>;
+      };
+    };
+    if (!response.ok || payload.schemaVersion !== 1 || !Array.isArray(payload.data?.instruments)) return null;
+    const data: CanonicalMarket = {
+      currency,
+      indexPrice: finiteOrNull(payload.data.indexPrice),
+      funding8h: finiteOrNull(payload.data.funding8h),
+      fetchedAt: payload.fetchedAt ? new Date(payload.fetchedAt).getTime() : Date.now(),
+      source: 'deribit',
+      instruments: payload.data.instruments.map((row) => ({
+        instrument: String(row.instrument ?? ''),
+        baseCurrency: String(row.baseCurrency ?? currency),
+        quoteCurrency: String(row.quoteCurrency ?? ''),
+        contractSize: finiteOrNull(row.contractSize),
+        settlementPeriod: row.settlementPeriod == null ? null : String(row.settlementPeriod),
+        kind: row.kind as CanonicalInstrument['kind'],
+        expiryMs: finiteOrNull(row.expiryMs),
+        tickSize: null,
+        isInverse: Boolean(row.isInverse),
+        bidPrice: finiteOrNull(row.bid),
+        askPrice: finiteOrNull(row.ask),
+        markPrice: finiteOrNull(row.mark),
+        lastPrice: finiteOrNull(row.last),
+        indexPrice: finiteOrNull(row.indexPrice),
+        openInterest: finiteOrNull(row.openInterest),
+        volume: finiteOrNull(row.volume),
+        funding8h: finiteOrNull(row.funding8h),
+      })).filter((row) => row.instrument && ['option', 'future', 'perp'].includes(row.kind)),
+    };
     cache.set(key, { value: data, expiry: Date.now() + ttl });
     return data;
   } catch {
@@ -215,11 +245,40 @@ export async function fetchFundingHistory(
   if (existing && existing.expiry > Date.now()) return existing.value;
   try {
     const response = await fetch(
-      `/api/deribit/funding-history?instrument_name=${encodeURIComponent(instrumentName)}&days=${days}`,
+      `/api/v1/market/crypto/${currency}/funding?instrument_name=${encodeURIComponent(instrumentName)}&days=${days}`,
       { headers: { Accept: 'application/json' } },
     );
-    const data = (await response.json()) as DeribitFundingHistoryBundle & { error?: string };
-    if (!response.ok || data.error || !Array.isArray(data.points)) return null;
+    const payload = (await response.json()) as {
+      schemaVersion?: number;
+      fetchedAt?: string;
+      data?: {
+        currency?: DeribitCurrency;
+        instrumentName?: string;
+        days?: number;
+        points?: Array<{ timestamp: number; rate8h: number; annualizedPct: number; indexPrice: number | null }>;
+        latest?: { timestamp: number; rate8h: number; annualizedPct: number; indexPrice: number | null } | null;
+        count?: number;
+      };
+    };
+    if (!response.ok || payload.schemaVersion !== 1 || !Array.isArray(payload.data?.points)) return null;
+    const data: DeribitFundingHistoryBundle = {
+      currency,
+      instrument_name: payload.data.instrumentName ?? instrumentName,
+      days: payload.data.days ?? days,
+      points: payload.data.points.map((point) => ({
+        t: point.timestamp,
+        rate8h: point.rate8h,
+        annualizedPct: point.annualizedPct,
+        indexPrice: point.indexPrice,
+      })),
+      latest: payload.data.latest ? {
+        t: payload.data.latest.timestamp,
+        rate8h: payload.data.latest.rate8h,
+        annualizedPct: payload.data.latest.annualizedPct,
+      } : null,
+      count: payload.data.count ?? payload.data.points.length,
+      fetchedAt: payload.fetchedAt ? new Date(payload.fetchedAt).getTime() : Date.now(),
+    };
     fundingCache.set(key, { value: data, expiry: Date.now() + ttl });
     return data;
   } catch {

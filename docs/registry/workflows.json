@@ -75,7 +75,7 @@
       "deepLink": "/?desk=vol&sec=vol-sub-surface",
       "code": "SURF",
       "apiOps": [
-        "getOptionsChain",
+        "v1GetOptionsChain",
         "getVolatilitySurface"
       ],
       "mcpTools": [
@@ -90,7 +90,7 @@
       "deepLink": "/?desk=vol&sec=vol-sub-smile",
       "code": "SMILE",
       "apiOps": [
-        "getOptionsChain"
+        "v1GetOptionsChain"
       ],
       "mcpTools": [
         "terminal.get_volatility_surface"
@@ -104,7 +104,7 @@
       "deepLink": "/?desk=vol&sec=vol-sub-term",
       "code": "TERM",
       "apiOps": [
-        "getOptionsChain"
+        "v1GetOptionsChain"
       ],
       "mcpTools": [
         "terminal.get_volatility_surface"
@@ -118,7 +118,7 @@
       "deepLink": "/?desk=vol&sec=vol-sub-greeks",
       "code": "GRK",
       "apiOps": [
-        "getOptionsChain",
+        "v1GetOptionsChain",
         "getGreeks"
       ],
       "mcpTools": [
@@ -133,7 +133,7 @@
       "deepLink": "/?desk=vol&sec=vol-sub-quality",
       "code": "FIT",
       "apiOps": [
-        "getOptionsChain"
+        "v1GetOptionsChain"
       ],
       "mcpTools": [
         "terminal.get_volatility_surface"
@@ -147,7 +147,7 @@
       "deepLink": "/?desk=positioning&sec=pos-sub-chain",
       "code": "GEX",
       "apiOps": [
-        "getOptionsChain",
+        "v1GetOptionsChain",
         "getPositioning"
       ],
       "mcpTools": [
@@ -176,7 +176,7 @@
       "deepLink": "/?desk=desk&sec=trade-sub-structure",
       "code": "MM",
       "apiOps": [
-        "getOptionsChain",
+        "v1GetOptionsChain",
         "getGreeks"
       ],
       "mcpTools": [
@@ -206,7 +206,7 @@
       "deepLink": "/?desk=desk&sec=trade-sub-risk",
       "code": "HDG",
       "apiOps": [
-        "getOptionsChain"
+        "v1GetOptionsChain"
       ],
       "mcpTools": [
         "terminal.get_market_snapshot"
@@ -220,7 +220,7 @@
       "deepLink": "/?desk=crypto&view=overview",
       "code": "OVR",
       "apiOps": [
-        "getDeribitMarket",
+        "v1GetCryptoMarket",
         "getFreeCryptoSnapshot"
       ],
       "mcpTools": [
@@ -235,7 +235,7 @@
       "deepLink": "/?desk=crypto&view=volatility",
       "code": "VOL",
       "apiOps": [
-        "getDeribitMarket"
+        "v1GetCryptoMarket"
       ],
       "mcpTools": [
         "terminal.get_volatility_surface"
@@ -249,7 +249,7 @@
       "deepLink": "/?desk=crypto&view=positioning",
       "code": "POS",
       "apiOps": [
-        "getDeribitMarket"
+        "v1GetCryptoMarket"
       ],
       "mcpTools": [
         "terminal.get_positioning"
@@ -263,7 +263,7 @@
       "deepLink": "/?desk=crypto&view=flow",
       "code": "FLOW",
       "apiOps": [
-        "getDeribitTrades"
+        "v1GetCryptoTrades"
       ],
       "mcpTools": [
         "terminal.get_crypto_flow"
@@ -277,7 +277,7 @@
       "deepLink": "/?desk=crypto&view=carry",
       "code": "CARRY",
       "apiOps": [
-        "getDeribitFundingHistory"
+        "v1GetCryptoFunding"
       ],
       "mcpTools": [
         "terminal.get_crypto_carry"
@@ -291,7 +291,7 @@
       "deepLink": "/?desk=crypto&view=trade-risk",
       "code": "T&R",
       "apiOps": [
-        "getDeribitMarket"
+        "v1GetCryptoMarket"
       ],
       "mcpTools": [
         "terminal.get_options_chain"

@@ -72,6 +72,35 @@ function runYf(symbol, mode) {
   });
 }
 
+export async function getOptionChainSnapshot(symbol, { probe = false, max = null } = {}) {
+  const maxArg = Number.isFinite(Number(max)) && Number(max) > 0
+    ? Math.min(Math.trunc(Number(max)), 12)
+    : null;
+  const cacheKey = `options:${symbol}:${maxArg || 'full'}`;
+
+  const stale = peek(cacheKey);
+  if (stale && Date.now() - stale.timestamp < TTL.OPTIONS_MS) {
+    const contracts = Array.isArray(stale.data?.quotes) ? stale.data.quotes.length : 0;
+    if (probe) return { available: contracts >= 10, contracts, fromCache: true };
+    return { ...stale.data, _cache: { hit: true, ageMs: Date.now() - stale.timestamp } };
+  }
+
+  const { data: result, fromCache, ageMs } = await getOrFetch(
+    cacheKey,
+    probe ? TTL.OPTIONS_PROBE_MS : TTL.OPTIONS_MS,
+    () => runOptionsFetcher(symbol, maxArg),
+    { allowStaleOnError: true },
+  );
+  const contracts = Array.isArray(result.quotes) ? result.quotes.length : 0;
+  if (!probe && (!Number.isFinite(Number(result.spot)) || Number(result.spot) <= 0 || contracts === 0)) {
+    const error = new Error('Empty chain payload from provider');
+    error.code = 'insufficient_coverage';
+    throw error;
+  }
+  if (probe) return { available: contracts >= 10, contracts, fromCache };
+  return { ...result, _cache: { hit: fromCache, ageMs } };
+}
+
 export function registerEquityFeedsRoutes(fastify) {
   // Option chain — backs Vol/Positioning/Trade first paint.
   fastify.get('/api/options/:symbol', async (request, reply) => {
@@ -80,42 +109,15 @@ export function registerEquityFeedsRoutes(fastify) {
       reply.code(400);
       return { error: 'Invalid symbol' };
     }
-    const { probe, max: maxStr } = request.query ?? {};
+    const { probe, max } = request.query ?? {};
     const isProbe = probe === '1' || probe === 'true';
-    const max = parseInt(maxStr, 10);
-    const maxArg = Number.isFinite(max) && max > 0 ? Math.min(max, 12) : null;
-    const cacheKey = `options:${symbol}:${maxArg || 'full'}`;
-
     try {
-      // Stale shared chain still serves while a refresh is in flight (SWR).
-      const stale = peek(cacheKey);
-      if (stale && Date.now() - stale.timestamp < TTL.OPTIONS_MS) {
-        if (isProbe) {
-          const contracts = Array.isArray(stale.data?.quotes) ? stale.data.quotes.length : 0;
-          return { available: contracts >= 10, contracts, fromCache: true };
-        }
-        return { ...stale.data, _cache: { hit: true, ageMs: Date.now() - stale.timestamp } };
-      }
-
-      const { data: result, fromCache, ageMs } = await getOrFetch(
-        cacheKey,
-        isProbe ? TTL.OPTIONS_PROBE_MS : TTL.OPTIONS_MS,
-        () => runOptionsFetcher(symbol, maxArg),
-        { allowStaleOnError: true },
-      );
-
-      const contracts = Array.isArray(result.quotes) ? result.quotes.length : 0;
-      // Fail closed on an empty payload — an empty 200 would read as "no options today".
-      if (!isProbe && (!Number.isFinite(Number(result.spot)) || Number(result.spot) <= 0 || contracts === 0)) {
-        const err = new Error('Empty chain payload from provider');
-        err.empty = true;
-        throw err;
-      }
-      if (isProbe) return { available: contracts >= 10, contracts, fromCache };
-      return { ...result, _cache: { hit: fromCache, ageMs } };
+      return await getOptionChainSnapshot(symbol, { probe: isProbe, max });
     } catch (err) {
-      // Empty payloads are not cached as success — allow a later retry.
-      if (err?.empty) { reply.code(502); return { error: 'No option chain for symbol', detail: err.message }; }
+      if (err?.code === 'insufficient_coverage') {
+        reply.code(502);
+        return { error: 'No option chain for symbol', detail: err.message };
+      }
       console.error('API endpoint error:', err);
       reply.code(502);
       return { error: 'Failed to fetch data', detail: err.message };

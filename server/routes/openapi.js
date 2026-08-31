@@ -16,6 +16,43 @@ function loadRegistry() {
   return JSON.parse(raw);
 }
 
+function loadV1Contracts() {
+  const raw = readFileSync(join(ROOT, 'packages/contracts/src/v1-contracts.schema.json'), 'utf8');
+  return JSON.parse(raw);
+}
+
+function openApiPath(runtimePath) {
+  return runtimePath
+    .replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, '{$1}')
+    .replace(/\*/g, '{wildcard}');
+}
+
+function generatedOperation(method, runtimePath) {
+  const path = openApiPath(runtimePath);
+  const parameters = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => ({
+    name: match[1],
+    in: 'path',
+    required: true,
+    schema: { type: 'string' },
+  }));
+  const operationId = `legacy_${method.toLowerCase()}_${runtimePath}`
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+  return {
+    operationId,
+    tags: [runtimePath.startsWith('/docs') ? 'academy' : 'legacy'],
+    summary: `Runtime-discovered legacy adapter: ${method} ${runtimePath}`,
+    description: 'Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.',
+    deprecated: true,
+    'x-legacy-adapter': true,
+    ...(parameters.length > 0 ? { parameters } : {}),
+    responses: {
+      200: jsonOk({ type: 'object' }, 'Legacy adapter payload; shape is provider/route specific.'),
+      default: { description: 'Legacy route error' },
+    },
+  };
+}
+
 function envelopeSchema(data) {
   return {
     type: 'object',
@@ -95,17 +132,19 @@ const currencyParam = {
   schema: { type: 'string', enum: ['BTC', 'ETH'] },
 };
 
-export function buildOpenApiDocument(registry) {
+export function buildOpenApiDocument(registry, runtimeRoutes = []) {
   const r = registry || loadRegistry();
-  return {
+  const document = {
     openapi: '3.1.0',
     info: {
       title: 'Terminal REST API',
       version: '1.0.0',
-      description: 'Read-only market analytics. All market responses use the common envelope (schemaVersion, requestId, symbol, asOf, fetchedAt, source, provenanceByField, unitsByField, freshness, coverage, assumptions, warnings, data). Provider keys never leave the server.',
+      description: 'Read-only market analytics. Canonical /api/v1 responses use strict validated envelopes. Unversioned routes are documented as deprecated compatibility/provider-native adapters. Provider keys never leave the server.',
     },
     servers: [{ url: '/', description: 'This server' }],
     tags: [
+      { name: 'v1', description: 'Canonical, strict, runtime-validated contracts' },
+      { name: 'legacy', description: 'Deprecated compatibility and provider-native adapters' },
       { name: 'system', description: 'Health, cache, workflows' },
       { name: 'equities', description: 'Option chains, quotes, enrichment' },
       { name: 'crypto', description: 'Deribit authoritative + free multi-venue snapshot' },
@@ -113,7 +152,68 @@ export function buildOpenApiDocument(registry) {
       { name: 'academy', description: 'Publication index' },
     ],
     'x-workflows': r.workflows,
+    components: {
+      schemas: {
+        V1Contracts: loadV1Contracts(),
+      },
+    },
     paths: {
+      '/api/v1/system/health': {
+        get: {
+          operationId: 'v1GetHealth', tags: ['v1', 'system'], summary: 'Canonical liveness envelope',
+          responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/healthResponse' }, 'Validated health envelope') },
+        },
+      },
+      '/api/v1/workflows': {
+        get: {
+          operationId: 'v1GetWorkflows', tags: ['v1', 'system'], summary: 'Canonical desk and workflow registry envelope',
+          responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/workflowsResponse' }, 'Validated workflow envelope') },
+        },
+      },
+      '/api/v1/market/options/{symbol}': {
+        get: {
+          operationId: 'v1GetOptionsChain', tags: ['v1', 'equities'], summary: 'Sanitized delayed equity option chain',
+          parameters: [symbolParam()],
+          responses: {
+            200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/optionsResponse' }, 'Validated option-chain envelope'),
+            400: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed request error'),
+            502: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed provider/coverage error'),
+          },
+        },
+      },
+      '/api/v1/market/crypto/{currency}': {
+        get: {
+          operationId: 'v1GetCryptoMarket', tags: ['v1', 'crypto'], summary: 'Sanitized active Deribit catalogue/quote snapshot',
+          parameters: [currencyParam],
+          responses: {
+            200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/cryptoMarketResponse' }, 'Validated crypto market envelope'),
+            400: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed request error'),
+            502: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed provider/coverage error'),
+          },
+        },
+      },
+      '/api/v1/market/crypto/{currency}/funding': {
+        get: {
+          operationId: 'v1GetCryptoFunding', tags: ['v1', 'crypto'], summary: 'Validated 8h funding history and labelled simple annualization',
+          parameters: [currencyParam, { name: 'days', in: 'query', schema: { type: 'integer', enum: [1, 7, 30, 90] } }],
+          responses: {
+            200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/cryptoFundingResponse' }, 'Validated funding envelope'),
+            400: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed request error'),
+            502: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed provider error'),
+          },
+        },
+      },
+      '/api/v1/market/crypto/{currency}/trades': {
+        get: {
+          operationId: 'v1GetCryptoTrades', tags: ['v1', 'crypto'], summary: 'Validated Deribit option tape with parsed right and expiry',
+          parameters: [currencyParam, { name: 'hours', in: 'query', schema: { type: 'integer', enum: [1, 4, 24] } }, { name: 'count', in: 'query', schema: { type: 'integer', minimum: 50, maximum: 1000 } }],
+          responses: {
+            200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/cryptoTradesResponse' }, 'Validated option-trade envelope'),
+            400: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed request error'),
+            502: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed provider error'),
+          },
+        },
+      },
       '/api/health': {
         get: {
           operationId: 'getHealth', tags: ['system'], summary: 'Liveness',
@@ -258,6 +358,28 @@ export function buildOpenApiDocument(registry) {
       },
     },
   };
+
+  for (const pathItem of Object.values(document.paths)) {
+    for (const [method, operation] of Object.entries(pathItem)) {
+      if (!['get', 'post', 'put', 'patch', 'delete'].includes(method)) continue;
+      if (!operation.tags?.includes('v1') && !operation['x-legacy-adapter']) {
+        operation.deprecated = true;
+        operation['x-legacy-adapter'] = true;
+        operation.description = `${operation.description ? `${operation.description} ` : ''}Deprecated compatibility route; migrate to /api/v1 where available.`;
+      }
+    }
+  }
+
+  for (const route of runtimeRoutes) {
+    if (!String(route.url).startsWith('/api') && !String(route.url).startsWith('/docs')) continue;
+    const method = String(route.method).toLowerCase();
+    if (!['get', 'post', 'put', 'patch', 'delete'].includes(method)) continue;
+    const path = openApiPath(String(route.url));
+    document.paths[path] ??= {};
+    document.paths[path][method] ??= generatedOperation(String(route.method), String(route.url));
+  }
+
+  return document;
 }
 
 export function registerOpenApiRoutes(fastify) {
@@ -265,6 +387,6 @@ export function registerOpenApiRoutes(fastify) {
   fastify.get('/api/openapi.json', async (_req, reply) => {
     reply.header('content-type', 'application/json; charset=utf-8');
     reply.header('cache-control', 'public, max-age=300');
-    return buildOpenApiDocument();
+    return buildOpenApiDocument(undefined, fastify.runtimeRouteManifest);
   });
 }

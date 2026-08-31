@@ -19,6 +19,7 @@ import { registerDeskFeedRoutes } from './routes/deskFeeds.js';
 import { registerAcademyDocsRoutes } from './routes/academyDocs.js';
 import { registerHomeBriefingRoutes } from './routes/homeBriefing.js';
 import { registerOpenApiRoutes } from './routes/openapi.js';
+import { registerV1Routes } from './routes/v1.js';
 import { registerStripeBilling, gateInfoForRequest } from '../api/stripeBilling.js';
 import { registerStripeAuth } from '../api/authRoutes.js';
 import { resolveProxyTrust } from '../api/proxyTrust.js';
@@ -273,6 +274,7 @@ export async function buildServer({ onRoute } = {}) {
   await registerMacrovolRoutes(fastify);
   await registerAcademyDocsRoutes(fastify);
   registerHomeBriefingRoutes(fastify);
+  registerV1Routes(fastify);
   registerOpenApiRoutes(fastify);
   registerFlashalphaRoutes(fastify);
   registerKsaRoutes(fastify);

@@ -17,6 +17,12 @@ const VIEWPORTS = [
 
 type Desk = { id: string; label: string; url: string; expectText: RegExp; testId?: string };
 
+const DERIBIT_MONTH_CODES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+function deribitExpiryCode(timestamp: number): string {
+  const date = new Date(timestamp);
+  return `${String(date.getUTCDate()).padStart(2, '0')}${DERIBIT_MONTH_CODES[date.getUTCMonth()]}${String(date.getUTCFullYear()).slice(-2)}`;
+}
+
 const DESKS: Desk[] = [
   { id: 'home', label: 'Home', url: '/?desk=home', expectText: /Home — Launchpad|LPAD|function codes/i, testId: 'launchpad-grid' },
   { id: 'vol-surface', label: 'Vol Surface', url: '/?desk=vol&sec=vol-sub-surface', expectText: /IV Surface|strike.*expiry|MatrixHeatmap/i, testId: 'vol-structure-view' },
@@ -83,16 +89,26 @@ async function mockAll(page: import('@playwright/test').Page) {
     const opt = JSON.parse(readFileSync(join(__dirname, '..', 'server', 'providers', 'deribit', 'fixtures', 'get_instruments.option.json'), 'utf8')).result;
     const fut = JSON.parse(readFileSync(join(__dirname, '..', 'server', 'providers', 'deribit', 'fixtures', 'get_instruments.future.json'), 'utf8')).result;
     const catalogue = [...opt, ...fut];
-    instruments = catalogue.map((c: { instrument_name: string; base_currency: string; quote_currency: string; settlement_currency: string; contract_size: number; settlement_period: string; kind: string; expiration_timestamp: number; strike?: number; option_type?: string; is_inverse: boolean }) => {
+    const listedExpiries = [...new Set<number>(catalogue.filter((row: { settlement_period: string }) => row.settlement_period !== 'perpetual').map((row: { expiration_timestamp: number }) => row.expiration_timestamp))].sort();
+    const expiryByListed = new Map(listedExpiries.map((expiry, index) => [expiry, Date.now() + (30 + index * 30) * 86400000]));
+    instruments = catalogue.map((c: { instrument_name: string; base_currency: string; quote_currency: string; settlement_currency: string; contract_size: number; settlement_period: string; kind: string; expiration_timestamp: number; strike?: number; option_type?: string; is_inverse: boolean }, index: number) => {
       const isPerp = c.settlement_period === 'perpetual';
       const isOption = c.kind === 'option';
-      const futureMs = Date.now() + 30 * 86400000 + (isOption && c.strike ? (c.strike % 7) * 86400000 : 0);
+      const futureMs = isPerp ? null : expiryByListed.get(c.expiration_timestamp)!;
+      const mark = isOption ? 0.05 : isPerp ? 60150.5 : 61000 + index * 125;
+      const instrument = isPerp
+        ? `${c.base_currency}-PERPETUAL`
+        : isOption
+          ? `${c.base_currency}-${deribitExpiryCode(futureMs!)}-${c.strike}-${c.option_type === 'call' ? 'C' : 'P'}`
+          : `${c.base_currency}-${deribitExpiryCode(futureMs!)}`;
       return {
-        instrument: c.instrument_name, baseCurrency: c.base_currency, quoteCurrency: c.quote_currency, settlementCurrency: c.settlement_currency,
+        instrument, baseCurrency: c.base_currency, quoteCurrency: c.quote_currency, settlementCurrency: c.settlement_currency,
         contractSize: c.contract_size, kind: isPerp ? 'perp' : c.kind,
-        expiryMs: isPerp ? null : isOption ? futureMs : (c.expiration_timestamp < 4102444800000 ? c.expiration_timestamp : null),
+        expiryMs: isPerp ? null : futureMs,
         strike: c.strike ?? null, optionType: c.option_type ?? null, isInverse: !!c.is_inverse,
-        bidPrice: isPerp ? 60150 : 0.05, askPrice: isPerp ? 60151 : 0.051, markPrice: isPerp ? 60150.5 : 0.05, lastPrice: isPerp ? 60150 : 0.05, bidIv: 0.55, askIv: 0.56, markIv: 0.55, indexPrice: 60150, openInterest: 100, volume: 10, funding8h: c.instrument_name === 'BTC-PERPETUAL' ? 0.0001 : null, timestamp: Date.now(), hasQuote: true, isStale: false,
+        bidPrice: isOption ? 0.049 : mark - 5, askPrice: isOption ? 0.051 : mark + 5, markPrice: mark, lastPrice: mark,
+        bidIv: isOption ? 0.55 : null, askIv: isOption ? 0.56 : null, markIv: isOption ? 0.55 : null,
+        indexPrice: 60150, openInterest: 100, volume: 10, funding8h: isPerp ? 0.0001 : null, timestamp: Date.now(), hasQuote: true, isStale: false,
       };
     });
     const last = JSON.parse(readFileSync(join(__dirname, '..', 'server', 'providers', 'deribit', 'fixtures', 'get_last_trades.json'), 'utf8')).result.trades;
@@ -101,6 +117,46 @@ async function mockAll(page: import('@playwright/test').Page) {
     }));
   } catch {}
   const yResp = yahooResponse();
+  const envelope = (data: unknown, source: string, numerator: number, denominator: number) => ({
+    schemaVersion: 1,
+    requestId: 'playwright',
+    asOf: new Date().toISOString(),
+    fetchedAt: new Date().toISOString(),
+    source: [source],
+    provenanceByField: {},
+    unitsByField: {},
+    freshness: source === 'yfinance' ? 'delayed' : 'live',
+    coverage: { numerator, denominator, state: numerator === denominator ? 'complete' : numerator > 0 ? 'partial' : 'unavailable', missing: [] },
+    assumptions: [],
+    warnings: [],
+    data,
+  });
+  await page.route('**/api/v1/market/crypto/**', async (route) => {
+    const url = route.request().url();
+    if (url.includes('/funding')) {
+      const now = Date.now();
+      const points = Array.from({ length: 12 }, (_, index) => ({ timestamp: now - (11 - index) * 8 * 3600_000, rate8h: 0.00005 + index * 0.000002, annualizedPct: (0.00005 + index * 0.000002) * 1095 * 100, indexPrice: 60150 }));
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope({ currency: 'BTC', instrumentName: 'BTC-PERPETUAL', days: 30, points, latest: points.at(-1), count: points.length }, 'deribit', points.length, points.length)) });
+    }
+    if (url.includes('/trades')) {
+      const expiry = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+      const expiryCode = deribitExpiryCode(new Date(`${expiry}T08:00:00Z`).getTime());
+      const rows = (trades as Array<Record<string, unknown>>).map((trade, index) => ({ ...trade, instrument: `BTC-${expiryCode}-60000-${index % 2 === 0 ? 'C' : 'P'}`, right: index % 2 === 0 ? 'call' : 'put', expiry, contractSize: 1 }));
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope({ currency: 'BTC', trades: rows, count: rows.length, hasMore: false }, 'deribit', rows.length, rows.length)) });
+    }
+    const rows = (instruments as Array<Record<string, unknown>>).map((ticker) => ({
+      instrument: ticker.instrument, baseCurrency: ticker.baseCurrency ?? 'BTC', quoteCurrency: ticker.quoteCurrency ?? 'USD', settlementCurrency: ticker.settlementCurrency ?? 'BTC', contractSize: ticker.contractSize ?? 1, settlementPeriod: ticker.kind === 'perp' ? 'perpetual' : 'month', isInverse: true,
+      kind: ticker.kind, expiryMs: ticker.expiryMs, strike: ticker.strike, right: ticker.optionType, bid: ticker.bidPrice, ask: ticker.askPrice, mark: ticker.markPrice, last: ticker.lastPrice, bidIv: ticker.bidIv, askIv: ticker.askIv, markIv: ticker.markIv, indexPrice: ticker.indexPrice, openInterest: ticker.openInterest, volume: ticker.volume, funding8h: ticker.funding8h, timestamp: ticker.timestamp, tradable: ticker.hasQuote,
+    }));
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope({ currency: 'BTC', indexPrice: 60150, funding8h: 0.0001, instruments: rows, count: rows.length }, 'deribit', rows.length, rows.length)) });
+  });
+  await page.route('**/api/v1/market/options/**', async (route) => {
+    const quotes = yResp.quotes.map((raw) => {
+      const quote = raw as Record<string, unknown>;
+      return { ...quote, right: quote.type, markIv: quote.iv };
+    });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope({ symbol: yResp.symbol, spot: yResp.spot, expirations: yResp.expirations, quotes, count: quotes.length }, 'yfinance', quotes.length, quotes.length)) });
+  });
   await page.route('**/api/deribit/**', async (route) => {
     const url = route.request().url();
     if (url.includes('/trades')) {

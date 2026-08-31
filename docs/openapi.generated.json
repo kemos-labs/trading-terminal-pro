@@ -3,7 +3,7 @@
   "info": {
     "title": "Terminal REST API",
     "version": "1.0.0",
-    "description": "Read-only market analytics. All market responses use the common envelope (schemaVersion, requestId, symbol, asOf, fetchedAt, source, provenanceByField, unitsByField, freshness, coverage, assumptions, warnings, data). Provider keys never leave the server."
+    "description": "Read-only market analytics. Canonical /api/v1 responses use strict validated envelopes. Unversioned routes are documented as deprecated compatibility/provider-native adapters. Provider keys never leave the server."
   },
   "servers": [
     {
@@ -12,6 +12,14 @@
     }
   ],
   "tags": [
+    {
+      "name": "v1",
+      "description": "Canonical, strict, runtime-validated contracts"
+    },
+    {
+      "name": "legacy",
+      "description": "Deprecated compatibility and provider-native adapters"
+    },
     {
       "name": "system",
       "description": "Health, cache, workflows"
@@ -58,7 +66,7 @@
       "deepLink": "/?desk=vol&sec=vol-sub-surface",
       "code": "SURF",
       "apiOps": [
-        "getOptionsChain",
+        "v1GetOptionsChain",
         "getVolatilitySurface"
       ],
       "mcpTools": [
@@ -73,7 +81,7 @@
       "deepLink": "/?desk=vol&sec=vol-sub-smile",
       "code": "SMILE",
       "apiOps": [
-        "getOptionsChain"
+        "v1GetOptionsChain"
       ],
       "mcpTools": [
         "terminal.get_volatility_surface"
@@ -87,7 +95,7 @@
       "deepLink": "/?desk=vol&sec=vol-sub-term",
       "code": "TERM",
       "apiOps": [
-        "getOptionsChain"
+        "v1GetOptionsChain"
       ],
       "mcpTools": [
         "terminal.get_volatility_surface"
@@ -101,7 +109,7 @@
       "deepLink": "/?desk=vol&sec=vol-sub-greeks",
       "code": "GRK",
       "apiOps": [
-        "getOptionsChain",
+        "v1GetOptionsChain",
         "getGreeks"
       ],
       "mcpTools": [
@@ -116,7 +124,7 @@
       "deepLink": "/?desk=vol&sec=vol-sub-quality",
       "code": "FIT",
       "apiOps": [
-        "getOptionsChain"
+        "v1GetOptionsChain"
       ],
       "mcpTools": [
         "terminal.get_volatility_surface"
@@ -130,7 +138,7 @@
       "deepLink": "/?desk=positioning&sec=pos-sub-chain",
       "code": "GEX",
       "apiOps": [
-        "getOptionsChain",
+        "v1GetOptionsChain",
         "getPositioning"
       ],
       "mcpTools": [
@@ -159,7 +167,7 @@
       "deepLink": "/?desk=desk&sec=trade-sub-structure",
       "code": "MM",
       "apiOps": [
-        "getOptionsChain",
+        "v1GetOptionsChain",
         "getGreeks"
       ],
       "mcpTools": [
@@ -189,7 +197,7 @@
       "deepLink": "/?desk=desk&sec=trade-sub-risk",
       "code": "HDG",
       "apiOps": [
-        "getOptionsChain"
+        "v1GetOptionsChain"
       ],
       "mcpTools": [
         "terminal.get_market_snapshot"
@@ -203,7 +211,7 @@
       "deepLink": "/?desk=crypto&view=overview",
       "code": "OVR",
       "apiOps": [
-        "getDeribitMarket",
+        "v1GetCryptoMarket",
         "getFreeCryptoSnapshot"
       ],
       "mcpTools": [
@@ -218,7 +226,7 @@
       "deepLink": "/?desk=crypto&view=volatility",
       "code": "VOL",
       "apiOps": [
-        "getDeribitMarket"
+        "v1GetCryptoMarket"
       ],
       "mcpTools": [
         "terminal.get_volatility_surface"
@@ -232,7 +240,7 @@
       "deepLink": "/?desk=crypto&view=positioning",
       "code": "POS",
       "apiOps": [
-        "getDeribitMarket"
+        "v1GetCryptoMarket"
       ],
       "mcpTools": [
         "terminal.get_positioning"
@@ -246,7 +254,7 @@
       "deepLink": "/?desk=crypto&view=flow",
       "code": "FLOW",
       "apiOps": [
-        "getDeribitTrades"
+        "v1GetCryptoTrades"
       ],
       "mcpTools": [
         "terminal.get_crypto_flow"
@@ -260,7 +268,7 @@
       "deepLink": "/?desk=crypto&view=carry",
       "code": "CARRY",
       "apiOps": [
-        "getDeribitFundingHistory"
+        "v1GetCryptoFunding"
       ],
       "mcpTools": [
         "terminal.get_crypto_carry"
@@ -274,7 +282,7 @@
       "deepLink": "/?desk=crypto&view=trade-risk",
       "code": "T&R",
       "apiOps": [
-        "getDeribitMarket"
+        "v1GetCryptoMarket"
       ],
       "mcpTools": [
         "terminal.get_options_chain"
@@ -419,7 +427,1305 @@
       ]
     }
   ],
+  "components": {
+    "schemas": {
+      "V1Contracts": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://terminal.local/contracts/v1",
+        "title": "Trading Terminal v1 response contracts",
+        "$defs": {
+          "coverage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "numerator",
+              "denominator",
+              "state",
+              "missing"
+            ],
+            "properties": {
+              "numerator": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "denominator": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "partial",
+                  "unavailable"
+                ]
+              },
+              "missing": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              }
+            }
+          },
+          "baseEnvelope": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "schemaVersion",
+              "requestId",
+              "asOf",
+              "fetchedAt",
+              "source",
+              "provenanceByField",
+              "unitsByField",
+              "freshness",
+              "coverage",
+              "assumptions",
+              "warnings",
+              "data"
+            ],
+            "properties": {
+              "schemaVersion": {
+                "type": "integer",
+                "const": 1
+              },
+              "requestId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "asOf": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "fetchedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "source": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "provenanceByField": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "unitsByField": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "freshness": {
+                "type": "string",
+                "enum": [
+                  "live",
+                  "delayed",
+                  "stale",
+                  "unavailable"
+                ]
+              },
+              "coverage": {
+                "$ref": "#/$defs/coverage"
+              },
+              "assumptions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              },
+              "data": {}
+            }
+          },
+          "healthData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "timestamp"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "ok"
+              },
+              "timestamp": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "desk": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "hotkey",
+              "defaultWorkflowId"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "enum": [
+                  "home",
+                  "vol",
+                  "positioning",
+                  "desk",
+                  "crypto",
+                  "rates",
+                  "academy",
+                  "ksa"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "hotkey": {
+                "type": "string",
+                "pattern": "^[0-7]$"
+              },
+              "defaultWorkflowId": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "workflow": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "desk",
+              "title",
+              "purpose",
+              "deepLink",
+              "code",
+              "apiOps",
+              "mcpTools"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "desk": {
+                "type": "string",
+                "enum": [
+                  "home",
+                  "vol",
+                  "positioning",
+                  "desk",
+                  "crypto",
+                  "rates",
+                  "academy",
+                  "ksa"
+                ]
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1
+              },
+              "deepLink": {
+                "type": "string",
+                "pattern": "^/\\?desk="
+              },
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "apiOps": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              },
+              "mcpTools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              }
+            }
+          },
+          "workflowsData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "version",
+              "desks",
+              "workflows"
+            ],
+            "properties": {
+              "version": {
+                "type": "integer",
+                "const": 1
+              },
+              "desks": {
+                "type": "array",
+                "minItems": 8,
+                "maxItems": 8,
+                "items": {
+                  "$ref": "#/$defs/desk"
+                }
+              },
+              "workflows": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/workflow"
+                }
+              }
+            }
+          },
+          "optionQuote": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "strike",
+              "expiry",
+              "right",
+              "bid",
+              "ask",
+              "last",
+              "markIv",
+              "volume",
+              "openInterest"
+            ],
+            "properties": {
+              "strike": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "expiry": {
+                "type": "string",
+                "format": "date"
+              },
+              "right": {
+                "type": "string",
+                "enum": [
+                  "call",
+                  "put"
+                ]
+              },
+              "bid": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "ask": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "last": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "markIv": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 10
+              },
+              "volume": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "openInterest": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            }
+          },
+          "optionsData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "symbol",
+              "spot",
+              "expirations",
+              "quotes",
+              "count"
+            ],
+            "properties": {
+              "symbol": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+              },
+              "spot": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "expirations": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "uniqueItems": true
+              },
+              "quotes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/optionQuote"
+                }
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "cryptoInstrument": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "instrument",
+              "baseCurrency",
+              "quoteCurrency",
+              "settlementCurrency",
+              "contractSize",
+              "settlementPeriod",
+              "isInverse",
+              "kind",
+              "expiryMs",
+              "strike",
+              "right",
+              "bid",
+              "ask",
+              "mark",
+              "last",
+              "bidIv",
+              "askIv",
+              "markIv",
+              "indexPrice",
+              "openInterest",
+              "volume",
+              "funding8h",
+              "timestamp",
+              "tradable"
+            ],
+            "properties": {
+              "instrument": {
+                "type": "string",
+                "minLength": 1
+              },
+              "baseCurrency": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "quoteCurrency": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "settlementCurrency": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "contractSize": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "settlementPeriod": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "isInverse": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "option",
+                  "future",
+                  "perp"
+                ]
+              },
+              "expiryMs": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "strike": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "right": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "call",
+                  "put",
+                  null
+                ]
+              },
+              "bid": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "ask": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "mark": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "last": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "bidIv": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 10
+              },
+              "askIv": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 10
+              },
+              "markIv": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 10
+              },
+              "indexPrice": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "openInterest": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "volume": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "funding8h": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "timestamp": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "tradable": {
+                "type": "boolean"
+              }
+            }
+          },
+          "cryptoMarketData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "currency",
+              "indexPrice",
+              "funding8h",
+              "instruments",
+              "count"
+            ],
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "BTC",
+                  "ETH"
+                ]
+              },
+              "indexPrice": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "funding8h": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "instruments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/cryptoInstrument"
+                }
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "fundingPoint": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "timestamp",
+              "rate8h",
+              "annualizedPct",
+              "indexPrice"
+            ],
+            "properties": {
+              "timestamp": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "rate8h": {
+                "type": "number"
+              },
+              "annualizedPct": {
+                "type": "number"
+              },
+              "indexPrice": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              }
+            }
+          },
+          "cryptoFundingData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "currency",
+              "instrumentName",
+              "days",
+              "points",
+              "latest",
+              "count"
+            ],
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "BTC",
+                  "ETH"
+                ]
+              },
+              "instrumentName": {
+                "type": "string",
+                "pattern": "^(BTC|ETH)-PERPETUAL$"
+              },
+              "days": {
+                "type": "integer",
+                "enum": [
+                  1,
+                  7,
+                  30,
+                  90
+                ]
+              },
+              "points": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/fundingPoint"
+                }
+              },
+              "latest": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/fundingPoint"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "cryptoTrade": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "instrument",
+              "timestamp",
+              "price",
+              "quantity",
+              "side",
+              "right",
+              "expiry",
+              "markIv",
+              "premiumNative",
+              "contractSize",
+              "nativeCurrency",
+              "blockTrade",
+              "rfq"
+            ],
+            "properties": {
+              "instrument": {
+                "type": "string",
+                "minLength": 1
+              },
+              "timestamp": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "price": {
+                "type": "number",
+                "minimum": 0
+              },
+              "quantity": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "side": {
+                "type": "string",
+                "enum": [
+                  "buy",
+                  "sell"
+                ]
+              },
+              "right": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "call",
+                  "put",
+                  null
+                ]
+              },
+              "expiry": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date"
+              },
+              "markIv": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 10
+              },
+              "premiumNative": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "contractSize": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "nativeCurrency": {
+                "type": "string",
+                "enum": [
+                  "BTC",
+                  "ETH"
+                ]
+              },
+              "blockTrade": {
+                "type": "boolean"
+              },
+              "rfq": {
+                "type": "boolean"
+              }
+            }
+          },
+          "cryptoTradesData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "currency",
+              "trades",
+              "count",
+              "hasMore"
+            ],
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "BTC",
+                  "ETH"
+                ]
+              },
+              "trades": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/cryptoTrade"
+                }
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "hasMore": {
+                "type": "boolean"
+              }
+            }
+          },
+          "healthResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/healthData"
+                  }
+                }
+              }
+            ]
+          },
+          "workflowsResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/workflowsData"
+                  }
+                }
+              }
+            ]
+          },
+          "optionsResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/optionsData"
+                  }
+                }
+              }
+            ]
+          },
+          "cryptoMarketResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/cryptoMarketData"
+                  }
+                }
+              }
+            ]
+          },
+          "cryptoFundingResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/cryptoFundingData"
+                  }
+                }
+              }
+            ]
+          },
+          "cryptoTradesResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/cryptoTradesData"
+                  }
+                }
+              }
+            ]
+          },
+          "errorResponse": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "schemaVersion",
+              "requestId",
+              "asOf",
+              "error"
+            ],
+            "properties": {
+              "schemaVersion": {
+                "type": "integer",
+                "const": 1
+              },
+              "requestId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "asOf": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "error": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "message",
+                  "retryable"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "INVALID_REQUEST",
+                      "INVALID_SYMBOL",
+                      "UNSUPPORTED_CURRENCY",
+                      "PROVIDER_UNAVAILABLE",
+                      "INSUFFICIENT_COVERAGE",
+                      "RATE_LIMITED",
+                      "ENTITLEMENT_MISSING",
+                      "INTERNAL_CONTRACT_ERROR"
+                    ]
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "provider": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "detail": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
   "paths": {
+    "/api/v1/system/health": {
+      "get": {
+        "operationId": "v1GetHealth",
+        "tags": [
+          "v1",
+          "system"
+        ],
+        "summary": "Canonical liveness envelope",
+        "responses": {
+          "200": {
+            "description": "Validated health envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/healthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workflows": {
+      "get": {
+        "operationId": "v1GetWorkflows",
+        "tags": [
+          "v1",
+          "system"
+        ],
+        "summary": "Canonical desk and workflow registry envelope",
+        "responses": {
+          "200": {
+            "description": "Validated workflow envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/workflowsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/options/{symbol}": {
+      "get": {
+        "operationId": "v1GetOptionsChain",
+        "tags": [
+          "v1",
+          "equities"
+        ],
+        "summary": "Sanitized delayed equity option chain",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+            },
+            "description": "Observed equity chain (yfinance, delayed)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated option-chain envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/optionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed request error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed provider/coverage error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/crypto/{currency}": {
+      "get": {
+        "operationId": "v1GetCryptoMarket",
+        "tags": [
+          "v1",
+          "crypto"
+        ],
+        "summary": "Sanitized active Deribit catalogue/quote snapshot",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BTC",
+                "ETH"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated crypto market envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/cryptoMarketResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed request error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed provider/coverage error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/crypto/{currency}/funding": {
+      "get": {
+        "operationId": "v1GetCryptoFunding",
+        "tags": [
+          "v1",
+          "crypto"
+        ],
+        "summary": "Validated 8h funding history and labelled simple annualization",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BTC",
+                "ETH"
+              ]
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                1,
+                7,
+                30,
+                90
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated funding envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/cryptoFundingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed request error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed provider error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/crypto/{currency}/trades": {
+      "get": {
+        "operationId": "v1GetCryptoTrades",
+        "tags": [
+          "v1",
+          "crypto"
+        ],
+        "summary": "Validated Deribit option tape with parsed right and expiry",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BTC",
+                "ETH"
+              ]
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                1,
+                4,
+                24
+              ]
+            }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 50,
+              "maximum": 1000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated option-trade envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/cryptoTradesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed request error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed provider error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "getHealth",
@@ -450,7 +1756,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/cache/status": {
@@ -471,7 +1780,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/workflows": {
@@ -504,7 +1816,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/options/{symbol}": {
@@ -741,7 +2056,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/yf/history/{symbol}": {
@@ -811,7 +2129,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/yf/info/{symbol}": {
@@ -881,7 +2202,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/finnhub/quote": {
@@ -986,7 +2310,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/finnhub/news": {
@@ -1099,7 +2426,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/desk/pack": {
@@ -1129,7 +2459,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/home/briefing": {
@@ -1159,7 +2492,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/deribit/market/{currency}": {
@@ -1268,7 +2604,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/deribit/trades/{currency}": {
@@ -1354,7 +2693,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/deribit/funding-history": {
@@ -1438,7 +2780,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/free-crypto/market/{currency}": {
@@ -1626,7 +2971,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/venues/options/{currency}": {
@@ -1735,7 +3083,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/ksa/board": {
@@ -1867,7 +3218,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/ksa/session": {
@@ -1888,7 +3242,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/docs/index.json": {
@@ -1909,7 +3266,10 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
     "/api/openapi.json": {
@@ -1929,6 +3289,942 @@
                 }
               }
             }
+          }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
+      }
+    },
+    "/api/boot/briefing": {
+      "get": {
+        "operationId": "legacy_get_api_boot_briefing",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/boot/briefing",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/fmp/stable/{wildcard}": {
+      "get": {
+        "operationId": "legacy_get_api_fmp_stable",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/fmp/stable/*",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "parameters": [
+          {
+            "name": "wildcard",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/stream/quote/{symbol}": {
+      "get": {
+        "operationId": "legacy_get_api_stream_quote_symbol",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/stream/quote/:symbol",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/history/spy": {
+      "get": {
+        "operationId": "legacy_get_api_history_spy",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/history/spy",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/finnhub/earnings": {
+      "get": {
+        "operationId": "legacy_get_api_finnhub_earnings",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/finnhub/earnings",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/finnhub/economic-calendar": {
+      "get": {
+        "operationId": "legacy_get_api_finnhub_economic_calendar",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/finnhub/economic-calendar",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/finnhub/recommendation": {
+      "get": {
+        "operationId": "legacy_get_api_finnhub_recommendation",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/finnhub/recommendation",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/finnhub/peers": {
+      "get": {
+        "operationId": "legacy_get_api_finnhub_peers",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/finnhub/peers",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/alphavantage/quote": {
+      "get": {
+        "operationId": "legacy_get_api_alphavantage_quote",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/alphavantage/quote",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/tradingview/snapshot": {
+      "get": {
+        "operationId": "legacy_get_api_tradingview_snapshot",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/tradingview/snapshot",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/deribit/instruments": {
+      "get": {
+        "operationId": "legacy_get_api_deribit_instruments",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/deribit/instruments",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/deribit/index/{name}": {
+      "get": {
+        "operationId": "legacy_get_api_deribit_index_name",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/deribit/index/:name",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/macrovol/{wildcard}": {
+      "get": {
+        "operationId": "legacy_get_api_macrovol",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/macrovol/*",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "parameters": [
+          {
+            "name": "wildcard",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "legacy_post_api_macrovol",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: POST /api/macrovol/*",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "parameters": [
+          {
+            "name": "wildcard",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/docs/{wildcard}": {
+      "get": {
+        "operationId": "legacy_get_docs",
+        "tags": [
+          "academy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /docs/*",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "parameters": [
+          {
+            "name": "wildcard",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/flashalpha/exposure/{type}/{symbol}": {
+      "get": {
+        "operationId": "legacy_get_api_flashalpha_exposure_type_symbol",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/flashalpha/exposure/:type/:symbol",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/ksa/quote/{symbol}": {
+      "get": {
+        "operationId": "legacy_get_api_ksa_quote_symbol",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/ksa/quote/:symbol",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/opra/status": {
+      "get": {
+        "operationId": "legacy_get_api_opra_status",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/opra/status",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/opra/chain/{symbol}": {
+      "get": {
+        "operationId": "legacy_get_api_opra_chain_symbol",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/opra/chain/:symbol",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/billing/gate": {
+      "get": {
+        "operationId": "legacy_get_api_billing_gate",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/billing/gate",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/billing/config": {
+      "get": {
+        "operationId": "legacy_get_api_billing_config",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/billing/config",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/billing/checkout-session": {
+      "post": {
+        "operationId": "legacy_post_api_billing_checkout_session",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: POST /api/billing/checkout-session",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/billing/portal-session": {
+      "post": {
+        "operationId": "legacy_post_api_billing_portal_session",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: POST /api/billing/portal-session",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/billing/status": {
+      "get": {
+        "operationId": "legacy_get_api_billing_status",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/billing/status",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/stripe/webhook": {
+      "post": {
+        "operationId": "legacy_post_api_stripe_webhook",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: POST /api/stripe/webhook",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "operationId": "legacy_post_api_auth_register",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: POST /api/auth/register",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "legacy_post_api_auth_login",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: POST /api/auth/login",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "legacy_post_api_auth_logout",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: POST /api/auth/logout",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "operationId": "legacy_get_api_auth_me",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: GET /api/auth/me",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/auth/reset-request": {
+      "post": {
+        "operationId": "legacy_post_api_auth_reset_request",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: POST /api/auth/reset-request",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
+          }
+        }
+      }
+    },
+    "/api/auth/reset-confirm": {
+      "post": {
+        "operationId": "legacy_post_api_auth_reset_confirm",
+        "tags": [
+          "legacy"
+        ],
+        "summary": "Runtime-discovered legacy adapter: POST /api/auth/reset-confirm",
+        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "responses": {
+          "200": {
+            "description": "Legacy adapter payload; shape is provider/route specific.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Legacy route error"
           }
         }
       }

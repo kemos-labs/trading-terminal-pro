@@ -2,8 +2,8 @@
 
 Generated deterministically by `node scripts/route-parity.mjs --write` from Fastify's `onRoute` hook after all plugins are ready.
 
-- Runtime path patterns: **49**
-- Non-HEAD/OPTIONS operations: **50**
+- Runtime path patterns: **55**
+- Non-HEAD/OPTIONS operations: **56**
 - Frontend route declarations checked: **38**
 - Unregistered `/api` and `/docs` requests fail with JSON 404 responses.
 
@@ -53,6 +53,12 @@ Generated deterministically by `node scripts/route-parity.mjs --write` from Fast
 | GET | `/api/stream/quote/:symbol` | public server-proxied |
 | POST | `/api/stripe/webhook` | webhook |
 | GET | `/api/tradingview/snapshot` | public server-proxied |
+| GET | `/api/v1/market/crypto/:currency` | public server-proxied |
+| GET | `/api/v1/market/crypto/:currency/funding` | public server-proxied |
+| GET | `/api/v1/market/crypto/:currency/trades` | public server-proxied |
+| GET | `/api/v1/market/options/:symbol` | public server-proxied |
+| GET | `/api/v1/system/health` | public server-proxied |
+| GET | `/api/v1/workflows` | public server-proxied |
 | GET | `/api/venues/options/:currency` | public server-proxied |
 | GET | `/api/workflows` | public server-proxied |
 | GET | `/api/yf/history/:symbol` | public server-proxied |

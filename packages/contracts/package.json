@@ -1,0 +1,11 @@
+{
+  "name": "@terminal/contracts",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./runtime": "./src/runtime.js",
+    "./schemas/v1": "./src/v1-contracts.schema.json",
+    "./workflows": "./src/workflows.json"
+  }
+}

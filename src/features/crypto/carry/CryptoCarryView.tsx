@@ -27,15 +27,16 @@ export function CryptoCarryView() {
   const [fundingHistory, setFundingHistory] = useState<{ t: number; rate8h: number }[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/deribit/funding-history?currency=${bundle?.currency ?? 'BTC'}&days=30`)
+    fetch(`/api/v1/market/crypto/${bundle?.currency ?? 'BTC'}/funding?days=30`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
+      .then((envelope: { data?: { points?: { timestamp?: number; rate8h?: number }[] } } | null) => {
         if (cancelled) return;
-        const rows = Array.isArray(d?.points) ? d.points : [];
-        setFundingHistory(rows.map((r: { timestamp?: number; t?: number; rate8h?: number; current_funding_8h?: number }) => ({
-          t: r.timestamp ?? r.t ?? 0,
-          rate8h: (r.rate8h ?? r.current_funding_8h ?? 0) * 100,
-        })).filter((r: { t: number }) => r.t > 0));
+        const rows = Array.isArray(envelope?.data?.points) ? envelope.data.points : [];
+        setFundingHistory(rows.flatMap((row) => (
+          Number.isFinite(row.timestamp) && Number.isFinite(row.rate8h)
+            ? [{ t: row.timestamp as number, rate8h: (row.rate8h as number) * 100 }]
+            : []
+        )));
       })
       .catch(() => { if (!cancelled) setFundingHistory(null); });
     return () => { cancelled = true; };

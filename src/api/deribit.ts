@@ -1,20 +1,11 @@
 /**
- * Thin same-origin browser client — knows only normalized schemas, never Deribit raw types.
+ * Canonical same-origin Deribit client.
  *
- * Contract: GET /api/deribit/market/:currency returns DeribitMarketBundle.
- * Server and browser share this shape (server/routes/deribitMarket.js).
- *
- * Units:
- *   - IVs (bidIv/askIv/markIv, trade markIv) are DECIMAL (0.55 = 55%). Server converts
- *     from Deribit percentage points exactly once. Views render ×100 only.
- *   - openInterest units are native per kind: base currency for options,
- *     USD notional for inverse perp/futures.
- *   - funding8h is the native 8h rate (decimal); annualization (×3×365) is done
- *     via src/lib/math/carry/funding.ts, never inline.
- *   - Trade premium is premiumNative in the NATIVE settlement currency
- *     (BTC for inverse options), price × amount × contract_size. NOT quote currency.
- * Missing fields are null — never plausible defaults.
+ * Both market and tape requests use validated `/api/v1` envelopes. IVs are
+ * decimal, funding is the native decimal 8h print, missing fields remain null,
+ * and option-trade right/expiry are parsed at the server contract boundary.
  */
+import type { MarketEnvelope } from '../../packages/contracts/src';
 
 export type InstrumentKind = 'option' | 'future' | 'perp';
 
@@ -25,7 +16,6 @@ export interface NormalizedTicker {
   settlementCurrency: string | null;
   contractSize: number | null;
   kind: InstrumentKind;
-  /** ms epoch; null for perp (no expiry) */
   expiryMs: number | null;
   strike: number | null;
   optionType: 'call' | 'put' | null;
@@ -34,25 +24,19 @@ export interface NormalizedTicker {
   askPrice: number | null;
   markPrice: number | null;
   lastPrice: number | null;
-  /** decimal IVs — 0.55 renders as 55% */
   bidIv: number | null;
   askIv: number | null;
   markIv: number | null;
-  /** Venue-reported mark IV (observed feed layer), decimal. */
   feedIv: number | null;
-  /** IV solved from executable mid/bid/ask prices; null until solved. */
   midIv: number | null;
   bidIvDerived: number | null;
   askIvDerived: number | null;
-  /** Fitted/model IV, never substituted for an observed venue IV. */
   modelIv: number | null;
   indexPrice: number | null;
   openInterest: number | null;
   volume: number | null;
-  /** native 8h funding rate (decimal) — perp only */
   funding8h: number | null;
   timestamp: number;
-  /** true when a quote was joined for this catalogue row */
   hasQuote: boolean;
   isStale: boolean;
 }
@@ -61,18 +45,103 @@ export interface DeribitMarketBundle {
   currency: string;
   indexPrice: number | null;
   instruments: NormalizedTicker[];
-  /** joined-with-quote fraction of the ACTIVE catalogue (0..1), null when catalogue empty */
   coverage: number | null;
-  /** native 8h perp funding (decimal), null when perp quote missing */
   funding8h: number | null;
   fetchedAt: number;
   source: 'deribit';
 }
 
+interface V1Instrument {
+  instrument: string;
+  baseCurrency: string | null;
+  quoteCurrency: string | null;
+  settlementCurrency: string | null;
+  contractSize: number | null;
+  settlementPeriod: string | null;
+  isInverse: boolean;
+  kind: InstrumentKind;
+  expiryMs: number | null;
+  strike: number | null;
+  right: 'call' | 'put' | null;
+  bid: number | null;
+  ask: number | null;
+  mark: number | null;
+  last: number | null;
+  bidIv: number | null;
+  askIv: number | null;
+  markIv: number | null;
+  indexPrice: number | null;
+  openInterest: number | null;
+  volume: number | null;
+  funding8h: number | null;
+  timestamp: number | null;
+  tradable: boolean;
+}
+
+interface V1MarketData {
+  currency: 'BTC' | 'ETH';
+  indexPrice: number | null;
+  funding8h: number | null;
+  instruments: V1Instrument[];
+  count: number;
+}
+
+async function v1Json<T>(response: Response, label: string): Promise<MarketEnvelope<T>> {
+  const body = await response.json().catch(() => null) as (MarketEnvelope<T> & {
+    error?: { message?: string };
+  }) | null;
+  if (!response.ok || !body || body.schemaVersion !== 1 || !('data' in body)) {
+    throw new Error(body?.error?.message ?? `${label} ${response.status}`);
+  }
+  return body;
+}
+
 export async function fetchDeribitMarket(currency: string): Promise<DeribitMarketBundle> {
-  const res = await fetch(`/api/deribit/market/${encodeURIComponent(currency)}`);
-  if (!res.ok) throw new Error(`Deribit market ${res.status}`);
-  return res.json();
+  const response = await fetch(`/api/v1/market/crypto/${encodeURIComponent(currency)}`);
+  const envelope = await v1Json<V1MarketData>(response, 'Deribit market');
+  const fetchedAt = new Date(envelope.fetchedAt).getTime();
+  const stale = envelope.freshness === 'stale' || envelope.freshness === 'unavailable';
+  return {
+    currency: envelope.data.currency,
+    indexPrice: envelope.data.indexPrice,
+    instruments: envelope.data.instruments.map((row) => ({
+      instrument: row.instrument,
+      baseCurrency: row.baseCurrency,
+      quoteCurrency: row.quoteCurrency,
+      settlementCurrency: row.settlementCurrency,
+      contractSize: row.contractSize,
+      kind: row.kind,
+      expiryMs: row.expiryMs,
+      strike: row.strike,
+      optionType: row.right,
+      isInverse: row.isInverse,
+      bidPrice: row.bid,
+      askPrice: row.ask,
+      markPrice: row.mark,
+      lastPrice: row.last,
+      bidIv: row.bidIv,
+      askIv: row.askIv,
+      markIv: row.markIv,
+      feedIv: row.markIv,
+      midIv: null,
+      bidIvDerived: null,
+      askIvDerived: null,
+      modelIv: null,
+      indexPrice: row.indexPrice,
+      openInterest: row.openInterest,
+      volume: row.volume,
+      funding8h: row.funding8h,
+      timestamp: row.timestamp ?? fetchedAt,
+      hasQuote: row.tradable,
+      isStale: stale,
+    })),
+    coverage: envelope.coverage.denominator > 0
+      ? envelope.coverage.numerator / envelope.coverage.denominator
+      : null,
+    funding8h: envelope.data.funding8h,
+    fetchedAt,
+    source: 'deribit',
+  };
 }
 
 export interface DeribitTrade {
@@ -80,16 +149,22 @@ export interface DeribitTrade {
   timestamp: number | null;
   price: number;
   quantity: number;
-  /** taker side */
   side: 'buy' | 'sell';
-  /** decimal mark IV at trade time */
+  right: 'call' | 'put' | null;
+  expiry: string | null;
   markIv: number | null;
-  /** premium in NATIVE settlement currency (price × amount × contract_size) */
   premiumNative: number | null;
   contractSize: number | null;
   nativeCurrency: string | null;
   blockTrade: boolean;
   rfq: boolean;
+}
+
+interface V1TradesData {
+  currency: 'BTC' | 'ETH';
+  trades: DeribitTrade[];
+  count: number;
+  hasMore: boolean;
 }
 
 export async function fetchDeribitTrades(currency: string, hours = 24, count = 500): Promise<{
@@ -100,9 +175,13 @@ export async function fetchDeribitTrades(currency: string, hours = 24, count = 5
   fetchedAt: number;
   source: 'deribit';
 }> {
-  const res = await fetch(
-    `/api/deribit/trades/${encodeURIComponent(currency)}?hours=${hours}&count=${count}`,
+  const response = await fetch(
+    `/api/v1/market/crypto/${encodeURIComponent(currency)}/trades?hours=${hours}&count=${count}`,
   );
-  if (!res.ok) throw new Error(`Deribit trades ${res.status}`);
-  return res.json();
+  const envelope = await v1Json<V1TradesData>(response, 'Deribit trades');
+  return {
+    ...envelope.data,
+    fetchedAt: new Date(envelope.fetchedAt).getTime(),
+    source: 'deribit',
+  };
 }

@@ -10,9 +10,10 @@ describe('CryptoCarryView — Phase 7 contract guards', () => {
     expect(text).toContain('carry-funding-history');
     expect(text).toContain('basis-term-unavailable');
     expect(text).toContain('funding-history-unavailable');
-    expect(text).toContain('get_funding_history');
-    // Field mapping for the funding-history endpoint (points[].rate8h)
-    expect(text).toContain('r.rate8h ?? r.current_funding_8h');
+    expect(text).toContain('/api/v1/market/crypto/');
+    // Strict v1 points preserve missing rates instead of coercing them to zero.
+    expect(text).toContain('Number.isFinite(row.rate8h)');
+    expect(text).not.toContain('current_funding_8h ?? 0');
     // Current-funding reference line on the history chart
     expect(text).toContain('current 8h');
     // Robust percentile-clamped basis domain

@@ -772,7 +772,7 @@ async function fetchLiveSnapshot(symbol: string, force: boolean) {
           }),
         },
       });
-      if (!hasWarned(upper)) {
+      if (useTerminalStore.getState().activeTab !== 'crypto' && !hasWarned(upper)) {
         markWarned(upper);
         toast.warning('Live chain unavailable', {
           description:
@@ -838,7 +838,7 @@ async function fetchLiveSnapshot(symbol: string, force: boolean) {
       prefetchGreeks(upper, Number.isFinite(snap.dividendYield) ? snap.dividendYield : null);
     }
 
-    if (!provider.lastChainAvailable && !hasWarned(upper)) {
+    if (useTerminalStore.getState().activeTab !== 'crypto' && !provider.lastChainAvailable && !hasWarned(upper)) {
       markWarned(upper);
       toast.warning('Live chain unavailable', {
         description:
@@ -848,9 +848,11 @@ async function fetchLiveSnapshot(symbol: string, force: boolean) {
   } catch (err) {
     if (gen !== liveFetchGen) return;
     console.error('Failed to fetch live snapshot:', err);
-    toast.error('Live fetch failed', {
-      description: err instanceof Error ? err.message : 'Could not retrieve options data',
-    });
+    if (useTerminalStore.getState().activeTab !== 'crypto') {
+      toast.error('Live fetch failed', {
+        description: err instanceof Error ? err.message : 'Could not retrieve options data',
+      });
+    }
     const prev = useTerminalStore.getState();
     set({
       loading: false,

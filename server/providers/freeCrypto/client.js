@@ -6,13 +6,15 @@
  * so the app owns caching, timeout, and rate discipline.
  */
 
+import { deleteCache, getOrFetch } from '../../../api/upstreamCache.js';
+
 const VENUES = {
   binance: 'https://fapi.binance.com',
   bybit: 'https://api.bybit.com',
 };
 const TIMEOUT_MS = 8_000;
 const CACHE_TTL_MS = 15_000;
-const cache = new Map();
+const MAX_STALE_MS = 2 * 60_000;
 
 function symbolFor(currency) {
   const c = String(currency || '').toUpperCase();
@@ -98,27 +100,34 @@ export async function fetchFreeCryptoMarket(currency) {
   const c = String(currency || '').toUpperCase();
   const symbol = symbolFor(c);
   if (!symbol) throw Object.assign(new Error('currency must be BTC or ETH'), { status: 400 });
-  const hit = cache.get(c);
-  if (hit && Date.now() < hit.expiresAt) return hit.value;
-
-  const results = await Promise.allSettled([fetchBinance(symbol), fetchBybit(symbol)]);
-  const venues = results
-    .filter((r) => r.status === 'fulfilled')
-    .map((r) => r.value);
-  if (venues.length === 0) throw Object.assign(new Error('All free crypto venues unavailable'), { status: 502 });
-
-  const value = {
-    currency: c,
-    symbol,
-    venues,
-    fetchedAt: Date.now(),
-    source: 'free-exchanges',
-    note: 'Public Binance Futures and Bybit data; not Velo-normalized and not a trading feed.',
-  };
-  cache.set(c, { value, expiresAt: Date.now() + CACHE_TTL_MS });
-  return value;
+  const { data } = await getOrFetch(
+    `free-crypto:${c}`,
+    CACHE_TTL_MS,
+    async () => {
+      const results = await Promise.allSettled([fetchBinance(symbol), fetchBybit(symbol)]);
+      const venues = results
+        .filter((result) => result.status === 'fulfilled')
+        .map((result) => result.value);
+      if (venues.length === 0) throw Object.assign(new Error('All free crypto venues unavailable'), { status: 502 });
+      return {
+        currency: c,
+        symbol,
+        venues,
+        fetchedAt: Date.now(),
+        source: 'free-exchanges',
+        note: 'Public Binance Futures and Bybit data; not Velo-normalized and not a trading feed.',
+      };
+    },
+    {
+      allowStaleOnError: true,
+      maxStaleMs: MAX_STALE_MS,
+      cacheIf: (snapshot) => Array.isArray(snapshot?.venues) && snapshot.venues.length > 0,
+    },
+  );
+  return data;
 }
 
 export function resetFreeCryptoMarketCache() {
-  cache.clear();
+  deleteCache('free-crypto:BTC');
+  deleteCache('free-crypto:ETH');
 }

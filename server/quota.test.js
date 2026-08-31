@@ -44,6 +44,7 @@ describe('quota & single-flight (server cache)', () => {
     expect(results).toHaveLength(8);
     // The single upstream fill is proven by loader invocations, not fromCache flags.
     expect(loaderCalls).toBe(1);
+    expect(results.filter((result) => result.coalesced).length).toBe(7);
     // And a subsequent read is a cache hit within TTL.
     const again = await getOrFetch(key, 60_000, async () => ({ v: 2 }));
     expect(again.fromCache).toBe(true);
@@ -72,6 +73,37 @@ describe('quota & single-flight (server cache)', () => {
     expect(results.every((r) => r.status === 'rejected')).toBe(true);
   });
 
+  it('rejects stale-on-error data beyond the explicit maximum age', async () => {
+    vi.useFakeTimers();
+    try {
+      const { getOrFetch, setCache, clearCacheForTests } = await import('../api/upstreamCache.js');
+      clearCacheForTests();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      setCache('test:bounded-stale', { v: 'last-good' });
+      vi.setSystemTime(new Date('2026-01-01T00:02:01Z'));
+      await expect(getOrFetch(
+        'test:bounded-stale',
+        10_000,
+        async () => { throw new Error('provider down'); },
+        { allowStaleOnError: true, maxStaleMs: 120_000 },
+      )).rejects.toThrow('provider down');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not poison the last-success cache with rejected loader payloads', async () => {
+    const { getOrFetch, clearCacheForTests } = await import('../api/upstreamCache.js');
+    clearCacheForTests();
+    let calls = 0;
+    const load = async () => ({ valid: ++calls > 1 });
+    const first = await getOrFetch('test:cache-if', 60_000, load, { cacheIf: (row) => row.valid });
+    const second = await getOrFetch('test:cache-if', 60_000, load, { cacheIf: (row) => row.valid });
+    expect(first.data.valid).toBe(false);
+    expect(second.data.valid).toBe(true);
+    expect(calls).toBe(2);
+  });
+
   it('budget exhaustion path: recordBudget + budgetAllows refuse after cap', async () => {
     const { recordBudget, budgetAllows, getBudgetUsed, clearCacheForTests } = await import('../api/upstreamCache.js');
     clearCacheForTests();
@@ -91,7 +123,15 @@ describe('background-tab discipline (frontend)', () => {
     const storeSrc = fs.readFileSync(path.join(root, 'src/store/terminalStore.ts'), 'utf8');
     const ksaSrc = fs.readFileSync(path.join(root, 'src/components/views/KsaMarketView.tsx'), 'utf8');
     const stripSrc = fs.readFileSync(path.join(root, 'src/components/common/SharedDeskStrip.tsx'), 'utf8');
-    for (const [name, src] of [['terminalStore', storeSrc], ['KsaMarketView', ksaSrc], ['SharedDeskStrip', stripSrc]]) {
+    const cryptoBooksSrc = fs.readFileSync(path.join(root, 'src/hooks/useCryptoDualBooks.ts'), 'utf8');
+    const futuresSrc = fs.readFileSync(path.join(root, 'src/hooks/useDeribitFutures.ts'), 'utf8');
+    for (const [name, src] of [
+      ['terminalStore', storeSrc],
+      ['KsaMarketView', ksaSrc],
+      ['SharedDeskStrip', stripSrc],
+      ['useCryptoDualBooks', cryptoBooksSrc],
+      ['useDeribitFutures', futuresSrc],
+    ]) {
       expect(src.includes('document.hidden'), `${name} must gate polling on document.hidden`).toBe(true);
     }
     // The gate sits INSIDE the interval callback (poll skipped, timer alive)

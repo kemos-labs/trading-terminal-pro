@@ -36,10 +36,29 @@
     "healthData": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "timestamp"],
+      "required": ["status", "timestamp", "providerModes"],
       "properties": {
         "status": { "type": "string", "const": "ok" },
-        "timestamp": { "type": "integer", "minimum": 0 }
+        "timestamp": { "type": "integer", "minimum": 0 },
+        "providerModes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["crypto"],
+          "properties": {
+            "crypto": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "veloCredentialPresent", "veloConfigured", "fallbackProviders", "normalization"],
+              "properties": {
+                "mode": { "type": "string", "enum": ["velo-configuration-detected", "free-alternatives", "configuration-error"] },
+                "veloCredentialPresent": { "type": "boolean" },
+                "veloConfigured": { "type": "boolean" },
+                "fallbackProviders": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+                "normalization": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
       }
     },
     "desk": {

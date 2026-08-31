@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { providerEntitlements } from '../providers/entitlements.js';
 import { getOptionChainSnapshot } from './equityFeeds.js';
 import {
   getDeribitMarketSnapshot,
@@ -162,6 +163,7 @@ function baseEnvelope(request, {
 export function registerV1Routes(fastify) {
   fastify.get('/api/v1/system/health', async (request, reply) => {
     const now = Date.now();
+    const providerModes = providerEntitlements();
     const envelope = baseEnvelope(request, {
       asOf: now,
       fetchedAt: now,
@@ -171,8 +173,12 @@ export function registerV1Routes(fastify) {
       provenanceByField: { 'data.status': 'terminal-api', 'data.timestamp': 'terminal-api-clock' },
       unitsByField: { 'data.timestamp': 'unix-ms' },
       assumptions: [],
-      warnings: [],
-      data: { status: 'ok', timestamp: now },
+      warnings: providerModes.crypto.mode === 'free-alternatives'
+        ? ['VELO_NOT_CONFIGURED: crypto multi-venue panels use labelled public exchange alternatives.']
+        : providerModes.crypto.mode === 'configuration-error'
+          ? ['VELO_CONFIGURATION_INCOMPLETE: free fallback is disabled for canonical provider selection.']
+          : ['VELO_CONNECTOR_PENDING: configuration was detected, but no unverified vendor payload is presented as active.'],
+      data: { status: 'ok', timestamp: now, providerModes },
     });
     return sendContract(request, reply, 'healthResponse', envelope);
   });

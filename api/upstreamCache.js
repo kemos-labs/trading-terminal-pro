@@ -19,6 +19,15 @@ const inflight = new Map();
 export const MAX_CACHE_ENTRIES = Math.max(0, parseInt(process.env.MAX_CACHE_ENTRIES || '5000', 10) || 5000);
 /** Observability: total evictions since boot (surfaced via cacheStats). */
 let evictions = 0;
+const metrics = {
+  freshHits: 0,
+  misses: 0,
+  upstreamLoads: 0,
+  coalescedJoins: 0,
+  staleServes: 0,
+  loadErrors: 0,
+  rejectedPayloads: 0,
+};
 
 function setEntry(key, entry) {
   store.delete(key);
@@ -99,8 +108,8 @@ export function monthBudgetAllows(provider, maxPerMonth, headroom = 0.85) {
  * @param {string} key
  * @param {number} ttlMs
  * @param {() => Promise<T>} loader
- * @param {{ allowStaleOnError?: boolean, force?: boolean, cacheIf?: (data: T) => boolean }} [opts]
- * @returns {Promise<{ data: T, fromCache: boolean, ageMs: number, stale?: boolean }>}
+ * @param {{ allowStaleOnError?: boolean, maxStaleMs?: number, force?: boolean, cacheIf?: (data: T) => boolean }} [opts]
+ * @returns {Promise<{ data: T, fromCache: boolean, ageMs: number, stale?: boolean, coalesced?: boolean }>}
  *
  * `cacheIf` — when provided, only persist loader results that pass the predicate
  * (e.g. MacroVol proxy: cache only HTTP 2xx envelopes; never sticky 5xx bodies).
@@ -110,22 +119,37 @@ export function monthBudgetAllows(provider, maxPerMonth, headroom = 0.85) {
 export async function getOrFetch(key, ttlMs, loader, opts = {}) {
   const now = Date.now();
   const hit = touch(key);
-  if (!opts.force && hit && now - hit.timestamp < ttlMs) {
-    return { data: hit.data, fromCache: true, ageMs: now - hit.timestamp, stale: false };
+  const hitAgeMs = hit ? now - hit.timestamp : null;
+  if (!opts.force && hit && hitAgeMs < ttlMs) {
+    metrics.freshHits += 1;
+    return { data: hit.data, fromCache: true, ageMs: hitAgeMs, stale: false, coalesced: false };
   }
 
+  metrics.misses += 1;
   let pending = inflight.get(key);
+  const joinedInflight = Boolean(pending);
+  if (joinedInflight) metrics.coalescedJoins += 1;
   if (!pending) {
+    metrics.upstreamLoads += 1;
     pending = (async () => {
       try {
         const data = await loader();
-        const okToCache = typeof opts.cacheIf === 'function' ? !!opts.cacheIf(data) : true;
+        const okToCache = typeof opts.cacheIf === 'function' ? Boolean(opts.cacheIf(data)) : true;
         if (okToCache) {
           setEntry(key, { data, timestamp: Date.now() });
+        } else {
+          metrics.rejectedPayloads += 1;
         }
         return { data, stale: false, hitTs: null };
       } catch (err) {
-        if (opts.allowStaleOnError !== false && hit) {
+        metrics.loadErrors += 1;
+        const defaultMaxStaleMs = Math.max(ttlMs, ttlMs * 10);
+        const maxStaleMs = Number.isFinite(opts.maxStaleMs)
+          ? Math.max(0, Number(opts.maxStaleMs))
+          : defaultMaxStaleMs;
+        const staleAgeMs = hit ? Date.now() - hit.timestamp : Infinity;
+        if (opts.allowStaleOnError !== false && hit && staleAgeMs <= maxStaleMs) {
+          metrics.staleServes += 1;
           return { data: hit.data, stale: true, hitTs: hit.timestamp };
         }
         throw err;
@@ -143,12 +167,13 @@ export async function getOrFetch(key, ttlMs, loader, opts = {}) {
       fromCache: true,
       ageMs: result.hitTs != null ? Date.now() - result.hitTs : 0,
       stale: true,
+      coalesced: joinedInflight,
     };
   }
   const entry = store.get(key);
   const ageMs = entry ? Date.now() - entry.timestamp : 0;
-  // Fresh network fill (or single-flight join on a miss) reports fromCache: false.
-  return { data: result.data, fromCache: false, ageMs, stale: false };
+  // A single-flight join shares a successful upstream fill; it is not a prior cache hit.
+  return { data: result.data, fromCache: false, ageMs, stale: false, coalesced: joinedInflight };
 }
 
 export function peek(key) {
@@ -159,10 +184,17 @@ export function peek(key) {
 export function clearCacheForTests() {
   store.clear();
   inflight.clear();
+  evictions = 0;
+  for (const key of Object.keys(metrics)) metrics[key] = 0;
 }
 
 export function setCache(key, data) {
   setEntry(key, { data, timestamp: Date.now() });
+}
+
+export function deleteCache(key) {
+  store.delete(key);
+  inflight.delete(key);
 }
 
 /** Free-tier caps (documented; use with headroom 0.85). */
@@ -218,6 +250,8 @@ export function cacheStats() {
     entries: store.size,
     maxEntries: MAX_CACHE_ENTRIES,
     evictions,
+    inFlight: inflight.size,
+    metrics: { ...metrics },
     keys,
     budgets: {
       fmp: { used: getBudgetUsed('fmp'), capDaily: FMP_FREE_DAILY },

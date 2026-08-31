@@ -20,6 +20,7 @@ import { registerAcademyDocsRoutes } from './routes/academyDocs.js';
 import { registerHomeBriefingRoutes } from './routes/homeBriefing.js';
 import { registerOpenApiRoutes } from './routes/openapi.js';
 import { registerV1Routes } from './routes/v1.js';
+import { providerEntitlements } from './providers/entitlements.js';
 import { registerStripeBilling, gateInfoForRequest } from '../api/stripeBilling.js';
 import { registerStripeAuth } from '../api/authRoutes.js';
 import { resolveProxyTrust } from '../api/proxyTrust.js';
@@ -262,7 +263,11 @@ export async function buildServer({ onRoute } = {}) {
 
   // Health + cache status
   fastify.get('/api/health', async () => ({ status: 'ok', timestamp: Date.now() }));
-  fastify.get('/api/cache/status', async () => ({ status: 'ok', ...cacheStats() }));
+  fastify.get('/api/cache/status', async () => ({
+    status: 'ok',
+    providerModes: providerEntitlements(),
+    ...cacheStats(),
+  }));
   // Routes
   registerBootRoutes(fastify);
   registerFmpRoutes(fastify);

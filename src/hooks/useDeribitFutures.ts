@@ -2,8 +2,8 @@
  * useDeribitFutures — instruments + bulk tickers + index → basis rows.
  * useDeribitFundingHistory — perp funding-rate history (8h + annualized).
  *
- * Data comes from our own /api/deribit-market/* proxy routes (Deribit public
- * API, server-cached). Fail-closed: on upstream failure the hook keeps the
+ * Data comes from our canonical /api/v1 crypto market contracts (Deribit
+ * public API, server-cached). Fail-closed: on upstream failure the hook keeps the
  * last good rows and surfaces `error` + `stale`; it never fabricates values.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -68,6 +68,7 @@ export function useDeribitFutures(
     setAsOf(null);
 
     const load = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       const [inst, tk, idx] = await Promise.all([
         listFutures(currency),
         fetchTickers(currency),
@@ -156,6 +157,10 @@ export function useDeribitFundingHistory(params?: {
     setBundle(null);
 
     void (async () => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        setLoading(false);
+        return;
+      }
       const data = await fetchFundingHistory(instrumentName, days);
       if (cancelled) return;
       if (!data || data.points.length === 0) {
@@ -169,6 +174,7 @@ export function useDeribitFundingHistory(params?: {
     const id = setInterval(
       () =>
         void (async () => {
+          if (typeof document !== 'undefined' && document.hidden) return;
           const data = await fetchFundingHistory(instrumentName, days);
           if (cancelled) return;
           if (data && data.points.length > 0) {

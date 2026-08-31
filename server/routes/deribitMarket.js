@@ -22,8 +22,10 @@ import {
 import { getOrFetch } from '../../api/upstreamCache.js';
 
 const CATALOGUE_TTL_MS = 5 * 60_000; // listings change ~daily
-const _QUOTES_TTL_MS = 20_000;
-const _TRADES_TTL_MS = 5_000;
+const QUOTES_TTL_MS = 20_000;
+const TRADES_TTL_MS = 5_000;
+const FUNDING_TTL_MS = 60_000;
+const MAX_DERIBIT_STALE_MS = 5 * 60_000;
 
 function parseCurrency(currency) {
   const c = String(currency || '').trim().toUpperCase();
@@ -39,7 +41,7 @@ async function loadCatalogue(currency) {
       .filter((r) => r && r.instrument_name && r.is_active)
       .map(normalizeCatalogueEntry)
       .filter(Boolean);
-  }, { allowStaleOnError: true }).then((r) => r.data);
+  }, { allowStaleOnError: true, maxStaleMs: 24 * 60 * 60_000 }).then((result) => result.data);
 }
 
 /** Quotes for options and futures from book summaries; perp from ticker. */
@@ -68,7 +70,7 @@ async function loadQuotes(currency) {
   return quotes;
 }
 
-export async function getDeribitMarketSnapshot(currency) {
+async function loadDeribitMarketSnapshot(currency) {
   const catalogue = await loadCatalogue(currency);
   const quotes = await loadQuotes(currency);
   const { rows, coverage } = joinCatalogueWithQuotes(catalogue, quotes, Date.now());
@@ -86,7 +88,21 @@ export async function getDeribitMarketSnapshot(currency) {
   };
 }
 
-export async function getDeribitTradesSnapshot(currency, hours = 24, count = 500) {
+export async function getDeribitMarketSnapshot(currency) {
+  const { data } = await getOrFetch(
+    `deribit:market:${currency}`,
+    QUOTES_TTL_MS,
+    () => loadDeribitMarketSnapshot(currency),
+    {
+      allowStaleOnError: true,
+      maxStaleMs: MAX_DERIBIT_STALE_MS,
+      cacheIf: (snapshot) => Number(snapshot?.coverage?.quotedCount) > 0,
+    },
+  );
+  return data;
+}
+
+async function loadDeribitTradesSnapshot(currency, hours = 24, count = 500) {
   const start = Date.now() - hours * 3_600_000;
   const result = await deribitFetch(
     `get_last_trades_by_currency_and_time?currency=${currency}&kind=option&start_timestamp=${start}&count=${count}&sorting=desc`,
@@ -105,7 +121,18 @@ export async function getDeribitTradesSnapshot(currency, hours = 24, count = 500
   };
 }
 
-export async function getDeribitFundingSnapshot(currency, instrumentName, days) {
+export async function getDeribitTradesSnapshot(currency, hours = 24, count = 500) {
+  const normalizedCount = count <= 100 ? 100 : count <= 500 ? 500 : 1000;
+  const { data } = await getOrFetch(
+    `deribit:trades:${currency}:${hours}:${normalizedCount}`,
+    TRADES_TTL_MS,
+    () => loadDeribitTradesSnapshot(currency, hours, normalizedCount),
+    { allowStaleOnError: true, maxStaleMs: 60_000 },
+  );
+  return data;
+}
+
+async function loadDeribitFundingSnapshot(currency, instrumentName, days) {
   const end = Date.now();
   const start = end - days * 86_400_000;
   const result = await deribitFetch(
@@ -137,6 +164,16 @@ export async function getDeribitFundingSnapshot(currency, instrumentName, days) 
     fetchedAt: Date.now(),
     source: 'deribit',
   };
+}
+
+export async function getDeribitFundingSnapshot(currency, instrumentName, days) {
+  const { data } = await getOrFetch(
+    `deribit:funding:${currency}:${days}`,
+    FUNDING_TTL_MS,
+    () => loadDeribitFundingSnapshot(currency, instrumentName, days),
+    { allowStaleOnError: true, maxStaleMs: MAX_DERIBIT_STALE_MS },
+  );
+  return data;
 }
 
 export async function registerDeribitMarketRoutes(fastify) {

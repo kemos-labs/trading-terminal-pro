@@ -205,6 +205,7 @@ export function useCryptoDualBooks(opts?: { dualCharts?: boolean }) {
     const storeSnapAtStart = storeSnap;
 
     const load = async (force: boolean) => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       const now = Date.now();
       const lastFetch = { btc: lastBtcFetch.current, eth: lastEthFetch.current };
       const needGecko = force || now - lastGeckoFetch.current >= GECKO_MS;

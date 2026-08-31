@@ -140,6 +140,11 @@ describe('canonical /api/v1 contracts', () => {
     const perpetual = body.data.instruments.find((row) => row.kind === 'perp');
     expect(perpetual).toMatchObject({ funding8h: null, openInterest: null });
     expect(body.data.instruments.every((row) => row.expiryMs == null || row.expiryMs > Date.now())).toBe(true);
+    expect(body.cache).toMatchObject({ state: 'miss', hit: false, stale: false });
+    const upstreamCalls = global.fetch.mock.calls.length;
+    const cached = await app.inject('/api/v1/market/crypto/BTC');
+    expect(cached.json().cache).toMatchObject({ state: 'fresh', hit: true, stale: false });
+    expect(global.fetch).toHaveBeenCalledTimes(upstreamCalls);
   });
 
   it('labels funding units and preserves observed history through the v1 contract', async () => {
@@ -151,6 +156,9 @@ describe('canonical /api/v1 contracts', () => {
     expect(body.data.points[1].rate8h).toBe(0.00006);
     expect(body.data.points[1].annualizedPct).toBeCloseTo(6.57, 10);
     expect(body.unitsByField['data.points[].rate8h']).toBe('decimal-per-8h');
+    expect(body.cache).toMatchObject({ state: 'miss', hit: false });
+    expect((await app.inject('/api/v1/market/crypto/BTC/funding?days=30')).json().cache)
+      .toMatchObject({ state: 'fresh', hit: true });
   });
 
   it('parses Deribit trade right and expiry at the contract boundary', async () => {
@@ -159,6 +167,9 @@ describe('canonical /api/v1 contracts', () => {
     const body = response.json();
     expect(validateContract('cryptoTradesResponse', body)).toMatchObject({ valid: true });
     expect(body.data.trades[0]).toMatchObject({ right: 'call', expiry: '2030-12-30', side: 'buy' });
+    expect(body.cache).toMatchObject({ state: 'miss', hit: false });
+    expect((await app.inject('/api/v1/market/crypto/BTC/trades?hours=24&count=100')).json().cache)
+      .toMatchObject({ state: 'fresh', hit: true });
   });
 
   it('returns strict typed errors and rejects additional response properties', async () => {

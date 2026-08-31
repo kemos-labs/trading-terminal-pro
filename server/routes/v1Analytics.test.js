@@ -153,6 +153,9 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     expect(validateContract('cryptoCarryResponse', body)).toMatchObject({ valid: true });
     expect(body.data.sources).toMatchObject({ deribitFunding: true, freeExchanges: true });
     expect(body.data.indexPrice).toBe(60000);
+    expect(body.cache).toMatchObject({ state: 'miss', hit: false, stale: false });
+    const cached = await app.inject('/api/v1/crypto/carry/BTC');
+    expect(cached.json().cache).toMatchObject({ state: 'fresh', hit: true, stale: false });
   });
 
   it('crypto/flow aggregates buy/sell call/put and validates the contract', async () => {
@@ -162,6 +165,9 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     expect(validateContract('cryptoFlowResponse', body)).toMatchObject({ valid: true });
     expect(body.data.aggregates.calls.buy.count).toBe(1);
     expect(body.data.count).toBe(1);
+    expect(body.cache).toMatchObject({ state: 'miss', hit: false, stale: false });
+    expect((await app.inject('/api/v1/crypto/flow/BTC?hours=24&count=100')).json().cache)
+      .toMatchObject({ state: 'fresh', hit: true, stale: false });
     // invalid hours → typed 400
     const bad = await app.inject('/api/v1/crypto/flow/BTC?hours=7');
     expect(bad.statusCode).toBe(400);

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { fetchFreeCryptoMarket, resetFreeCryptoMarketCache } from './client.js';
+import { fetchFreeCryptoMarket, fetchFreeCryptoMarketResult, resetFreeCryptoMarketCache } from './client.js';
 
 const realFetch = global.fetch;
 const payload = (price = '100') => ({
@@ -65,6 +65,31 @@ describe('free crypto provider normalization', () => {
     mockFetch(payload());
     await fetchFreeCryptoMarket('BTC');
     expect(global.fetch).toHaveBeenCalledTimes(4);
+    vi.useRealTimers();
+  });
+
+  it('preserves miss, fresh-hit, and single-flight metadata for canonical consumers', async () => {
+    mockFetch(payload());
+    const [first, joined] = await Promise.all([
+      fetchFreeCryptoMarketResult('BTC'),
+      fetchFreeCryptoMarketResult('BTC'),
+    ]);
+    expect(first).toMatchObject({ fromCache: false, stale: false, coalesced: false });
+    expect(joined).toMatchObject({ fromCache: false, stale: false, coalesced: true });
+    const hit = await fetchFreeCryptoMarketResult('BTC');
+    expect(hit).toMatchObject({ fromCache: true, stale: false, coalesced: false });
+    expect(hit.ageMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('preserves a bounded stale-on-error state instead of relabelling it live', async () => {
+    vi.useFakeTimers();
+    mockFetch(payload());
+    await fetchFreeCryptoMarketResult('BTC');
+    await vi.advanceTimersByTimeAsync(15_001);
+    mockFetch({ binance: [new Error('down'), new Error('down'), new Error('down')], bybit: new Error('down') });
+    const stale = await fetchFreeCryptoMarketResult('BTC');
+    expect(stale).toMatchObject({ fromCache: true, stale: true, coalesced: false });
+    expect(stale.ageMs).toBeGreaterThanOrEqual(15_001);
     vi.useRealTimers();
   });
 

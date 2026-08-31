@@ -10,11 +10,11 @@ import { providerEntitlements } from '../providers/entitlements.js';
 import { cacheStats, getOrFetch } from '../../api/upstreamCache.js';
 import { resolveRatesWorkerUrl } from '../ratesWorkerUrl.js';
 import {
-  getDeribitFundingSnapshot,
-  getDeribitMarketSnapshot,
-  getDeribitTradesSnapshot,
+  getDeribitFundingSnapshotResult,
+  getDeribitMarketSnapshotResult,
+  getDeribitTradesSnapshotResult,
 } from './deribitMarket.js';
-import { fetchFreeCryptoMarket } from '../providers/freeCrypto/client.js';
+import { fetchFreeCryptoMarketResult } from '../providers/freeCrypto/client.js';
 import { academyIndexJson } from '../../api/academyCatalog.js';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,6 +53,34 @@ async function workerJson(suffix, query = '', ttlMs = 60_000) {
     if (!res.ok) throw new Error(`worker ${res.status}`);
     return res.json();
   }, { allowStaleOnError: true, maxStaleMs: 10 * ttlMs });
+}
+
+function cacheEnvelope(result) {
+  return {
+    state: result.stale ? 'stale' : result.fromCache ? 'fresh' : 'miss',
+    hit: Boolean(result.fromCache),
+    ageMs: Number.isFinite(result.ageMs) ? Math.max(0, result.ageMs) : null,
+    stale: Boolean(result.stale),
+    coalesced: Boolean(result.coalesced),
+  };
+}
+
+function combinedCacheEnvelope(settledResults) {
+  const results = settledResults
+    .filter((result) => result.status === 'fulfilled')
+    .map((result) => result.value);
+  if (results.length === 0) {
+    return { state: 'unavailable', hit: false, ageMs: null, stale: false, coalesced: false };
+  }
+  const stale = results.some((result) => result.stale);
+  const allHits = results.every((result) => result.fromCache);
+  return {
+    state: stale ? 'stale' : allHits ? 'fresh' : 'miss',
+    hit: allHits,
+    ageMs: Math.max(...results.map((result) => Number.isFinite(result.ageMs) ? Math.max(0, result.ageMs) : 0)),
+    stale,
+    coalesced: results.some((result) => result.coalesced),
+  };
 }
 
 export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, baseEnvelope, coverage } = {}) {
@@ -245,9 +273,9 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
   }, async (request, reply) => {
     const currency = request.params.currency.toUpperCase();
     const [funding, market, free] = await Promise.allSettled([
-      getDeribitFundingSnapshot(currency, `${currency}-PERPETUAL`, 7),
-      getDeribitMarketSnapshot(currency),
-      fetchFreeCryptoMarket(currency),
+      getDeribitFundingSnapshotResult(currency, `${currency}-PERPETUAL`, 7),
+      getDeribitMarketSnapshotResult(currency),
+      fetchFreeCryptoMarketResult(currency),
     ]);
     if (funding.status === 'rejected' && market.status === 'rejected' && free.status === 'rejected') {
       return sendError(request, reply, {
@@ -259,8 +287,8 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
       });
     }
     const now = Date.now();
-    const fundingBody = funding.status === 'fulfilled' ? funding.value : null;
-    const marketSnapshot = market.status === 'fulfilled' ? market.value : null;
+    const fundingBody = funding.status === 'fulfilled' ? funding.value.data : null;
+    const marketSnapshot = market.status === 'fulfilled' ? market.value.data : null;
     const fundingPoints = (fundingBody?.points ?? []).slice(-7).map((p) => ({
       timestamp: finiteOrNull(p.t ?? p.timestamp),
       rate8h: finiteOrNull(p.rate8h),
@@ -284,12 +312,13 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
           basisPct: mark != null && indexPrice != null && indexPrice > 0 ? ((mark / indexPrice) - 1) * 100 : null,
         };
       });
-    const freeBody = free.status === 'fulfilled' ? free.value : null;
+    const freeBody = free.status === 'fulfilled' ? free.value.data : null;
+    const cache = combinedCacheEnvelope([funding, market, free]);
     const envelope = baseEnvelope(request, {
       asOf: fundingBody?.fetchedAt ?? marketSnapshot?.fetchedAt ?? now,
       fetchedAt: now,
       source: ['deribit', 'free-exchanges'],
-      freshness: 'live',
+      freshness: cache.stale ? 'stale' : 'live',
       coverage: coverage(
         [funding.status === 'fulfilled', market.status === 'fulfilled', free.status === 'fulfilled'].filter(Boolean).length,
         3,
@@ -299,6 +328,7 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
           free.status === 'rejected' ? 'free-exchanges' : null,
         ].filter(Boolean),
       ),
+      cache,
       provenanceByField: {
         'data.fundingPoints': 'deribit-get_funding_rate_history',
         'data.perpPremiumPct': 'deribit-mark-vs-index',
@@ -352,9 +382,9 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
     const currency = request.params.currency.toUpperCase();
     const hours = Number(request.query?.hours ?? 24);
     const count = Number(request.query?.count ?? 500);
-    let body;
+    let result;
     try {
-      body = await getDeribitTradesSnapshot(currency, hours, count);
+      result = await getDeribitTradesSnapshotResult(currency, hours, count);
     } catch {
       return sendError(request, reply, {
         statusCode: 502,
@@ -364,6 +394,7 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
         provider: 'deribit',
       });
     }
+    const body = result.data;
     const trades = (body.trades ?? [])
       .map((t) => {
         const instrument = String(t.instrument ?? '');
@@ -408,8 +439,9 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
       asOf: trades[0]?.timestamp ?? now,
       fetchedAt: body.fetchedAt ?? now,
       source: ['deribit'],
-      freshness: 'live',
+      freshness: result.stale ? 'stale' : 'live',
       coverage: coverage(trades.length, (body.trades ?? []).length, trades.length < (body.trades ?? []).length ? ['invalid-trades-dropped'] : []),
+      cache: cacheEnvelope(result),
       provenanceByField: { 'data.trades': 'deribit-get_last_trades_by_currency_and_time' },
       unitsByField: {
         'data.aggregates.*.notional': 'venue-native-premium-notional',

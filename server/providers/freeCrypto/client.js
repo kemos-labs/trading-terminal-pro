@@ -96,11 +96,11 @@ async function fetchBybit(symbol) {
   return venue;
 }
 
-export async function fetchFreeCryptoMarket(currency) {
+export async function fetchFreeCryptoMarketResult(currency) {
   const c = String(currency || '').toUpperCase();
   const symbol = symbolFor(c);
   if (!symbol) throw Object.assign(new Error('currency must be BTC or ETH'), { status: 400 });
-  const { data } = await getOrFetch(
+  return getOrFetch(
     `free-crypto:${c}`,
     CACHE_TTL_MS,
     async () => {
@@ -124,7 +124,10 @@ export async function fetchFreeCryptoMarket(currency) {
       cacheIf: (snapshot) => Array.isArray(snapshot?.venues) && snapshot.venues.length > 0,
     },
   );
-  return data;
+}
+
+export async function fetchFreeCryptoMarket(currency) {
+  return (await fetchFreeCryptoMarketResult(currency)).data;
 }
 
 export function resetFreeCryptoMarketCache() {

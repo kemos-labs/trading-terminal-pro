@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { providerEntitlements } from '../providers/entitlements.js';
 import { getOptionChainSnapshot } from './equityFeeds.js';
 import {
-  getDeribitMarketSnapshot,
-  getDeribitTradesSnapshot,
-  getDeribitFundingSnapshot,
+  getDeribitMarketSnapshotResult,
+  getDeribitTradesSnapshotResult,
+  getDeribitFundingSnapshotResult,
 } from './deribitMarket.js';
 import { registerV1AnalyticsRoutes } from './v1Analytics.js';
 import {
@@ -163,6 +163,16 @@ function baseEnvelope(request, {
   });
 }
 
+function cacheEnvelope(result) {
+  return {
+    state: result.stale ? 'stale' : result.fromCache ? 'fresh' : 'miss',
+    hit: Boolean(result.fromCache),
+    ageMs: Number.isFinite(result.ageMs) ? Math.max(0, result.ageMs) : null,
+    stale: Boolean(result.stale),
+    coalesced: Boolean(result.coalesced),
+  };
+}
+
 export function registerV1Routes(fastify) {
   registerV1AnalyticsRoutes(fastify, { sendContract, sendError, baseEnvelope, coverage });
   fastify.get('/api/v1/system/health', async (request, reply) => {
@@ -310,9 +320,9 @@ export function registerV1Routes(fastify) {
         retryable: false,
       });
     }
-    let marketSnapshot;
+    let marketResult;
     try {
-      marketSnapshot = await getDeribitMarketSnapshot(currency);
+      marketResult = await getDeribitMarketSnapshotResult(currency);
     } catch {
       return sendError(request, reply, {
         statusCode: 502,
@@ -322,6 +332,7 @@ export function registerV1Routes(fastify) {
         provider: 'deribit',
       });
     }
+    const marketSnapshot = marketResult?.data;
     if (!marketSnapshot || !Array.isArray(marketSnapshot.instruments)) {
       return sendError(request, reply, {
         statusCode: 502,
@@ -389,6 +400,7 @@ export function registerV1Routes(fastify) {
       source: ['deribit'],
       freshness: freshnessFrom(fetchedAt),
       coverage: coverage(observed, instruments.length, missing),
+      cache: cacheEnvelope(marketResult),
       provenanceByField: {
         'data.indexPrice': 'deribit-get_index_price',
         'data.instruments': 'deribit-catalogue-joined-with-book-summary',
@@ -457,9 +469,9 @@ export function registerV1Routes(fastify) {
       });
     }
     const days = requestedDays;
-    let fundingSnapshot;
+    let fundingResult;
     try {
-      fundingSnapshot = await getDeribitFundingSnapshot(currency, instrumentName, days);
+      fundingResult = await getDeribitFundingSnapshotResult(currency, instrumentName, days);
     } catch {
       return sendError(request, reply, {
         statusCode: 502,
@@ -469,6 +481,7 @@ export function registerV1Routes(fastify) {
         provider: 'deribit',
       });
     }
+    const fundingSnapshot = fundingResult?.data;
     if (!fundingSnapshot || !Array.isArray(fundingSnapshot.points)) {
       return sendError(request, reply, {
         statusCode: 502,
@@ -498,6 +511,7 @@ export function registerV1Routes(fastify) {
       source: ['deribit'],
       freshness: freshnessFrom(fetchedAt),
       coverage: coverage(points.length, legacy.body.points.length, missing),
+      cache: cacheEnvelope(fundingResult),
       provenanceByField: { 'data.points': 'deribit-get_funding_rate_history' },
       unitsByField: {
         'data.points[].rate8h': 'decimal-per-8h',
@@ -564,9 +578,9 @@ export function registerV1Routes(fastify) {
       });
     }
     const count = requestedCount;
-    let tradesSnapshot;
+    let tradesResult;
     try {
-      tradesSnapshot = await getDeribitTradesSnapshot(currency, hours, count);
+      tradesResult = await getDeribitTradesSnapshotResult(currency, hours, count);
     } catch {
       return sendError(request, reply, {
         statusCode: 502,
@@ -576,6 +590,7 @@ export function registerV1Routes(fastify) {
         provider: 'deribit',
       });
     }
+    const tradesSnapshot = tradesResult?.data;
     if (!tradesSnapshot || !Array.isArray(tradesSnapshot.trades)) {
       return sendError(request, reply, {
         statusCode: 502,
@@ -618,6 +633,7 @@ export function registerV1Routes(fastify) {
       source: ['deribit'],
       freshness: freshnessFrom(fetchedAt),
       coverage: coverage(trades.length, legacy.body.trades.length, missing),
+      cache: cacheEnvelope(tradesResult),
       provenanceByField: { 'data.trades': 'deribit-get_last_trades_by_currency_and_time' },
       unitsByField: {
         'data.trades[].price': 'venue-native-premium-per-contract',

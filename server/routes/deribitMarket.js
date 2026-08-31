@@ -88,18 +88,21 @@ async function loadDeribitMarketSnapshot(currency) {
   };
 }
 
-export async function getDeribitMarketSnapshot(currency) {
-  const { data } = await getOrFetch(
+export async function getDeribitMarketSnapshotResult(currency) {
+  return getOrFetch(
     `deribit:market:${currency}`,
     QUOTES_TTL_MS,
     () => loadDeribitMarketSnapshot(currency),
     {
       allowStaleOnError: true,
       maxStaleMs: MAX_DERIBIT_STALE_MS,
-      cacheIf: (snapshot) => Number(snapshot?.coverage?.quotedCount) > 0,
+      cacheIf: (snapshot) => Number(snapshot?.coverage) > 0,
     },
   );
-  return data;
+}
+
+export async function getDeribitMarketSnapshot(currency) {
+  return (await getDeribitMarketSnapshotResult(currency)).data;
 }
 
 async function loadDeribitTradesSnapshot(currency, hours = 24, count = 500) {
@@ -121,15 +124,18 @@ async function loadDeribitTradesSnapshot(currency, hours = 24, count = 500) {
   };
 }
 
-export async function getDeribitTradesSnapshot(currency, hours = 24, count = 500) {
+export async function getDeribitTradesSnapshotResult(currency, hours = 24, count = 500) {
   const normalizedCount = count <= 100 ? 100 : count <= 500 ? 500 : 1000;
-  const { data } = await getOrFetch(
+  return getOrFetch(
     `deribit:trades:${currency}:${hours}:${normalizedCount}`,
     TRADES_TTL_MS,
     () => loadDeribitTradesSnapshot(currency, hours, normalizedCount),
     { allowStaleOnError: true, maxStaleMs: 60_000 },
   );
-  return data;
+}
+
+export async function getDeribitTradesSnapshot(currency, hours = 24, count = 500) {
+  return (await getDeribitTradesSnapshotResult(currency, hours, count)).data;
 }
 
 async function loadDeribitFundingSnapshot(currency, instrumentName, days) {
@@ -166,14 +172,17 @@ async function loadDeribitFundingSnapshot(currency, instrumentName, days) {
   };
 }
 
-export async function getDeribitFundingSnapshot(currency, instrumentName, days) {
-  const { data } = await getOrFetch(
+export async function getDeribitFundingSnapshotResult(currency, instrumentName, days) {
+  return getOrFetch(
     `deribit:funding:${currency}:${days}`,
     FUNDING_TTL_MS,
     () => loadDeribitFundingSnapshot(currency, instrumentName, days),
     { allowStaleOnError: true, maxStaleMs: MAX_DERIBIT_STALE_MS },
   );
-  return data;
+}
+
+export async function getDeribitFundingSnapshot(currency, instrumentName, days) {
+  return (await getDeribitFundingSnapshotResult(currency, instrumentName, days)).data;
 }
 
 export async function registerDeribitMarketRoutes(fastify) {
@@ -232,7 +241,12 @@ export async function registerDeribitMarketRoutes(fastify) {
       return { error: 'Invalid index (use btc_usd or eth_usd)' };
     }
     try {
-      const result = await deribitFetch(`get_index_price?index_name=${name}`);
+      const { data: result } = await getOrFetch(
+        `deribit:index:${name}`,
+        QUOTES_TTL_MS,
+        () => deribitFetch(`get_index_price?index_name=${name}`),
+        { allowStaleOnError: true, maxStaleMs: MAX_DERIBIT_STALE_MS },
+      );
       return { index_price: result.index_price, estimated_delivery_price: result.estimated_delivery_price, timestamp: Date.now() };
     } catch (err) {
       reply.code(502);

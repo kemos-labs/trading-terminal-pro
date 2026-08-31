@@ -66,7 +66,10 @@ function installDeribitBoundary() {
     }
     if (url.pathname.endsWith('/get_last_trades_by_currency_and_time')) {
       return deribitResponse({
-        trades: [{ instrument_name: 'BTC-30DEC30-60000-C', timestamp, price: 0.05, amount: 2, direction: 'buy', mark_iv: 55, block_trade: false }],
+        trades: [
+          { instrument_name: 'BTC-30DEC30-60000-C', timestamp, price: 0.05, amount: 2, direction: 'buy', mark_iv: 55, block_trade: false },
+          { instrument_name: 'BTC-31FEB30-60000-P', timestamp, price: 0.04, amount: 1, direction: 'sell', mark_iv: 54, block_trade: false },
+        ],
         has_more: false,
       });
     }
@@ -167,6 +170,8 @@ describe('canonical /api/v1 contracts', () => {
     const body = response.json();
     expect(validateContract('cryptoTradesResponse', body)).toMatchObject({ valid: true });
     expect(body.data.trades[0]).toMatchObject({ right: 'call', expiry: '2030-12-30', side: 'buy' });
+    expect(body.data.count).toBe(1);
+    expect(body.coverage).toMatchObject({ state: 'partial', missing: ['invalid-trades'] });
     expect(body.cache).toMatchObject({ state: 'miss', hit: false });
     expect((await app.inject('/api/v1/market/crypto/BTC/trades?hours=24&count=100')).json().cache)
       .toMatchObject({ state: 'fresh', hit: true });

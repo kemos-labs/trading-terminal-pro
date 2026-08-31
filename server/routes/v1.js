@@ -76,8 +76,15 @@ function parseDeribitOption(instrument) {
   if (!match) return { right: null, expiry: null };
   const month = MONTHS.get(match[3].toUpperCase());
   if (month == null) return { right: null, expiry: null };
-  const date = new Date(Date.UTC(2000 + Number(match[4]), month, Number(match[2])));
-  const expiry = Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : null;
+  const year = 2000 + Number(match[4]);
+  const day = Number(match[2]);
+  const date = new Date(Date.UTC(year, month, day));
+  const expiry = Number.isFinite(date.getTime())
+    && date.getUTCFullYear() === year
+    && date.getUTCMonth() === month
+    && date.getUTCDate() === day
+    ? date.toISOString().slice(0, 10)
+    : null;
   return { right: match[6].toUpperCase() === 'C' ? 'call' : 'put', expiry };
 }
 
@@ -608,7 +615,8 @@ export function registerV1Routes(fastify) {
       const price = nonNegativeOrNull(trade.price);
       const quantity = positiveOrNull(trade.quantity);
       const side = trade.side === 'buy' || trade.side === 'sell' ? trade.side : null;
-      if (!instrument || timestamp == null || price == null || quantity == null || side == null) return [];
+      if (!instrument || timestamp == null || price == null || quantity == null || side == null
+        || parsed.right == null || parsed.expiry == null) return [];
       return [{
         instrument,
         timestamp,

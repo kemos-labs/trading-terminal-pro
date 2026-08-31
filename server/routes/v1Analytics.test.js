@@ -87,6 +87,7 @@ function installBoundaryMock() {
       return deribitResult({
         trades: [
           { trade_id: 'a', instrument_name: 'BTC-30DEC30-60000-C', timestamp: timestamp - 1000, price: 0.05, amount: 10, index_price: 60000, mark_price: 0.051, direction: 'buy', block_trade: false, tick_direction: 2, iv: 55 },
+          { trade_id: 'bad-date', instrument_name: 'BTC-31FEB30-60000-P', timestamp, price: 0.04, amount: 1, index_price: 60000, direction: 'sell', block_trade: false, iv: 54 },
         ],
         has_more: false,
       });
@@ -165,6 +166,7 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     expect(validateContract('cryptoFlowResponse', body)).toMatchObject({ valid: true });
     expect(body.data.aggregates.calls.buy.count).toBe(1);
     expect(body.data.count).toBe(1);
+    expect(body.coverage).toMatchObject({ state: 'partial', missing: ['invalid-trades-dropped'] });
     expect(body.cache).toMatchObject({ state: 'miss', hit: false, stale: false });
     expect((await app.inject('/api/v1/crypto/flow/BTC?hours=24&count=100')).json().cache)
       .toMatchObject({ state: 'fresh', hit: true, stale: false });

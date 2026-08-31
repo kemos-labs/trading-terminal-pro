@@ -39,8 +39,13 @@ function parseDeribitOption(instrument) {
   if (!match) return { right: null, expiry: null };
   const month = MONTHS.get(match[3].toUpperCase());
   if (month == null) return { right: null, expiry: null };
-  const date = new Date(Date.UTC(2000 + Number(match[4]), month, Number(match[2])));
+  const year = 2000 + Number(match[4]);
+  const day = Number(match[2]);
+  const date = new Date(Date.UTC(year, month, day));
   return Number.isFinite(date.getTime())
+    && date.getUTCFullYear() === year
+    && date.getUTCMonth() === month
+    && date.getUTCDate() === day
     ? { right: match[5].toUpperCase() === 'C' ? 'call' : 'put', expiry: date.toISOString().slice(0, 10) }
     : { right: null, expiry: null };
 }

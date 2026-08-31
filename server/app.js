@@ -31,6 +31,7 @@ import {
   getBudgetUsed, FMP_FREE_DAILY, FLASHALPHA_FREE_DAILY,
 } from '../api/upstreamCache.js';
 import { FMP_BASE, isFmpEndpointAllowed, proxyFmp } from '../api/_shared.js';
+import { createErrorEnvelope } from '../packages/contracts/src/runtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -262,6 +263,26 @@ export async function buildServer({ onRoute } = {}) {
       err.statusCode = context.statusCode || 429;
       return err;
     },
+  });
+
+  // Canonical validation/error envelope for Fastify auto-validated requests:
+  // invalid params/querystring/body fail as typed 400 INVALID_REQUEST, matching
+  // the OpenAPI contract (never a bare HTML/plain 400, never silent defaulting).
+  fastify.setErrorHandler((error, request, reply) => {
+    if (error && (error.name === 'FST_ERR_VALIDATION' || error.validation)) {
+      const message = Array.isArray(error.validation)
+        ? error.validation.map((v) => v.message || String(v)).join('; ')
+        : (error.message || 'Invalid request');
+      reply.status(400).send(createErrorEnvelope({
+        requestId: request.id,
+        code: 'INVALID_REQUEST',
+        message,
+        retryable: false,
+        detail: error.validation,
+      }));
+      return;
+    }
+    reply.send(error);
   });
 
   // Health + cache status

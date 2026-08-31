@@ -33,13 +33,6 @@ function walk(dir, files = []) {
   return files;
 }
 
-function clientSample(pattern) {
-  const bare = pattern.split('?')[0];
-  return bare
-    .replace(/\$\{[^}]+\}/g, 'X')
-    .replace(/:[A-Za-z_][A-Za-z0-9_]*/g, 'X');
-}
-
 const fastify = await buildServer();
 try {
   await fastify.ready();

@@ -214,6 +214,13 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
           },
         },
       },
+      '/api/v1/provider/status': { get: { operationId: 'v1GetProviderStatus', tags: ['v1', 'system'], summary: 'Provider entitlement and cache status', responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/providerStatusResponse' }, 'Validated provider status envelope') } } },
+      '/api/v1/rates/stir': { get: { operationId: 'v1GetRatesStir', tags: ['v1', 'rates'], summary: 'STIR/SR3/SR1/ZQ strip and exact SERFF analytics', responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/ratesStirResponse' }, 'Validated STIR envelope') } } },
+      '/api/v1/rates/term-structure': { get: { operationId: 'v1GetRatesTermStructure', tags: ['v1', 'rates'], summary: 'Nullable Treasury/SOFR term structure', parameters: [{ name: 'T', in: 'query', schema: { type: 'number', minimum: 0.01, maximum: 40 } }], responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/ratesTermStructureResponse' }, 'Validated term structure envelope') } } },
+      '/api/v1/crypto/carry/{currency}': { get: { operationId: 'v1GetCryptoCarry', tags: ['v1', 'crypto'], summary: 'Funding, perpetual premium, and dated-future basis', parameters: [currencyParam], responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/cryptoCarryResponse' }, 'Validated carry envelope') } } },
+      '/api/v1/crypto/flow/{currency}': { get: { operationId: 'v1GetCryptoFlow', tags: ['v1', 'crypto'], summary: 'Deribit option flow aggregates', parameters: [currencyParam], responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/cryptoFlowResponse' }, 'Validated flow envelope') } } },
+      '/api/v1/academy/index': { get: { operationId: 'v1GetAcademyIndex', tags: ['v1', 'academy'], summary: 'Academy catalog index', responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/academyIndexResponse' }, 'Validated Academy index envelope') } } },
+      '/api/v1/ksa/board': { get: { operationId: 'v1GetKsaBoard', tags: ['v1', 'ksa'], summary: 'Entitlement-gated KSA board', responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/ksaBoardResponse' }, 'Validated KSA envelope') } } },
       '/api/health': {
         get: {
           operationId: 'getHealth', tags: ['system'], summary: 'Liveness',

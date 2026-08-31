@@ -171,4 +171,25 @@ describe('canonical /api/v1 contracts', () => {
     invalid.secret = 'must-not-serialize';
     expect(validateContract('errorResponse', invalid).valid).toBe(false);
   });
+
+  it('rejects invalid funding days with a typed 400 (never silently defaults)', async () => {
+    for (const days of ['2', '5', 'abc', '-1', '7.5', '100']) {
+      const response = await app.inject(`/api/v1/market/crypto/BTC/funding?days=${days}`);
+      expect(response.statusCode).toBe(400);
+      const body = response.json();
+      expect(body.error.code).toBe('INVALID_REQUEST');
+      expect(validateContract('errorResponse', body)).toMatchObject({ valid: true });
+    }
+  });
+
+  it('rejects invalid trade hours/count with typed 400s (never silently clamps)', async () => {
+    for (const qs of ['hours=3', 'hours=0', 'hours=abc', 'count=10', 'count=2000', 'count=1.5']) {
+      const response = await app.inject(`/api/v1/market/crypto/BTC/trades?${qs}`);
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('INVALID_REQUEST');
+    }
+    // Valid extremes still pass the schema boundary.
+    const ok = await app.inject('/api/v1/market/crypto/BTC/trades?hours=1&count=50');
+    expect(ok.statusCode).toBe(200);
+  });
 });

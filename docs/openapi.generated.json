@@ -1468,6 +1468,727 @@
                 }
               }
             }
+          },
+          "providerStatusData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "providerModes",
+              "cache"
+            ],
+            "properties": {
+              "providerModes": {
+                "type": "object"
+              },
+              "cache": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "entries",
+                  "hits",
+                  "misses",
+                  "inflight"
+                ],
+                "properties": {
+                  "entries": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "hits": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "misses": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "inflight": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "providerStatusResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/providerStatusData"
+                  }
+                }
+              }
+            ]
+          },
+          "stirContractRow": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "contract"
+            ],
+            "properties": {
+              "contract": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "ticker": {
+                "type": "string"
+              },
+              "month": {
+                "type": "string"
+              },
+              "ref_start": {
+                "type": "string"
+              },
+              "ref_end": {
+                "type": "string"
+              },
+              "settlement": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "chg": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "last_price": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "implied_rate": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "source": {
+                "type": "string"
+              },
+              "symbol": {
+                "type": "string"
+              }
+            }
+          },
+          "serffRow": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "legs",
+              "ratio",
+              "rate_bps",
+              "price_spread",
+              "note"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "legs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              },
+              "ratio": {
+                "type": "string"
+              },
+              "rate_bps": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "price_spread": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          },
+          "derivedProxyRow": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "legs",
+              "ratio",
+              "rate_bps",
+              "note"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "legs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              },
+              "ratio": {
+                "type": "string"
+              },
+              "rate_bps": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          },
+          "ratesStirData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "sr3",
+              "sr1",
+              "zq",
+              "serff",
+              "derivedProxies",
+              "asOf",
+              "count"
+            ],
+            "properties": {
+              "sr3": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/stirContractRow"
+                }
+              },
+              "sr1": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/stirContractRow"
+                }
+              },
+              "zq": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/stirContractRow"
+                }
+              },
+              "serff": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/serffRow"
+                }
+              },
+              "derivedProxies": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/derivedProxyRow"
+                }
+              },
+              "effr": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "iorb": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "asOf": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "ratesStirResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/ratesStirData"
+                  }
+                }
+              }
+            ]
+          },
+          "ratesTermStructureData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "T",
+              "r",
+              "r_pct",
+              "available",
+              "r_source",
+              "curvePoints",
+              "curveCoverage",
+              "sofr"
+            ],
+            "properties": {
+              "T": {
+                "type": "number",
+                "minimum": 0.01,
+                "maximum": 40
+              },
+              "r": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "r_pct": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "available": {
+                "type": "boolean"
+              },
+              "r_source": {
+                "type": "string"
+              },
+              "curvePoints": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "T",
+                    "r",
+                    "r_pct"
+                  ],
+                  "properties": {
+                    "T": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "r": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "r_pct": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              },
+              "curveCoverage": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "points",
+                  "state"
+                ],
+                "properties": {
+                  "points": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "full",
+                      "partial",
+                      "unavailable"
+                    ]
+                  }
+                }
+              },
+              "sofr": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          },
+          "ratesTermStructureResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/ratesTermStructureData"
+                  }
+                }
+              }
+            ]
+          },
+          "datedFutureBasis": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "instrument",
+              "expiryMs",
+              "mark",
+              "basisPct"
+            ],
+            "properties": {
+              "instrument": {
+                "type": "string"
+              },
+              "expiryMs": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "mark": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "basisPct": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          },
+          "cryptoCarryData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "currency",
+              "fundingPoints",
+              "datedFutureBasis",
+              "sources"
+            ],
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "BTC",
+                  "ETH"
+                ]
+              },
+              "indexPrice": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "perpMark": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "perpPremiumPct": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "fundingPoints": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/carryFundingPoint"
+                }
+              },
+              "datedFutureBasis": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/datedFutureBasis"
+                }
+              },
+              "freeFunding8h": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "freeIndexPrice": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "sources": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "deribitFunding",
+                  "deribitMarket",
+                  "freeExchanges"
+                ],
+                "properties": {
+                  "deribitFunding": {
+                    "type": "boolean"
+                  },
+                  "deribitMarket": {
+                    "type": "boolean"
+                  },
+                  "freeExchanges": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          },
+          "cryptoCarryResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/cryptoCarryData"
+                  }
+                }
+              }
+            ]
+          },
+          "flowAggregateBucket": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "notional",
+              "count"
+            ],
+            "properties": {
+              "notional": {
+                "type": "number"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "cryptoFlowData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "currency",
+              "hours",
+              "aggregates",
+              "count",
+              "hasMore"
+            ],
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "BTC",
+                  "ETH"
+                ]
+              },
+              "hours": {
+                "type": "integer",
+                "enum": [
+                  1,
+                  4,
+                  24
+                ]
+              },
+              "aggregates": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "calls",
+                  "puts"
+                ],
+                "properties": {
+                  "calls": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "buy",
+                      "sell"
+                    ],
+                    "properties": {
+                      "buy": {
+                        "$ref": "#/$defs/flowAggregateBucket"
+                      },
+                      "sell": {
+                        "$ref": "#/$defs/flowAggregateBucket"
+                      }
+                    }
+                  },
+                  "puts": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "buy",
+                      "sell"
+                    ],
+                    "properties": {
+                      "buy": {
+                        "$ref": "#/$defs/flowAggregateBucket"
+                      },
+                      "sell": {
+                        "$ref": "#/$defs/flowAggregateBucket"
+                      }
+                    }
+                  }
+                }
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "hasMore": {
+                "type": "boolean"
+              }
+            }
+          },
+          "cryptoFlowResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/cryptoFlowData"
+                  }
+                }
+              }
+            ]
+          },
+          "academyChildItem": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "academyIndexData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "children"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "children": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/academyChildItem"
+                }
+              }
+            }
+          },
+          "academyIndexResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/academyIndexData"
+                  }
+                }
+              }
+            ]
+          },
+          "ksaBoardData": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "ksaBoardResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/ksaBoardData"
+                  }
+                }
+              }
+            ]
+          },
+          "carryFundingPoint": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "timestamp",
+              "rate8h",
+              "annualizedPct"
+            ],
+            "properties": {
+              "timestamp": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "rate8h": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "annualizedPct": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
           }
         }
       }
@@ -1767,6 +2488,199 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/provider/status": {
+      "get": {
+        "operationId": "v1GetProviderStatus",
+        "tags": [
+          "v1",
+          "system"
+        ],
+        "summary": "Provider entitlement and cache status",
+        "responses": {
+          "200": {
+            "description": "Validated provider status envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/providerStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rates/stir": {
+      "get": {
+        "operationId": "v1GetRatesStir",
+        "tags": [
+          "v1",
+          "rates"
+        ],
+        "summary": "STIR/SR3/SR1/ZQ strip and exact SERFF analytics",
+        "responses": {
+          "200": {
+            "description": "Validated STIR envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/ratesStirResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rates/term-structure": {
+      "get": {
+        "operationId": "v1GetRatesTermStructure",
+        "tags": [
+          "v1",
+          "rates"
+        ],
+        "summary": "Nullable Treasury/SOFR term structure",
+        "parameters": [
+          {
+            "name": "T",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0.01,
+              "maximum": 40
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated term structure envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/ratesTermStructureResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/crypto/carry/{currency}": {
+      "get": {
+        "operationId": "v1GetCryptoCarry",
+        "tags": [
+          "v1",
+          "crypto"
+        ],
+        "summary": "Funding, perpetual premium, and dated-future basis",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BTC",
+                "ETH"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated carry envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/cryptoCarryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/crypto/flow/{currency}": {
+      "get": {
+        "operationId": "v1GetCryptoFlow",
+        "tags": [
+          "v1",
+          "crypto"
+        ],
+        "summary": "Deribit option flow aggregates",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BTC",
+                "ETH"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated flow envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/cryptoFlowResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academy/index": {
+      "get": {
+        "operationId": "v1GetAcademyIndex",
+        "tags": [
+          "v1",
+          "academy"
+        ],
+        "summary": "Academy catalog index",
+        "responses": {
+          "200": {
+            "description": "Validated Academy index envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/academyIndexResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ksa/board": {
+      "get": {
+        "operationId": "v1GetKsaBoard",
+        "tags": [
+          "v1",
+          "ksa"
+        ],
+        "summary": "Entitlement-gated KSA board",
+        "responses": {
+          "200": {
+            "description": "Validated KSA envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/ksaBoardResponse"
                 }
               }
             }

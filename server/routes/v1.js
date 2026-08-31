@@ -13,6 +13,7 @@ import {
   getDeribitTradesSnapshot,
   getDeribitFundingSnapshot,
 } from './deribitMarket.js';
+import { registerV1AnalyticsRoutes } from './v1Analytics.js';
 import {
   assertContract,
   createEnvelope,
@@ -161,6 +162,7 @@ function baseEnvelope(request, {
 }
 
 export function registerV1Routes(fastify) {
+  registerV1AnalyticsRoutes(fastify, { sendContract, sendError, baseEnvelope, coverage });
   fastify.get('/api/v1/system/health', async (request, reply) => {
     const now = Date.now();
     const providerModes = providerEntitlements();
@@ -412,7 +414,21 @@ export function registerV1Routes(fastify) {
     return sendContract(request, reply, 'cryptoMarketResponse', envelope);
   });
 
-  fastify.get('/api/v1/market/crypto/:currency/funding', async (request, reply) => {
+  fastify.get('/api/v1/market/crypto/:currency/funding', {
+    schema: {
+      params: {
+        type: 'object', additionalProperties: false, required: ['currency'],
+        properties: { currency: { type: 'string', enum: ['BTC', 'ETH'] } },
+      },
+      querystring: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          instrument_name: { type: 'string', pattern: '^(BTC|ETH)-PERPETUAL$' },
+          days: { type: 'integer', enum: [1, 7, 30, 90] },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const currency = String(request.params.currency ?? '').toUpperCase();
     if (currency !== 'BTC' && currency !== 'ETH') {
       return sendError(request, reply, {
@@ -431,8 +447,18 @@ export function registerV1Routes(fastify) {
         retryable: false,
       });
     }
+    // Strict enum: an invalid days value is a typed 400 (schemas also reject at
+    // the Fastify boundary), never a silent default.
     const requestedDays = Number(request.query?.days ?? 7);
-    const days = [1, 7, 30, 90].includes(requestedDays) ? requestedDays : 7;
+    if (![1, 7, 30, 90].includes(requestedDays)) {
+      return sendError(request, reply, {
+        statusCode: 400,
+        code: 'INVALID_REQUEST',
+        message: 'days must be one of 1, 7, 30, 90.',
+        retryable: false,
+      });
+    }
+    const days = requestedDays;
     let fundingSnapshot;
     try {
       fundingSnapshot = await getDeribitFundingSnapshot(currency, instrumentName, days);
@@ -494,7 +520,21 @@ export function registerV1Routes(fastify) {
     return sendContract(request, reply, 'cryptoFundingResponse', envelope);
   });
 
-  fastify.get('/api/v1/market/crypto/:currency/trades', async (request, reply) => {
+  fastify.get('/api/v1/market/crypto/:currency/trades', {
+    schema: {
+      params: {
+        type: 'object', additionalProperties: false, required: ['currency'],
+        properties: { currency: { type: 'string', enum: ['BTC', 'ETH'] } },
+      },
+      querystring: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          hours: { type: 'integer', enum: [1, 4, 24] },
+          count: { type: 'integer', minimum: 50, maximum: 1_000 },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const currency = String(request.params.currency ?? '').toUpperCase();
     if (currency !== 'BTC' && currency !== 'ETH') {
       return sendError(request, reply, {
@@ -504,8 +544,28 @@ export function registerV1Routes(fastify) {
         retryable: false,
       });
     }
-    const hours = [1, 4, 24].includes(Number(request.query?.hours)) ? Number(request.query.hours) : 24;
-    const count = Math.min(1_000, Math.max(50, Number(request.query?.count) || 500));
+    // Strict validation: invalid hours/count are typed 400s (schemas reject at
+    // the Fastify boundary too), never silent clamping/defaulting.
+    const requestedHours = Number(request.query?.hours ?? 24);
+    if (![1, 4, 24].includes(requestedHours)) {
+      return sendError(request, reply, {
+        statusCode: 400,
+        code: 'INVALID_REQUEST',
+        message: 'hours must be one of 1, 4, 24.',
+        retryable: false,
+      });
+    }
+    const hours = requestedHours;
+    const requestedCount = Number(request.query?.count ?? 500);
+    if (!Number.isInteger(requestedCount) || requestedCount < 50 || requestedCount > 1_000) {
+      return sendError(request, reply, {
+        statusCode: 400,
+        code: 'INVALID_REQUEST',
+        message: 'count must be an integer in [50, 1000].',
+        retryable: false,
+      });
+    }
+    const count = requestedCount;
     let tradesSnapshot;
     try {
       tradesSnapshot = await getDeribitTradesSnapshot(currency, hours, count);

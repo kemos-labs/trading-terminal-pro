@@ -333,3 +333,12 @@ Start with C0 in this order:
 - Remaining C3: end-to-end cache metadata (`hit`, age, stale, coalesced,
   providerError), direct/aggregate provider ownership, bounded canonical keys,
   persistent quota scope, circuit/partial-failure and hidden-tab cadence tests.
+
+### C4 — IN PROGRESS (commit `edcd641`, 2026-08-31)
+
+- Every MCP tool now publishes a strict output schema for the MCP result
+  envelope (`content`, `structuredContent`, `isError`), with a contract test;
+  read-only tool set and structured content behavior remain unchanged.
+- Evidence: MCP contract tests 10 passed; secret/diff gate PASS.
+- Remaining C4: migrate tools from legacy routes to canonical v1 services,
+  publish per-tool analytical data schemas, and complete negative validation.

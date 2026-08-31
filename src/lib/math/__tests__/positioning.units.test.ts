@@ -30,6 +30,41 @@ describe('positioning units and provenance', () => {
     expect(aggregateExposure([row('call', null), row('put', 5)], sign).total.coverageState).toBe('partial');
   });
 
+  it('GEX satisfies the dollar-delta finite-difference identity', () => {
+    // GEX (per 1% move) equals the change in delta-notional for a +1% spot move:
+    // (delta + gamma*0.01*S)*Q*S - delta*Q*S = gamma*Q*S^2*0.01
+    const r = row('call', 25, { gamma: 0.00012, delta: 0.42, spot: 60000 });
+    const { total } = aggregateExposure([r], () => 1);
+    const deltaNotionalAfter = (r.delta + r.gamma * 0.01 * r.spot) * 25 * r.spot;
+    const deltaNotionalBefore = r.delta * 25 * r.spot;
+    expect(total.gex).toBeCloseTo(deltaNotionalAfter - deltaNotionalBefore, 6);
+    expect(total.dex).toBeCloseTo(r.delta * 25 * r.spot, 6);
+  });
+
+  it('vanna is per 1 vol point and charm is per day (raw → display adapters)', () => {
+    const r = row('call', 10, { vannaRaw: 0.8, charmRaw: -7.3, spot: 50000 });
+    const { total } = aggregateExposure([r], () => 1);
+    // vannaRaw is per 1.0 vol → per vol point = *0.01, dollarized *Q*S
+    expect(total.vanna).toBeCloseTo(0.8 * 0.01 * 10 * 50000, 6);
+    // charmRaw is per year → per day = /365, dollarized *Q*S
+    expect(total.charm).toBeCloseTo(-7.3 / 365 * 10 * 50000, 6);
+  });
+
+  it('all exposure outputs are finite numbers or null (never NaN/Infinity)', () => {
+    const rows = [
+      row('call', null), row('put', 0, { available: false }), row('call', 5, { gamma: 0.01 }),
+      row('put', 7, { vannaRaw: NaN }), row('call', 3, { delta: Infinity }),
+    ];
+    const { total, perRow } = aggregateExposure(rows, r => (r.optionType === 'put' ? -1 : 1));
+    const walk = (v: unknown): void => {
+      if (typeof v === 'number') expect(Number.isFinite(v)).toBe(true);
+      else if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === 'object') Object.values(v).forEach(walk);
+    };
+    walk(perRow);
+    walk(total);
+  });
+
   it('required observed inputs missing do not become zero exposure', () => {
     const result = aggregateExposure([row('call', 10, { available: false })], r => r.optionType === 'put' ? -1 : 1);
     expect(result.total.gex).toBeNull();

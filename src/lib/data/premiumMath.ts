@@ -37,6 +37,8 @@ export interface PremiumCell {
   putPremium: number | null;
   /** Side-filtered standing premium for this cell (USD). */
   premium: number | null;
+  /** True when OI is missing for this cell — distinct from a computed 0 premium. */
+  oiMissing: boolean;
 }
 
 export interface PremiumMatrixResult {
@@ -64,11 +66,13 @@ export function markPriceUsd(q: Pick<OptionQuote, 'mid' | 'last'>): number | nul
   return null;
 }
 
-/** Standing dollar premium for one option: mark × OI. Zero OI is a real 0. */
+/** Standing dollar premium for one option: mark × OI.
+ * Missing OI → null (never zero); a real observed zero OI → 0. */
 export function standingPremiumUsd(q: OptionQuote): number | null {
   const mark = markPriceUsd(q);
   if (mark == null) return null;
-  return mark * Math.max(0, q.openInterest || 0);
+  if (q.openInterest == null || !Number.isFinite(q.openInterest)) return null;
+  return mark * Math.max(0, q.openInterest);
 }
 
 function expirySortKey(slice: { expiry: string; dte?: number }): string {
@@ -119,14 +123,20 @@ export function premiumMatrix(
   const expiries = slices.map((s) => s.expiry);
 
   // Aggregate quotes per (strike, expiry) — sum defensively if duplicates slip in.
-  const agg = new Map<string, { callSum: number | null; putSum: number | null }>();
+  const agg = new Map<
+    string,
+    { callSum: number | null; putSum: number | null; oiMissing: boolean }
+  >();
   const add = (strike: number, expiry: string, kind: 'call' | 'put', quote: OptionQuote) => {
     const key = `${strike}|${expiry}`;
-    const cur = agg.get(key) ?? { callSum: null, putSum: null };
+    const cur = agg.get(key) ?? { callSum: null, putSum: null, oiMissing: false };
     const p = standingPremiumUsd(quote);
     if (p != null) {
       if (kind === 'call') cur.callSum = (cur.callSum ?? 0) + p;
       else cur.putSum = (cur.putSum ?? 0) + p;
+    } else if (quote.openInterest == null || !Number.isFinite(quote.openInterest)) {
+      // Missing premium because OI is missing (not because the mark is missing).
+      cur.oiMissing = true;
     }
     agg.set(key, cur);
   };
@@ -143,7 +153,8 @@ export function premiumMatrix(
     let rowSum = 0;
     let rowHasValue = false;
     for (let ci = 0; ci < expiries.length; ci++) {
-      const entry = agg.get(`${strike}|${expiries[ci]}`) ?? { callSum: null, putSum: null };
+      const entry =
+        agg.get(`${strike}|${expiries[ci]}`) ?? { callSum: null, putSum: null, oiMissing: false };
       let premium: number | null;
       if (side === 'calls') premium = entry.callSum;
       else if (side === 'puts') premium = entry.putSum;
@@ -153,7 +164,7 @@ export function premiumMatrix(
         rowSum += premium;
         rowHasValue = true;
       }
-      row.push({ strike, expiry: expiries[ci]!, callPremium: entry.callSum, putPremium: entry.putSum, premium });
+      row.push({ strike, expiry: expiries[ci]!, callPremium: entry.callSum, putPremium: entry.putSum, premium, oiMissing: entry.oiMissing });
     }
     cells.push(row);
     rowTotals.push(rowHasValue ? rowSum : null);
@@ -219,8 +230,9 @@ export interface ScannerRow {
   theta: number | null;
   vega: number | null;
   premiumUsd: number | null;
-  openInterest: number;
-  volume: number;
+  /** Observed open interest; null = missing (never coerced to zero). */
+  openInterest: number | null;
+  volume: number | null;
   /** True when the option is past spot (call: K < S · put: K > S). */
   itm: boolean;
 }
@@ -289,8 +301,8 @@ export function scannerRows(chain: PremiumChain & { symbol?: string }, filters: 
         theta: finite(q.theta) ? q.theta : null,
         vega: finite(q.vega) ? q.vega : null,
         premiumUsd: standingPremiumUsd(q),
-        openInterest: Math.max(0, q.openInterest || 0),
-        volume: Math.max(0, q.volume || 0),
+        openInterest: finite(q.openInterest) ? Math.max(0, q.openInterest) : null,
+        volume: finite(q.volume) ? Math.max(0, q.volume) : null,
         itm: spot != null ? (q.type === 'call' ? q.strike < spot : q.strike > spot) : false,
       });
     }
@@ -309,7 +321,12 @@ export function largestOiRows(rows: ScannerRow[], n = 5): ScannerRow[] {
 export interface ExpirySummary {
   expiry: string;
   dte: number | null;
+  /** Sum of OBSERVED OI only; missing-OI options contribute nothing (not zero). */
   totalOi: number;
+  /** Count of options with missing OI — coverage must be labelled partial when > 0. */
+  oiMissing: number;
+  /** 'full' when every option has observed OI; 'partial' when some; 'missing' when none. */
+  oiCoverage: 'full' | 'partial' | 'missing';
   options: number;
 }
 
@@ -319,12 +336,24 @@ export function expirySummaries(chain: PremiumChain): ExpirySummary[] {
     .sort((a, b) => expirySortKey(a).localeCompare(expirySortKey(b)))
     .map((slice) => {
       let totalOi = 0;
-      for (const q of [...slice.calls, ...slice.puts]) totalOi += Math.max(0, q.openInterest || 0);
+      let oiMissing = 0;
+      const quotes = [...slice.calls, ...slice.puts];
+      for (const q of quotes) {
+        if (finite(q.openInterest) && q.openInterest >= 0) totalOi += q.openInterest;
+        else oiMissing += 1;
+      }
       return {
         expiry: slice.expiry,
         dte: finite(slice.dte) ? slice.dte : deriveDte(slice.expiry, Date.now()),
         totalOi,
-        options: slice.calls.length + slice.puts.length,
+        oiMissing,
+        oiCoverage:
+          quotes.length === 0 || oiMissing === quotes.length
+            ? 'missing'
+            : oiMissing > 0
+              ? 'partial'
+              : 'full',
+        options: quotes.length,
       };
     });
 }

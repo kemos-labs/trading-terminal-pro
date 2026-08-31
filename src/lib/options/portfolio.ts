@@ -19,12 +19,23 @@ export interface PortfolioLeg {
   qty: number;
   strike?: number;
   expiry?: string;
-  /** Entry premium: long→ask, short→bid; null if that side unavailable (never mid/last fallback) */
+  /** Entry premium: long→observed ask, short→observed bid; null if that side unavailable (never mid/last fallback) */
   entryPrice: number | null;
-  /** How entryPrice was sourced — ask for long, bid for short, mid separate valuation basis */
-  entryBasis?: 'ask' | 'bid' | 'mid' | 'last' | 'user' | null;
+  /** How entryPrice was sourced. Structural law: long = 'ask', short = 'bid',
+   * explicit user override = 'user'. Mid/last/mark substitution is forbidden. */
+  entryBasis?: 'ask' | 'bid' | 'user' | null;
   /** Override IV (decimal); else taken from snapshot */
   iv?: number;
+}
+
+/** Structural executable-entry law: long requires observed positive ask,
+ * short requires observed positive bid, 'user' is an explicit override.
+ * Spot/future legs have no quote side (price is the underlying level). */
+export function entryBasisValidFor(leg: Pick<PortfolioLeg, 'kind' | 'side' | 'entryBasis'>): boolean {
+  if (leg.kind === 'spot' || leg.kind === 'future') return true;
+  if (leg.entryBasis === 'user') return true;
+  if (leg.side === 'long') return leg.entryBasis === 'ask';
+  return leg.entryBasis === 'bid';
 }
 
 export interface ComboGreeks {
@@ -108,6 +119,16 @@ export function evaluateCombo(
     if (ep == null || !isFinite(ep)) {
       hasMissing = true;
       missingReason = 'missing entryPrice';
+      continue;
+    }
+    if (leg.kind !== 'spot' && leg.kind !== 'future' && ep <= 0) {
+      hasMissing = true;
+      missingReason = 'non-positive entry price (executable entries require observed positive ask/bid)';
+      continue;
+    }
+    if (!entryBasisValidFor(leg)) {
+      hasMissing = true;
+      missingReason = `invalid entry basis '${leg.entryBasis}' for ${leg.side} leg (long requires observed ask, short requires observed bid)`;
       continue;
     }
     entryCost += sgn * ep;
@@ -327,6 +348,10 @@ export function comboPayoffAtExpiry(legs: PortfolioLeg[], S: number): number | n
       // Missing entryPrice → unavailable, not free — return null not NaN
       return null;
     }
+    if (leg.kind !== 'spot' && leg.kind !== 'future') {
+      if (ep <= 0) return null;
+      if (!entryBasisValidFor(leg)) return null;
+    }
     if (leg.kind === 'spot' || leg.kind === 'future') {
       const v = S - ep;
       if (!Number.isFinite(v)) return null;
@@ -354,6 +379,9 @@ export function breakEvenSpots(legs: PortfolioLeg[], spot: number, loMult = 0.5,
   // Fail-closed: any missing executable entry price → unavailable
   if (legs.some(l => l.entryPrice == null || !Number.isFinite(l.entryPrice as number))) {
     return { available: false, breakEvens: [], reason: 'missing entryPrice' };
+  }
+  if (legs.some(l => !entryBasisValidFor(l))) {
+    return { available: false, breakEvens: [], reason: "invalid entry basis (long requires observed ask, short requires observed bid)" };
   }
   if (!Number.isFinite(spot) || spot <= 0) return { available: false, breakEvens: [], reason: 'invalid spot' };
   const lo = spot * loMult;

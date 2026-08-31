@@ -38,6 +38,18 @@ export function normalizeQuantity(row: PositionRow): number | null {
   return null;
 }
 
+/** A row is usable only when every required input is finite — non-finite
+ * Greeks/spot fail closed as missing, never propagate NaN/Infinity. */
+function rowUsable(r: PositionRow): boolean {
+  return (
+    isFinite(r.gamma)
+    && isFinite(r.delta)
+    && isFinite(r.vannaRaw)
+    && isFinite(r.charmRaw)
+    && isFinite(r.spot)
+  );
+}
+
 export function aggregateExposure(
   rows: PositionRow[],
   sign: (row: PositionRow) => Sign,
@@ -46,7 +58,7 @@ export function aggregateExposure(
   let missing = 0;
   const perRow: ExposureResult[] = rows.map(r => {
     const Q = normalizeQuantity(r);
-    if (Q == null) {
+    if (Q == null || !rowUsable(r)) {
       missing++;
       return { gex: null, dex: null, vanna: null, charm: null, coverage: 0, missingOiCount: 1, coverageState: 'missing' };
     }

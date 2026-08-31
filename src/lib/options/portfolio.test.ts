@@ -3,8 +3,10 @@ import { buildSnapshot } from './synthetic';
 import {
   breakEvenSpots,
   comboPayoffAtExpiry,
+  entryBasisValidFor,
   evaluateCombo,
   templateLegs,
+  type PortfolioLeg,
 } from './portfolio';
 
 describe('portfolio / combo', () => {
@@ -37,5 +39,86 @@ describe('portfolio / combo', () => {
     // Payoff at deep ITM call side should be positive for long straddle
     const payoff = comboPayoffAtExpiry(legs, snap.spot * 1.5);
     expect(payoff != null && payoff > 0).toBe(true);
+  });
+
+  // ── Structural executable-entry law (C1) ────────────────────────────────
+
+  const legWith = (over: Partial<PortfolioLeg>): PortfolioLeg => ({
+    id: 't', kind: 'call', side: 'long', qty: 1,
+    strike: snap.expiries[0]!.calls[0]!.strike, expiry: snap.expiries[0]!.expiry,
+    entryPrice: 2.5, entryBasis: 'ask', ...over,
+  });
+
+  it('enforces long = observed ask, short = observed bid (fail closed)', () => {
+    // long with 'bid' basis → unavailable
+    const longWrong = evaluateCombo([legWith({ side: 'long', entryBasis: 'bid' })], snap);
+    expect(longWrong.unavailable).toBe(true);
+    expect(longWrong.mark).toBeNull();
+    expect(longWrong.unavailableReason).toMatch(/entry basis/);
+    // short with 'mid' basis (mid substitution) → unavailable
+    const shortMid = evaluateCombo(
+      [legWith({ side: 'short', entryBasis: 'mid' })],
+      snap,
+    );
+    expect(shortMid.unavailable).toBe(true);
+    // short with 'ask' basis → unavailable
+    const shortAsk = evaluateCombo(
+      [legWith({ side: 'short', entryBasis: 'ask' })],
+      snap,
+    );
+    expect(shortAsk.unavailable).toBe(true);
+  });
+
+  it('accepts correct bases: long/ask, short/bid, and explicit user override', () => {
+    expect(evaluateCombo([legWith({ side: 'long', entryBasis: 'ask' })], snap).unavailable).toBeFalsy();
+    expect(evaluateCombo([legWith({ side: 'short', entryBasis: 'bid' })], snap).unavailable).toBeFalsy();
+    expect(evaluateCombo([legWith({ side: 'long', entryBasis: 'user' })], snap).unavailable).toBeFalsy();
+    expect(evaluateCombo([legWith({ side: 'short', entryBasis: 'user' })], snap).unavailable).toBeFalsy();
+  });
+
+  it('rejects non-positive and missing entry prices for option legs', () => {
+    const zero = evaluateCombo([legWith({ entryPrice: 0 })], snap);
+    expect(zero.unavailable).toBe(true);
+    expect(zero.unavailableReason).toMatch(/positive/);
+    const missing = evaluateCombo([legWith({ entryPrice: null })], snap);
+    expect(missing.unavailable).toBe(true);
+  });
+
+  it('payoff-at-expiry is unavailable for invalid entry bases', () => {
+    expect(comboPayoffAtExpiry([legWith({ side: 'long', entryBasis: 'mid' })], snap.spot)).toBeNull();
+    expect(comboPayoffAtExpiry([legWith({ entryPrice: 0 })], snap.spot)).toBeNull();
+    // user basis with a positive price is fine
+    const v = comboPayoffAtExpiry([legWith({ entryBasis: 'user' })], snap.spot * 2);
+    expect(v != null && Number.isFinite(v)).toBe(true);
+  });
+
+  it('break-even scan fails closed on invalid entry basis', () => {
+    const be = breakEvenSpots([legWith({ side: 'long', entryBasis: 'last' })], snap.spot);
+    expect(be.available).toBe(false);
+    expect(be.reason).toMatch(/entry basis|entryPrice/);
+  });
+
+  it('entryBasisValidFor discriminates sides without a snapshot', () => {
+    expect(entryBasisValidFor({ kind: 'call', side: 'long', entryBasis: 'ask' })).toBe(true);
+    expect(entryBasisValidFor({ kind: 'call', side: 'long', entryBasis: 'bid' })).toBe(false);
+    expect(entryBasisValidFor({ kind: 'put', side: 'short', entryBasis: 'bid' })).toBe(true);
+    expect(entryBasisValidFor({ kind: 'put', side: 'short', entryBasis: 'ask' })).toBe(false);
+    expect(entryBasisValidFor({ kind: 'call', side: 'long', entryBasis: 'user' })).toBe(true);
+    expect(entryBasisValidFor({ kind: 'put', side: 'short', entryBasis: null })).toBe(false);
+    expect(entryBasisValidFor({ kind: 'future', side: 'long', entryBasis: null })).toBe(true);
+  });
+
+  it('templates never emit mid/last bases and null when the side is unavailable', () => {
+    for (const name of [
+      'long_straddle', 'short_straddle', 'long_call', 'short_put',
+      'risk_reversal', 'call_spread', 'collar',
+    ] as const) {
+      for (const leg of templateLegs(name, snap, 0)) {
+        expect(['ask', 'bid', 'user', null]).toContain(leg.entryBasis ?? null);
+        if (leg.entryBasis === 'ask') expect(leg.side).toBe('long');
+        if (leg.entryBasis === 'bid') expect(leg.side).toBe('short');
+        if (leg.entryPrice != null) expect(leg.entryPrice).toBeGreaterThan(0);
+      }
+    }
   });
 });

@@ -14,7 +14,7 @@
 
 import { priceGreeksMarket } from '../math/adapters';
 import type { PortfolioLeg } from './portfolio';
-import { evaluateCombo } from './portfolio';
+import { entryBasisValidFor, evaluateCombo } from './portfolio';
 import { yearFractionFromSlice } from './time';
 import type { VolSnapshot } from './types';
 
@@ -163,7 +163,7 @@ export function optionGreeksPnl(
     iv?: number;
     /** Explicit executable entry price: long→ask, short→bid; null forces unavailable */
     entryPrice?: number | null;
-    entryBasis?: 'ask' | 'bid' | 'mid' | 'last' | 'user' | null;
+    entryBasis?: 'ask' | 'bid' | 'user' | null;
   },
 ): GreeksPnlSeries {
   const side = opts.side ?? 'long';
@@ -194,11 +194,13 @@ export function comboGreeksPnl(
   path: SpotBar[],
   pathProvenance: 'observed-history' | 'scenario-synthetic' = 'observed-history',
 ): GreeksPnlSeries {
-  // Fail-closed: missing legs/expiry/IV/entryPrice → unavailable, do not silently price with defaults
+  // Fail-closed: missing legs/expiry/IV/entryPrice or an invalid executable
+  // basis (mid/last substitution) → unavailable, never silently priced.
   const hasMissingLeg = legs.some((l) => {
     if (l.kind === 'spot' || l.kind === 'future') return false;
     if (l.strike == null || !l.expiry) return true;
-    if (l.entryPrice == null || !isFinite(l.entryPrice as number)) return true;
+    if (l.entryPrice == null || !isFinite(l.entryPrice as number) || (l.entryPrice as number) <= 0) return true;
+    if (!entryBasisValidFor(l)) return true;
     const T0 = legT0(snap, l);
     if (T0 == null) return true;
     const v = legVol(snap, l);

@@ -483,6 +483,7 @@ export interface SerffBoardRow {
   last_bps?: number | null;
   price_spread?: number | null;
   legs?: string[];
+  ratio?: string | null;
   kind?: string;
   imply?: ImplyRead | null;
 }
@@ -491,6 +492,7 @@ export interface StirSpread {
   name: string;
   kind: 'calendar' | 'fly' | 'pack' | 'serff' | 'inter' | 'cash' | string;
   legs: string[];
+  ratio?: string | null;
   rate_bps: number | null;
   price_spread?: number | null;
   implied_rate?: number | null;

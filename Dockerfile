@@ -16,7 +16,7 @@ WORKDIR /app
 
 # Python: yfinance (equity chains) + MacroVol (rates/FRED)
 # Hashed, fully resolved lock is the production dependency authority.
-COPY macrovol-api/requirements.lock /tmp/macrovol-requirements.lock
+COPY services/rates-worker/requirements.lock /tmp/macrovol-requirements.lock
 RUN pip3 install --no-cache-dir --break-system-packages --require-hashes \
     -r /tmp/macrovol-requirements.lock \
     && python3 -c "import yfinance, fastapi, uvicorn; print('python ok')"

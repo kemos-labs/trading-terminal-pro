@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env from this package dir first (macrovol-api/.env), then cwd.
+# Load .env from this package dir first (services/rates-worker/.env), then cwd.
 _PKG_ENV = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_PKG_ENV, override=False)
 load_dotenv(override=False)

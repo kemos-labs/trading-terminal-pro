@@ -18,9 +18,9 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "[start] MacroVol on 127.0.0.1:${MACRO_PORT}"
+echo "[start] rates-worker on 127.0.0.1:${MACRO_PORT} (loopback-only)"
 python3 -m uvicorn main:app \
-  --app-dir macrovol-api \
+  --app-dir services/rates-worker \
   --host 127.0.0.1 \
   --port "$MACRO_PORT" \
   --log-level warning &

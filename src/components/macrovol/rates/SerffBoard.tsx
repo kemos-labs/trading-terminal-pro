@@ -46,8 +46,11 @@ export function SerffBoard({
 
   // Exact legs + ratio resolved from the data contract (never guessed from the name).
   const legs = Array.from(new Set(data.flatMap((r) => (r.legs ?? [])))).filter(Boolean);
+  const ratios = Array.from(new Set(data.map((r) => (r as unknown as { ratio?: string }).ratio).filter(Boolean) as string[]));
+  const ratioLabel = ratios.length === 1 ? ratios[0] : ratios.length ? ratios.join(' | ') : null;
   const ccSet = Array.from(new Set(data.map((r) => r.cc).filter(Boolean)));
   const legLabel = legs.length ? legs.join(' − ') : ccSet.join(' / ');
+  const titleRatio = ratioLabel ? ` [${ratioLabel}]` : '';
   const curvePoints = toCurvePoints(data, {
     x: (r) => r.cc && r.name ? `${r.cc} ${r.name}` : (r.name || r.cc),
     bps: (r) => r.last_bps,
@@ -62,7 +65,7 @@ export function SerffBoard({
   return (
     <div className="mt-3 overflow-hidden rounded border border-border">
       <StirSpreadCurve
-        title={`SERFF · ${legLabel} = leg1 − leg2 (bp per 1 contract)`}
+        title={`SERFF · ${legLabel}${titleRatio} = legs as listed (bp per contract)`}
         points={curvePoints}
         synthNote={synthNote}
         height={140}
@@ -85,12 +88,13 @@ export function SerffBoard({
           rows={data.map((s) => [s.cc, s.name, s.description, s.last_bps, s.price_spread])}
         />
       </div>
-      <div className="grid grid-cols-[48px_1fr_2fr_72px_72px_100px] gap-0 border-b border-border/60 px-1.5 py-1 text-type-2xs text-muted-foreground">
+      <div className="grid grid-cols-[48px_1fr_2fr_64px_64px_64px_84px] gap-0 border-b border-border/60 px-1.5 py-1 text-type-2xs text-muted-foreground">
         <span>CC</span>
         <span>Spread</span>
         <span>Description</span>
         <span className="text-right">Last bps</span>
         <span className="text-right">Price spr</span>
+        <span className="text-center">Ratio</span>
         <span>Implies</span>
       </div>
       <VirtualRows
@@ -105,7 +109,7 @@ export function SerffBoard({
             <div
               style={style}
               onClick={() => focusRow(index, 'name')}
-              className={`grid grid-cols-[48px_1fr_2fr_72px_72px_100px] items-center gap-0 border-t border-border/40 px-1.5 text-type-xs cursor-default hover:bg-muted/20 ${
+              className={`grid grid-cols-[48px_1fr_2fr_64px_64px_64px_84px] items-center gap-0 border-t border-border/40 px-1.5 text-type-xs cursor-default hover:bg-muted/20 ${
                 isFocused ? 'focus-ring-term-inset bg-primary/10' : ''
               } ${
                 !isFocused && bps != null && bps < 0
@@ -133,6 +137,9 @@ export function SerffBoard({
                     ? `+${s.price_spread.toFixed(3)}`
                     : s.price_spread.toFixed(3)
                   : '—'}
+              </span>
+              <span className="text-center font-mono text-type-2xs text-muted-foreground" title={(s as unknown as { ratio?: string }).ratio ?? ''}>
+                {(s as unknown as { ratio?: string }).ratio ?? '—'}
               </span>
               <span>
                 <ImplyChip imply={s.imply} compact onOpen={onOpenImply} />

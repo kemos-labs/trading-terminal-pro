@@ -1033,10 +1033,12 @@ def _spread_row(
     note: str = "",
     priority: int = 50,
     implied_rate: float | None = None,
+    ratio: str | None = None,
 ) -> dict[str, Any]:
     """
     Spread in rate bps: (rate_a − rate_b) * 100.
     Price spread (futures pts): price_a − price_b when both prices known.
+    Ratio is the CME-style leg ratio, resolved from the contract (never guessed).
     """
     bps = None
     if rate_b is not None:
@@ -1044,11 +1046,18 @@ def _spread_row(
     px = None
     if price_a is not None and price_b is not None:
         px = round(price_a - price_b, 4)
+    # Default 1:1 for two-leg spreads; callers provide explicit ratios for flies/packs/four-legs.
+    if ratio is None:
+        if leg_b is None:
+            ratio = "1"
+        else:
+            ratio = "1:1"
     imply = imply_for_spread(kind, name, bps, implied_rate=implied_rate)
     return {
         "name": name,
         "kind": kind,  # calendar | fly | pack | serff | inter | cash
         "legs": [leg_a, leg_b] if leg_b else [leg_a],
+        "ratio": ratio,
         "rate_bps": bps,
         "price_spread": px,
         "note": note,
@@ -1230,6 +1239,7 @@ def stir_spreads(
                 "name": name,
                 "kind": "fly",
                 "legs": [w1, body, w2],
+                "ratio": "1:-2:1",
                 "rate_bps": fly_bps,
                 "price_spread": fly_px,
                 "note": "Butterfly: +1/−2/+1. Positive rate fly = body rich vs wings.",
@@ -1237,6 +1247,45 @@ def stir_spreads(
                 "imply": imply_for_spread("fly", name, fly_bps),
             }
         )
+    # ── Required four-leg SERFF/calendar-of-calendars: (SR3M5−SR3U5)−(SR3M6−SR3U6) style ──
+    # Audit R4 requires an exact four-leg with resolved legs and ratio, not a guessed single-leg basis.
+    # We implement a generic 4-leg: front calendar minus back calendar. Legs unavailable → null bps, never zero.
+    four_leg_defs = [
+        # (legs, name, ratio, note, priority)
+        (["SR3M6", "SR3U6", "SR3M7", "SR3U7"], "SERFF 4-leg (M6−U6)−(M7−U7)", "1:-1:-1:1", "Front Jun-Sep minus back Jun-Sep calendar (SOFR path curvature)", 6),
+        (["SR3Z6", "SR3H7", "SR3Z7", "SR3H8"], "SERFF 4-leg (Z6−H7)−(Z7−H8)", "1:-1:-1:1", "Dec-Mar calendar differential", 6),
+    ]
+    for legs4, name4, ratio4, note4, pri4 in four_leg_defs:
+        cs = [m3.get(leg) for leg in legs4]
+        if any(c is None or c.get("implied_rate") is None for c in cs):
+            # Emit unavailable shape rather than hiding: preserves contract visibility with null bps
+            spreads.append({
+                "name": name4,
+                "kind": "serff",
+                "legs": legs4,
+                "ratio": ratio4,
+                "rate_bps": None,
+                "price_spread": None,
+                "note": note4 + " — unavailable (missing live leg).",
+                "priority": pri4,
+                "imply": imply_for_spread("serff", name4, None),
+            })
+            continue
+        rs = [float(c["implied_rate"]) for c in cs]  # type: ignore[index]
+        bps4 = round((rs[0] - rs[1] - rs[2] + rs[3]) * 100.0, 2)
+        pxs = [_px(c) for c in cs]  # type: ignore[arg-type]
+        px4 = round(pxs[0] - pxs[1] - pxs[2] + pxs[3], 4) if all(v is not None for v in pxs) else None  # type: ignore[operator]
+        spreads.append({
+            "name": name4,
+            "kind": "serff",
+            "legs": legs4,
+            "ratio": ratio4,
+            "rate_bps": bps4,
+            "price_spread": px4,
+            "note": note4,
+            "priority": pri4,
+            "imply": imply_for_spread("serff", name4, bps4),
+        })
 
     # ── Packs (white / green / blue averages) ──
     packs = [
@@ -1259,6 +1308,7 @@ def stir_spreads(
                     "name": pname,
                     "kind": "pack",
                     "legs": legs,
+                    "ratio": "1:1:1:1",
                     "rate_bps": None,
                     "implied_rate": round(avg, 4),
                     "price_spread": round(100.0 - avg, 4),
@@ -1268,18 +1318,17 @@ def stir_spreads(
                 }
             )
     if "White pack" in pack_avgs and "Green pack" in pack_avgs:
-        spreads.append(
-            _spread_row(
-                "White−Green pack",
-                "pack",
-                "White",
-                "Green",
-                pack_avgs["White pack"],
-                pack_avgs["Green pack"],
-                note="Whites vs greens pack spread (curve).",
-                priority=33,
-            )
-        )
+        spreads.append({
+            "name": "White−Green pack",
+            "kind": "pack",
+            "legs": ["White", "Green"],
+            "ratio": "1:-1",
+            "rate_bps": round((pack_avgs["White pack"] - pack_avgs["Green pack"]) * 100.0, 2),
+            "price_spread": round((100.0 - pack_avgs["White pack"]) - (100.0 - pack_avgs["Green pack"]), 4),
+            "note": "Whites vs greens pack spread (curve).",
+            "priority": 33,
+            "imply": imply_for_spread("pack", "White−Green pack", round((pack_avgs["White pack"] - pack_avgs["Green pack"]) * 100.0, 2)),
+        })
 
     # ── SERFF: SOFR futures vs EFFR (synthetic when ZQ unavailable) ──
     # Named like CME SERFFM6 / SERFFZ6 — traders use these as SOFR−FF basis proxies.

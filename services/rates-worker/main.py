@@ -29,17 +29,17 @@ app = FastAPI(title="MacroVol API")
 
 print(f"FRED_API_KEY loaded: {'YES' if os.getenv('FRED_API_KEY') else 'NO'}")
 
-# CORS: explicit origins via MACROVOL_CORS_ORIGIN (comma-separated), wildcard
-# only when unset. The Node proxy is the only intended production consumer.
-_macrovol_cors = [o.strip() for o in os.environ.get("MACROVOL_CORS_ORIGIN", "").split(",") if o.strip()]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_macrovol_cors or ["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Private worker — loopback only. Node is the sole consumer and the only public surface.
+# CORS is disabled by default; set RATES_WORKER_CORS_ORIGINS only for explicit browser dev use.
+_rates_cors = [o.strip() for o in os.environ.get("RATES_WORKER_CORS_ORIGINS", os.environ.get("MACROVOL_CORS_ORIGIN", "")).split(",") if o.strip()]
+if _rates_cors:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_rates_cors,
+        allow_credentials=False,
+        allow_methods=["GET", "OPTIONS"],
+        allow_headers=["Accept", "Content-Type"],
+    )
 
 SERIES_MAP = {
     "SOFR": "sofr",
@@ -1569,6 +1569,7 @@ async def get_stir_strip():
             "last_bps": s.get("rate_bps"),
             "price_spread": s.get("price_spread"),
             "legs": s.get("legs"),
+            "ratio": s.get("ratio"),
             "kind": "serff",
             "imply": s.get("imply"),
         })
@@ -1582,6 +1583,7 @@ async def get_stir_strip():
                 "last_bps": s.get("rate_bps"),
                 "price_spread": s.get("price_spread"),
                 "legs": s.get("legs"),
+                "ratio": s.get("ratio"),
                 "kind": "inter",
                 "imply": s.get("imply"),
             })

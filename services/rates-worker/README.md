@@ -1,24 +1,27 @@
-# MacroVol API (embedded)
+# rates-worker (private, loopback-only)
 
 FastAPI backend: **FRED** macro/rates + **yfinance** Greeks/IV surface/STIR.
+Private implementation worker for `services/rates-worker`; the Node Fastify process is the sole public HTTP surface and proxies this worker over loopback only.
 
 ## Run
 
 ```bash
-# Preferred: put key in macrovol-api/.env
+# Preferred: put key in services/rates-worker/.env
 # FRED_API_KEY=...   https://fred.stlouisfed.org/docs/api/api_key.html
 
 # From repo root
-npm run macrovol-api
+npm run rates-worker
 # or
-python3 -m uvicorn main:app --app-dir macrovol-api --host 127.0.0.1 --port 8765
+python3 -m uvicorn main:app --app-dir services/rates-worker --host 127.0.0.1 --port 8765
+# Legacy alias `npm run macrovol-api` still resolves to `rates-worker`.
 ```
 
 `ALLOW_STIR_FALLBACK=0` (default) — never mix stale SR3/ZQ fallbacks with live quotes.
 
 ## Proxy
 
-Node `server.js`: `/api/macrovol/*` → `MACROVOL_API_URL` (default `http://127.0.0.1:8765`) `/api/*`.
+Node `server/routes/macrovol.js`: `/api/macrovol/*` → `MACROVOL_API_URL` (default `http://127.0.0.1:8765`) `/api/*`.
+No wildcard CORS — loopback only. Set `RATES_WORKER_CORS_ORIGINS` explicitly only for local browser dev.
 
 ## Data quality notes
 

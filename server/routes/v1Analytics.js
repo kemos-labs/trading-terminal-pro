@@ -15,7 +15,7 @@ import {
   getDeribitTradesSnapshotResult,
 } from './deribitMarket.js';
 import { fetchFreeCryptoMarketResult } from '../providers/freeCrypto/client.js';
-import { academyIndexJson } from '../../api/academyCatalog.js';
+import { buildAcademyIndex } from '../../api/academyCatalog.js';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gateInfoForRequest } from '../../api/stripeBilling.js';
@@ -470,7 +470,7 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
   fastify.get('/api/v1/academy/index', async (request, reply) => {
     let index;
     try {
-      index = academyIndexJson(DOCS_ROOT);
+      index = buildAcademyIndex(DOCS_ROOT);
     } catch {
       return sendError(request, reply, {
         statusCode: 502,
@@ -481,7 +481,13 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
       });
     }
     const now = Date.now();
-    const children = Array.isArray(index.children) ? index.children : [];
+    const categories = Array.isArray(index.categories) ? index.categories : [];
+    const children = categories.flatMap((category) => (Array.isArray(category.files) ? category.files : [])
+      .map((item) => ({
+        ...item,
+        categoryId: String(category.id ?? ''),
+        categoryLabel: String(category.label ?? category.id ?? ''),
+      })));
     const envelope = baseEnvelope(request, {
       asOf: now,
       fetchedAt: now,

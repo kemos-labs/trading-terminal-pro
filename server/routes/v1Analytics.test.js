@@ -183,6 +183,8 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     expect(validateContract('academyIndexResponse', body)).toMatchObject({ valid: true });
     expect(body.data.title).toBeTruthy();
     expect(Array.isArray(body.data.children)).toBe(true);
+    expect(body.data.children.length).toBeGreaterThan(10);
+    expect(body.data.children[0]).toMatchObject({ title: expect.any(String), path: expect.stringMatching(/^docs\//) });
   });
 
   it('ksa/board fails closed with ENTITLEMENT_MISSING without a server key', async () => {

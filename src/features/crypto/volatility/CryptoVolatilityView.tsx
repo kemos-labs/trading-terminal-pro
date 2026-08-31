@@ -4,6 +4,10 @@ import { forwardVol } from '../../../lib/math/carry/forwardVol';
 
 interface TermPoint { expiryMs: number; atmIv: number | null; dte: number; hasQuote: boolean; }
 
+export function activeExpiryMs(expiryMs: number, nowMs: number): boolean {
+  return Number.isFinite(expiryMs) && expiryMs > nowMs;
+}
+
 /** IVs are decimal (server converts Deribit percentage points exactly once). Render ×100. */
 export function fmtIv(iv: number | null): string {
   return iv != null ? `${(iv * 100).toFixed(1)}%` : '—';
@@ -27,6 +31,10 @@ export function CryptoVolatilityView() {
     let cancelled = false;
     fetchDeribitMarket('BTC').then(res => {
       if (cancelled) return;
+      if (!res) {
+        setError('Deribit volatility snapshot unavailable');
+        return;
+      }
       setBundle(res);
       // Stale when server snapshot is older than 60s
       setStale(Date.now() - res.fetchedAt > 60_000);
@@ -46,7 +54,9 @@ export function CryptoVolatilityView() {
 
   const spot = bundle.indexPrice ?? bundle.instruments.find(t => t.kind === 'perp')?.markPrice ?? null;
   const now = Date.now();
-  const expiries = [...new Set(bundle.instruments.map(t => t.expiryMs).filter((e): e is number => e != null))].sort((a, b) => a - b);
+  // Active analytics never include expired contracts: negative T would make
+  // forward variance and Greeks economically meaningless.
+  const expiries = [...new Set(bundle.instruments.map(t => t.expiryMs).filter((e): e is number => e != null && activeExpiryMs(e, now)))].sort((a, b) => a - b);
 
   if (expiries.length === 0) return (
     <div className="rounded border border-dashed p-8 text-center font-mono text-xs" data-testid="vol-empty">

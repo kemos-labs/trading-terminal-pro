@@ -42,10 +42,14 @@ describe('route parity: method-aware resolution (C2)', () => {
     expect(resolves(compiled, 'POST /api/does-not-exist')).toBe(false);
   });
 
-  it('parsePattern defaults to GET and trims method prefixes', () => {
-    expect(parsePattern('/api/foo')).toEqual({ method: 'GET', path: '/api/foo' });
+  it('requires method authority for annotations and trims method prefixes', () => {
+    expect(parsePattern('/api/foo')).toEqual({ method: null, path: '/api/foo' });
     expect(parsePattern('POST /api/foo')).toEqual({ method: 'POST', path: '/api/foo' });
     expect(parsePattern('  patch   /api/foo  ')).toEqual({ method: 'PATCH', path: '/api/foo' });
+  });
+
+  it('does not treat a wrong explicit method as a GET fallback', () => {
+    expect(resolves(compiled, 'POST /api/deribit/market/BTC')).toBe(false);
   });
 
   it('route regex handles dynamic segments and trailing slashes', () => {

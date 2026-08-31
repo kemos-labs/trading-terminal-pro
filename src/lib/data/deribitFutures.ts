@@ -107,6 +107,7 @@ async function marketSnapshot(
   const cached = cache.get(key);
   if (cached && cached.expiry > Date.now()) return cached.value;
   try {
+    // route-parity: GET /api/v1/market/crypto/:currency
     const response = await fetch(`/api/v1/market/crypto/${currency}`, {
       headers: { Accept: 'application/json' },
     });
@@ -244,6 +245,7 @@ export async function fetchFundingHistory(
   const existing = fundingCache.get(key);
   if (existing && existing.expiry > Date.now()) return existing.value;
   try {
+    // route-parity: GET /api/v1/market/crypto/:currency/funding
     const response = await fetch(
       `/api/v1/market/crypto/${currency}/funding?instrument_name=${encodeURIComponent(instrumentName)}&days=${days}`,
       { headers: { Accept: 'application/json' } },

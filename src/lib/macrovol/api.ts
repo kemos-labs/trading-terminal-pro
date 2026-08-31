@@ -8,7 +8,7 @@
 const BASE = '/api/macrovol';
 
 async function fetchJson<T = unknown>(url: string, init?: RequestInit): Promise<T> {
-  // route-parity: /api/macrovol/*
+  // route-parity: GET /api/macrovol/*
   const res = await fetch(url, {
     ...init,
     headers: { Accept: 'application/json', ...init?.headers },

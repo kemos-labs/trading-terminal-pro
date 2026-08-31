@@ -17,11 +17,12 @@ export function routeRegex(route) {
   return new RegExp(`^${parts.join('/')}/?$`);
 }
 
-/** Parse an annotation/frontend pattern into { method, path }. Default method = GET. */
+/** Parse an annotation into { method, path }. Bare annotations have no
+ * method authority; callers may choose GET only for an options-less fetch. */
 export function parsePattern(pattern) {
   const trimmed = pattern.trim();
   const m = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(\/.*)$/i.exec(trimmed);
-  return m ? { method: m[1].toUpperCase(), path: m[2] } : { method: 'GET', path: trimmed };
+  return m ? { method: m[1].toUpperCase(), path: m[2] } : { method: null, path: trimmed };
 }
 
 export function clientSample(pattern) {
@@ -47,7 +48,7 @@ export function compileRuntimeRoutes(routes) {
 /** True when `path` with `method` resolves against the compiled runtime table. */
 export function resolves(compiled, pattern, explicitMethod = null) {
   const { method: patMethod, path } = parsePattern(pattern);
-  const wantMethod = (explicitMethod ?? patMethod).toUpperCase();
+  const wantMethod = (explicitMethod ?? patMethod ?? 'GET').toUpperCase();
   const sample = clientSample(path);
   return compiled.some(({ method: m, regex }) => m === wantMethod && regex.test(sample));
 }

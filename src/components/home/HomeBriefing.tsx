@@ -130,6 +130,7 @@ export function HomeBriefing() {
   useEffect(() => {
     let cancelled = false;
     setState((s) => ({ ...s, loading: true }));
+    // route-parity: GET /api/home/briefing
     fetch(`/api/home/briefing?symbol=${encodeURIComponent(symbol)}`, { headers: { Accept: 'application/json' } })
       .then(async (r) => {
         const body = await r.json().catch(() => null);

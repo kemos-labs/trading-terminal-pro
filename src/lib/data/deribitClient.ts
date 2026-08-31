@@ -142,6 +142,7 @@ export async function fetchDeribitMarket(
   if (cached && cached.expiry > Date.now()) return cached.value;
 
   try {
+    // route-parity: GET /api/v1/market/crypto/:currency
     const response = await fetch(`/api/v1/market/crypto/${currency}`, {
       headers: { Accept: 'application/json' },
     });

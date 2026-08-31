@@ -112,11 +112,13 @@ try {
         : [];
     }
 
-    /** Parse the fetch options argument to extract the HTTP method (default GET). */
+    /** Resolve fetch method only when it is explicit or options are absent.
+     * A present options object with a dynamic/omitted method is intentionally
+     * unresolved: the declaration must carry a method-prefixed annotation. */
     function optionsMethod(node) {
-      if (!node) return 'GET';
       const arg = node.arguments?.[1];
       if (!arg) return 'GET';
+      if (!ts.isObjectLiteralExpression(arg)) return null;
       let method = null;
       for (const prop of arg.properties ?? []) {
         if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === 'method') {
@@ -124,7 +126,7 @@ try {
           if (typeof v === 'string' && /^(GET|POST|PUT|PATCH|DELETE|HEAD)$/i.test(v)) method = v.toUpperCase();
         }
       }
-      return method ?? 'GET';
+      return method;
     }
 
     function inspect(node) {
@@ -155,6 +157,10 @@ try {
           for (const pattern of patterns) {
             const { method: patMethod, path } = parsePattern(pattern);
             const callMethod = method ?? patMethod;
+            if (!callMethod) {
+              errors.push(`${label}: unresolved HTTP method requires a method-prefixed route-parity annotation`);
+              continue;
+            }
             calls.push({ label, method: callMethod, pattern: path });
             if (!resolves(path, callMethod)) {
               errors.push(`${label}: ${callMethod} ${path} has no matching Fastify runtime route (method-aware)`);

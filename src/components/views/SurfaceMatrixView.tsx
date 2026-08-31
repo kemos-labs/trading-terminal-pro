@@ -12,6 +12,7 @@ type QuoteSide = 'mid' | 'bid' | 'ask';
 export function SurfaceMatrixView() {
   const snapshot = useTerminalStore((s) => s.snapshot);
   const [side, setSide] = useState<QuoteSide>('mid');
+  const [show3d, setShow3d] = useState(false);
 
   const availability = useMemo(() => {
     if (!snapshot) return { hasBidIv: false, hasAskIv: false };
@@ -122,10 +123,26 @@ export function SurfaceMatrixView() {
               emptyMessage="No IV observations in window — cells stay unavailable."
             />
           </div>
-          {/* 3D — lazy engine; explicit entry only */}
-          <Suspense fallback={<div className="flex h-40 items-center justify-center font-mono text-type-2xs text-muted-foreground">3D engine loads on open…</div>}>
-            <Surface3DTool />
-          </Suspense>
+          <div className="flex items-center justify-between border-t border-border pt-2">
+            <div>
+              <div className="font-mono text-type-xs font-semibold text-foreground">3D observed/model surface</div>
+              <div className="text-type-2xs text-muted-foreground">Optional analytical view; the WebGL engine is not loaded until opened.</div>
+            </div>
+            <button
+              type="button"
+              className="rounded border border-border px-2 py-1 font-mono text-type-2xs text-foreground hover:bg-muted/30 focus-ring-term"
+              aria-expanded={show3d}
+              onClick={() => setShow3d((open) => !open)}
+              data-testid="open-3d-surface"
+            >
+              {show3d ? 'Close 3D' : 'Open 3D'}
+            </button>
+          </div>
+          {show3d && (
+            <Suspense fallback={<div className="flex h-40 items-center justify-center font-mono text-type-2xs text-muted-foreground">3D engine loads on open…</div>}>
+              <Surface3DTool />
+            </Suspense>
+          )}
         </div>
       </div>
     </Panel>

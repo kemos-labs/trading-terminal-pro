@@ -113,7 +113,7 @@ export interface CacheStatus {
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
-  // route-parity: /api/desk/pack | /api/cache/status
+  // route-parity: GET /api/desk/pack | GET /api/cache/status
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
   return data as T;

@@ -19,6 +19,7 @@ export type OpraChainResponse =
 
 export async function fetchOpraStatus(signal?: AbortSignal): Promise<OpraStatus | null> {
   try {
+    // route-parity: GET /api/opra/status
     const res = await fetch('/api/opra/status', { signal });
     if (!res.ok) return null;
     return (await res.json()) as OpraStatus;
@@ -36,6 +37,7 @@ export async function fetchOpraChainSnapshot(
   signal?: AbortSignal,
 ): Promise<{ ok: boolean; status: number; body: OpraChainResponse | null }> {
   try {
+    // route-parity: GET /api/opra/chain/:symbol
     const res = await fetch(`/api/opra/chain/${encodeURIComponent(symbol)}`, { signal });
     const body = (await res.json().catch(() => null)) as OpraChainResponse | null;
     return { ok: res.ok, status: res.status, body };

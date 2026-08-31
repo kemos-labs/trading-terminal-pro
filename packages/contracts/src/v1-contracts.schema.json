@@ -163,9 +163,10 @@
                 "mode": {
                   "type": "string",
                   "enum": [
-                    "velo-configuration-detected",
+                    "velo-config-unverified",
                     "free-alternatives",
-                    "configuration-error"
+                    "velo-active",
+                    "velo-unavailable"
                   ]
                 },
                 "veloCredentialPresent": {

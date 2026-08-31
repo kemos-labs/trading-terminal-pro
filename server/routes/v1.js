@@ -177,9 +177,7 @@ export function registerV1Routes(fastify) {
       assumptions: [],
       warnings: providerModes.crypto.mode === 'free-alternatives'
         ? ['VELO_NOT_CONFIGURED: crypto multi-venue panels use labelled public exchange alternatives.']
-        : providerModes.crypto.mode === 'configuration-error'
-          ? ['VELO_CONFIGURATION_INCOMPLETE: free fallback is disabled for canonical provider selection.']
-          : ['VELO_CONNECTOR_PENDING: configuration was detected, but no unverified vendor payload is presented as active.'],
+        : ['VELO_CONFIG_UNVERIFIED: configuration presence is not entitlement; free Binance/Bybit alternatives remain active until a capability probe verifies Velo.'],
       data: { status: 'ok', timestamp: now, providerModes },
     });
     return sendContract(request, reply, 'healthResponse', envelope);

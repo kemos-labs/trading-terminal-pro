@@ -12,16 +12,17 @@ describe('provider entitlement selection', () => {
     });
   });
 
-  it('fails configuration closed rather than silently falling back with a partial Velo setup', () => {
+  it('keeps the free fallback active when a partial Velo configuration is present', () => {
     const mode = providerEntitlements({ VELO_API_KEY: 'test-key' }).crypto;
-    expect(mode.mode).toBe('configuration-error');
-    expect(mode.fallbackProviders).toEqual([]);
+    expect(mode.mode).toBe('velo-config-unverified');
+    expect(mode.fallbackProviders).toEqual(['Binance Futures', 'Bybit Linear']);
+    expect(mode.normalization).toMatch(/unverified/);
   });
 
-  it('detects complete Velo configuration without claiming the connector is active', () => {
+  it('does not claim complete Velo configuration is active without a capability probe', () => {
     const mode = providerEntitlements({ VELO_API_TOKEN: 'test-token', VELO_API_BASE_URL: 'https://example.test' }).crypto;
-    expect(mode.mode).toBe('velo-configuration-detected');
+    expect(mode.mode).toBe('velo-config-unverified');
     expect(mode.veloConfigured).toBe(true);
-    expect(mode.fallbackProviders).toEqual([]);
+    expect(mode.fallbackProviders).toEqual(['Binance Futures', 'Bybit Linear']);
   });
 });

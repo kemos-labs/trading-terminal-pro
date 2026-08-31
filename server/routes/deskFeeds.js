@@ -20,6 +20,17 @@ function finnhubKey() { return process.env.FINNHUB_API_KEY || null; }
 
 function finnhubDate(d = new Date()) { return d.toISOString().slice(0, 10); }
 
+function observedNonNegative(value) {
+  if (value == null || value === '' || typeof value === 'boolean') return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function sumObserved(rows, select) {
+  const values = rows.map(select).map(observedNonNegative).filter((value) => value != null);
+  return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) : null;
+}
+
 async function finnhubGet(path, params = {}) {
   const key = finnhubKey();
   if (!key) {
@@ -48,14 +59,14 @@ async function deribitOptionsSummary(ccy) {
     const result = await deribitFetch(`get_book_summary_by_currency?currency=${ccy}&kind=option`);
     const list = Array.isArray(result) ? result : [];
     if (!list.length) return null;
-    let volCcy = 0, volUsd = 0, openIntCcy = 0, instruments = 0;
-    for (const s of list) {
-      instruments += 1;
-      volCcy += Number(s.volume) || 0;
-      volUsd += Number(s.volume_usd) || 0;
-      openIntCcy += Number(s.open_interest) || 0; // contracts (Deribit summary field)
-    }
-    return { venue: 'Deribit', instruments, volCcy24h: volCcy, volUsd24h: volUsd, openIntContracts: openIntCcy, fetchedAt: Date.now() };
+    return {
+      venue: 'Deribit',
+      instruments: list.length,
+      volCcy24h: sumObserved(list, (row) => row.volume),
+      volUsd24h: sumObserved(list, (row) => row.volume_usd),
+      openIntContracts: sumObserved(list, (row) => row.open_interest),
+      fetchedAt: Date.now(),
+    };
   } catch { return null; }
 }
 
@@ -67,25 +78,20 @@ async function okxOptionsSummary(ccy) {
     const json = await res.json();
     const list = Array.isArray(json?.data) ? json.data : [];
     if (!list.length) return null;
-    let volCcy = 0, volUsd = 0, openIntCcy = 0, instruments = 0;
-    for (const t of list) {
-      instruments += 1;
-      volCcy += Number(t.volCcy24h) || 0; // base-ccy notional
-      volUsd += Number(t.volUsd24h) || 0;
-      openIntCcy += Number(t.openInt) || 0;
-    }
+    const volCcy = sumObserved(list, (row) => row.volCcy24h);
+    const volUsd = sumObserved(list, (row) => row.volUsd24h);
+    let openIntCcy = sumObserved(list, (row) => row.openInt);
     // OKX OI lives on a separate public endpoint (per-instrument rows).
     try {
       const oiRes = await fetch(`${OKX_BASE}/api/v5/public/open-interest?instType=OPTION&instFamily=${ccy}-USD`, { signal: AbortSignal.timeout(8_000) });
       if (oiRes.ok) {
         const oiJson = await oiRes.json();
         const oiRows = Array.isArray(oiJson?.data) ? oiJson.data : [];
-        let oiCcySum = 0;
-        for (const r of oiRows) oiCcySum += Number(r.oiCcy) || 0;
-        if (oiCcySum > 0) openIntCcy = oiCcySum;
+        const oiCcySum = sumObserved(oiRows, (row) => row.oiCcy);
+        if (oiCcySum != null) openIntCcy = oiCcySum;
       }
     } catch { /* tickers fallback already applied */ }
-    return { venue: 'OKX', instruments, volCcy24h: volCcy, volUsd24h: volUsd, openIntContracts: openIntCcy, fetchedAt: Date.now() };
+    return { venue: 'OKX', instruments: list.length, volCcy24h: volCcy, volUsd24h: volUsd, openIntContracts: openIntCcy, fetchedAt: Date.now() };
   } catch { return null; }
 }
 
@@ -97,13 +103,13 @@ async function bybitOptionsSummary(ccy) {
     const json = await res.json();
     const list = Array.isArray(json?.result?.list) ? json.result.list : [];
     if (!list.length) return null;
-    let volCcy = 0, openIntCcy = 0, instruments = 0;
-    for (const t of list) {
-      instruments += 1;
-      volCcy += Number(t.volume24h) || 0; // base-ccy contracts (1 = 1 ccy on Bybit)
-      openIntCcy += Number(t.openInterest) || 0;
-    }
-    return { venue: 'Bybit', instruments, volCcy24h: volCcy, openIntCcy, fetchedAt: Date.now() };
+    return {
+      venue: 'Bybit',
+      instruments: list.length,
+      volCcy24h: sumObserved(list, (row) => row.volume24h),
+      openIntContracts: sumObserved(list, (row) => row.openInterest),
+      fetchedAt: Date.now(),
+    };
   } catch { return null; }
 }
 

@@ -13,6 +13,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import http from 'node:http';
 import { clearCacheForTests } from '../../api/upstreamCache.js';
+import { resetDeribitClientState } from '../providers/deribit/client.js';
 
 const REAL_FETCH = global.fetch;
 
@@ -78,6 +79,7 @@ describe('restored routes (Phase 1 parity)', () => {
 
   beforeEach(async () => {
     clearCacheForTests();
+    resetDeribitClientState();
     app = await makeApp();
   });
 
@@ -211,6 +213,34 @@ describe('restored routes (Phase 1 parity)', () => {
       }
     } else {
       expect(res.statusCode).toBe(502);
+    }
+  });
+
+  it('venues/options preserves missing volume and open interest as null, not fabricated zero', async () => {
+    global.fetch = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes('deribit')) {
+        return new Response(JSON.stringify({ jsonrpc: '2.0', result: [{ instrument_name: 'BTC-X', volume: null, volume_usd: '', open_interest: undefined }] }), { status: 200 });
+      }
+      if (url.includes('/api/v5/market/tickers')) {
+        return new Response(JSON.stringify({ data: [{ volCcy24h: null, volUsd24h: '', openInt: false }] }), { status: 200 });
+      }
+      if (url.includes('/api/v5/public/open-interest')) {
+        return new Response(JSON.stringify({ data: [{ oiCcy: null }] }), { status: 200 });
+      }
+      if (url.includes('bybit')) {
+        return new Response(JSON.stringify({ result: { list: [{ volume24h: '', openInterest: null }] } }), { status: 200 });
+      }
+      return new Response('{}', { status: 404 });
+    });
+    const response = await app.inject('/api/venues/options/BTC');
+    expect(response.statusCode).toBe(200);
+    const venues = response.json().venues;
+    expect(venues.length).toBeGreaterThanOrEqual(2);
+    for (const venue of venues) {
+      expect(venue.volCcy24h).toBeNull();
+      expect(venue.openIntContracts).toBeNull();
+      expect(venue).not.toHaveProperty('openIntCcy');
     }
   });
 

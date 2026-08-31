@@ -33,7 +33,14 @@ export interface ExposureResult {
 }
 
 export function normalizeQuantity(row: PositionRow): number | null {
-  if (row.available !== false && row.oi != null && isFinite(row.oi)) return row.oi;
+  if (row.available === false) return null;
+  if (row.oi != null && Number.isFinite(row.oi) && row.oi >= 0) return row.oi;
+  if (row.contracts != null && row.multiplier != null
+    && Number.isFinite(row.contracts) && row.contracts >= 0
+    && Number.isFinite(row.multiplier) && row.multiplier > 0) {
+    const quantity = row.contracts * row.multiplier;
+    return Number.isFinite(quantity) ? quantity : null;
+  }
   // Do NOT fallback to volume or unit weight — return null for missing OI
   return null;
 }
@@ -47,6 +54,7 @@ function rowUsable(r: PositionRow): boolean {
     && isFinite(r.vannaRaw)
     && isFinite(r.charmRaw)
     && isFinite(r.spot)
+    && r.spot > 0
   );
 }
 

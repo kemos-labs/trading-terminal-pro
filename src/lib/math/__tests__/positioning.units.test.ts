@@ -30,6 +30,24 @@ describe('positioning units and provenance', () => {
     expect(aggregateExposure([row('call', null), row('put', 5)], sign).total.coverageState).toBe('partial');
   });
 
+  it('rejects negative OI and applies a contracts multiplier exactly once when OI is absent', () => {
+    const sign = () => 1 as const;
+    expect(aggregateExposure([row('call', -1)], sign).total).toMatchObject({ coverageState: 'missing', gex: null });
+    const converted = aggregateExposure([row('call', null, { contracts: 4, multiplier: 25 })], sign).total;
+    expect(converted).toMatchObject({ coverageState: 'observed', coverage: 1 });
+    expect(converted.gex).toBeCloseTo(0.01 * 100 * 100 * 100 * 0.01, 10);
+    const observedWins = aggregateExposure([row('call', 3, { contracts: 4, multiplier: 25 })], sign).total;
+    expect(observedWins.gex).toBeCloseTo(0.01 * 3 * 100 * 100 * 0.01, 10);
+  });
+
+  it('fails closed when spot is zero or negative', () => {
+    const sign = () => 1 as const;
+    for (const spot of [0, -100]) {
+      expect(aggregateExposure([row('call', 10, { spot })], sign).total)
+        .toMatchObject({ coverageState: 'missing', gex: null, dex: null });
+    }
+  });
+
   it('GEX satisfies the dollar-delta finite-difference identity', () => {
     // GEX (per 1% move) equals the change in delta-notional for a +1% spot move:
     // (delta + gamma*0.01*S)*Q*S - delta*Q*S = gamma*Q*S^2*0.01

@@ -377,7 +377,7 @@ export function StirSection({
           {/* ── Right stack: SR1 + Treasury fill remaining height ── */}
           <div className="grid min-h-0 grid-rows-2 gap-1.5 xl:col-span-5 2xl:col-span-4">
             <BoardShell
-              title="1M SOFR (SR1) · monthly SERFF legs"
+              title="1M SOFR (SR1) strip · SERFF near legs"
               badge={`${liveSr1.length} live`}
             >
               {liveSr1.length === 0 ? (

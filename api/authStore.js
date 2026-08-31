@@ -105,9 +105,10 @@ export function userExists(email) {
 }
 
 // ── Password reset tokens ─────────────────────────────────────────────────────
-// No mailer is wired yet: request-reset logs the token server-side and an
-// operator hands it to the user (or use scripts/auth-reset.mjs for a direct
-// admin reset). Tokens are single-use, 1h TTL, stored server-side only.
+// Public request-reset never creates, returns, persists, or logs a token or
+// email (see authRoutes.js — issuance is offline/operator-only via
+// scripts/auth-reset.mjs on the deploy box). Tokens are single-use, 1h TTL,
+// stored server-side only.
 
 const RESET_FILE = join(DATA_DIR, 'reset-tokens.json');
 const RESET_TTL_MS = 60 * 60 * 1000;

@@ -48,14 +48,21 @@ def implied_volatility(market_price, S, K, T, r, q, option_type="call"):
     return (lo + hi) / 2
 
 
-def _r_for_T(T: float, r: float, curve_points=None) -> float:
+def _r_for_T(T: float, r: float | None, curve_points=None) -> float | None:
+    """Resolve r(T). Fail-closed: returns None when neither the curve nor the
+    caller-supplied observed rate is available — never a fabricated default."""
     if not curve_points:
         return r
     try:
         from services.rate_risk import interpolate_r
-        return interpolate_r(curve_points, T)
+        r_t = interpolate_r(curve_points, T)
     except Exception:
+        r_t = None
+    if r_t is None:
+        # Curve missing/empty: fall back only to the caller-supplied rate (an
+        # observed SOFR anchor or an explicit user input), else unavailable.
         return r
+    return r_t
 
 
 def _sanitize_iv_grid(primary: np.ndarray, linear: np.ndarray, nearest: np.ndarray) -> np.ndarray:
@@ -88,7 +95,7 @@ def _sanitize_iv_grid(primary: np.ndarray, linear: np.ndarray, nearest: np.ndarr
 
 def build_iv_surface(
     ticker: str,
-    r: float = 0.05,
+    r: float | None = None,
     q: float = 0.0,
     strike_range: float = 0.3,
     curve_points=None,
@@ -108,6 +115,10 @@ def build_iv_surface(
         if T <= _POST_CLOSE_T * 10 or T > 3.0:
             continue
         r_t = _r_for_T(T, r, curve_points)
+        if r_t is None:
+            # Rate unavailable for this expiry → skip (fail-closed), never
+            # price with a fabricated default rate.
+            continue
         try:
             chain = stock.option_chain(exp_str)
         except Exception:

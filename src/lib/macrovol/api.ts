@@ -483,14 +483,24 @@ export interface SerffBoardRow {
   last_bps?: number | null;
   price_spread?: number | null;
   legs?: string[];
+  /** 'serff' = listed same-month SR1−ZQ; 'derived-proxy' = cash-EFFR proxy (non-listed, non-executable) */
+  kind?: 'serff' | 'derived-proxy' | string;
   ratio?: string | null;
-  kind?: string;
   imply?: ImplyRead | null;
 }
 
 export interface StirSpread {
   name: string;
-  kind: 'calendar' | 'fly' | 'pack' | 'serff' | 'inter' | 'cash' | string;
+  kind:
+    | 'calendar'
+    | 'fly'
+    | 'pack'
+    | 'calendar-of-calendars'
+    | 'serff'
+    | 'derived-proxy'
+    | 'inter'
+    | 'cash'
+    | string;
   legs: string[];
   ratio?: string | null;
   rate_bps: number | null;
@@ -621,10 +631,14 @@ export interface CurveShapeData {
 
 export interface TermStructureData {
   T: number;
-  r: number;
-  r_pct: number;
+  /** Interpolated rate (decimal). null = curve unavailable — never a fabricated default. */
+  r: number | null;
+  r_pct: number | null;
+  available?: boolean;
   r_source?: string;
   curve_points?: { T: number; r: number; r_pct: number }[];
+  curve_coverage?: { points: number; state: string };
+  warnings?: string[];
   sofr?: number | null;
   as_of?: string;
   source?: string;

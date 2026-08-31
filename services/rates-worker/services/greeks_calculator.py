@@ -148,17 +148,24 @@ def compute_iv(market_price, S, K, T, r, q, option_type="call"):
     return (lo + hi) / 2
 
 
-def _r_for_T(T: float, r: float, curve_points=None) -> float:
+def _r_for_T(T: float, r: float | None, curve_points=None) -> float | None:
+    """Resolve r(T). Fail-closed: returns None when neither the curve nor the
+    caller-supplied observed rate is available — never a fabricated default."""
     if not curve_points:
         return r
     try:
         from services.rate_risk import interpolate_r
-        return interpolate_r(curve_points, T)
+        r_t = interpolate_r(curve_points, T)
     except Exception:
+        r_t = None
+    if r_t is None:
+        # Curve missing/empty: fall back only to the caller-supplied rate (an
+        # observed SOFR anchor or an explicit user input), else unavailable.
         return r
+    return r_t
 
 
-def build_greeks_surface(ticker: str, r: float = 0.05, q: float = 0.0, curve_points=None) -> dict:
+def build_greeks_surface(ticker: str, r: float | None = None, q: float = 0.0, curve_points=None) -> dict:
     stock = yf.Ticker(ticker)
     spot = stock.fast_info.get("lastPrice") or stock.fast_info.get("previousClose")
     if not spot:
@@ -220,6 +227,9 @@ def build_greeks_surface(ticker: str, r: float = 0.05, q: float = 0.0, curve_poi
 
 
 def _point_from_row(row, spot, T, r, q, option_type: str):
+    if r is None:
+        # No observed/supplied rate available → point unavailable (fail-closed).
+        return None
     K = float(row["strike"])
     if K < spot * 0.85 or K > spot * 1.15:
         return None

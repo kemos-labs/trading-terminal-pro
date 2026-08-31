@@ -25,13 +25,18 @@ GREEKS_CACHE_TTL = 120
 SURFACE_CACHE_TTL = 120
 STIR_CACHE_TTL = 60
 
-app = FastAPI(title="MacroVol API")
-
-print(f"FRED_API_KEY loaded: {'YES' if os.getenv('FRED_API_KEY') else 'NO'}")
+app = FastAPI(title="Rates Worker — private rates/macro service")
 
 # Private worker — loopback only. Node is the sole consumer and the only public surface.
 # CORS is disabled by default; set RATES_WORKER_CORS_ORIGINS only for explicit browser dev use.
-_rates_cors = [o.strip() for o in os.environ.get("RATES_WORKER_CORS_ORIGINS", os.environ.get("MACROVOL_CORS_ORIGIN", "")).split(",") if o.strip()]
+# Wildcard origins are rejected even when configured — a private loopback worker
+# must never publish a public CORS surface.
+_raw_cors = os.environ.get("RATES_WORKER_CORS_ORIGINS", os.environ.get("MACROVOL_CORS_ORIGIN", ""))
+_rejected_cors = [o.strip() for o in _raw_cors.split(",") if o.strip() == "*"]
+_rates_cors = [o.strip() for o in _raw_cors.split(",") if o.strip() and o.strip() != "*"]
+if _rejected_cors:
+    # Never honor '*'; refuse to start the CORS middleware on wildcard config.
+    print("rates-worker: wildcard CORS origin rejected (private worker stays origin-pinned)")
 if _rates_cors:
     app.add_middleware(
         CORSMiddleware,
@@ -351,19 +356,31 @@ async def rates_term_structure(T: float = Query(0.25, ge=0.01, le=40.0)):
     sofr = await get_latest("SOFR")
     sofr_dec = round(float(sofr) / 100.0, 6) if sofr is not None else None
     # For very short T prefer SOFR when available
-    r_used = r
+    r_used: float | None = r
     r_source = "treasury_curve"
+    warnings: list[str] = []
     if T <= 0.25 and sofr_dec is not None:
         # blend: T→0 use SOFR, T→0.25 use 3M tsy
-        w = min(max(T / 0.25, 0.0), 1.0)
-        r_used = sofr_dec * (1 - w) + r * w
-        r_source = "sofr_blend_3m"
+        if r is None:
+            # No curve — observed SOFR is still a valid short-T input on its own.
+            r_used = sofr_dec
+            r_source = "sofr_only_no_curve"
+            warnings.append("treasury_curve_unavailable: r(T) sourced from observed SOFR only")
+        else:
+            w = min(max(T / 0.25, 0.0), 1.0)
+            r_used = sofr_dec * (1 - w) + r * w
+            r_source = "sofr_blend_3m"
+    elif r is None:
+        warnings.append("treasury_curve_unavailable: no live Treasury CMT points; r(T) unavailable (fail-closed, no default rate)")
     return {
         "T": T,
-        "r": round(r_used, 6),
-        "r_pct": round(r_used * 100.0, 4),
-        "r_source": r_source,
+        "r": round(r_used, 6) if r_used is not None else None,
+        "r_pct": round(r_used * 100.0, 4) if r_used is not None else None,
+        "available": r_used is not None,
+        "r_source": r_source if r_used is not None else "unavailable",
         "curve_points": [{"T": t, "r": round(rv, 6), "r_pct": round(rv * 100, 4)} for t, rv in pts],
+        "curve_coverage": {"points": len(pts), "state": "full" if len(pts) >= len(CURVE_LABELS) else "partial"},
+        "warnings": warnings,
         "sofr": sofr,
         "as_of": datetime.now(timezone.utc).isoformat(),
         "source": source,
@@ -1214,8 +1231,8 @@ async def get_macro_primary():
 
 
 def _debug_enabled() -> bool:
-    """Debug routes off by default. Enable only with MACROVOL_DEBUG=1 (local ops)."""
-    return os.getenv("MACROVOL_DEBUG", "0") == "1"
+    """Debug routes off by default. Enable only with RATES_WORKER_DEBUG=1 (local ops)."""
+    return os.getenv("RATES_WORKER_DEBUG", os.getenv("MACROVOL_DEBUG", "0")) == "1"
 
 
 @app.get("/api/debug/fred")
@@ -1558,12 +1575,14 @@ async def get_stir_strip():
         iorb=iorb_v,
     )
 
-    # SERFF board rows in CME ICS style (matching prop boards):
-    # CC · Description · Last (bps) · Change · for SR1−ZQ / synth
+    # SERFF board rows (CME ICS style):
+    # kind 'serff' = true listed SERFF: same-month SR1 − ZQ (ratio 1:1).
+    # kind 'derived-proxy' = SR1/SR3 implied − cash EFFR; non-listed, non-executable.
+    # Never mixes in SR3−ZQ (own intermarket family) or four-leg SR3 calendars.
     serff_board = []
     for s in (spreads.get("by_kind") or {}).get("serff") or []:
         serff_board.append({
-            "cc": "SR1/ZQ" if "SERFF1" in (s.get("name") or "") else "SR3/FF",
+            "cc": "SR1/ZQ",
             "name": s.get("name"),
             "description": s.get("note") or "",
             "last_bps": s.get("rate_bps"),
@@ -1573,20 +1592,18 @@ async def get_stir_strip():
             "kind": "serff",
             "imply": s.get("imply"),
         })
-    for s in (spreads.get("by_kind") or {}).get("inter") or []:
-        name = s.get("name") or ""
-        if "ZQ" in name or "SR1" in name:
-            serff_board.append({
-                "cc": "Inter",
-                "name": name,
-                "description": s.get("note") or "",
-                "last_bps": s.get("rate_bps"),
-                "price_spread": s.get("price_spread"),
-                "legs": s.get("legs"),
-                "ratio": s.get("ratio"),
-                "kind": "inter",
-                "imply": s.get("imply"),
-            })
+    for s in (spreads.get("by_kind") or {}).get("derived-proxy") or []:
+        serff_board.append({
+            "cc": "Proxy",
+            "name": s.get("name"),
+            "description": s.get("note") or "",
+            "last_bps": s.get("rate_bps"),
+            "price_spread": s.get("price_spread"),
+            "legs": s.get("legs"),
+            "ratio": s.get("ratio"),
+            "kind": "derived-proxy",
+            "imply": s.get("imply"),
+        })
 
     # Dual strip for Bloomberg-style chart: live yield vs prior settlement yield.
     # Implied rate = 100 − futures price. Settlement ≈ previous close.
@@ -1858,5 +1875,7 @@ if __name__ == "__main__":
     # Loopback by default — production paths (start-production.sh, Node proxy)
     # never hit this block, and a bare `python main.py` on a shared box must
     # not publish the API (wildcard CORS included) on every interface.
-    host = os.environ.get("MACROVOL_BIND_HOST", "127.0.0.1")
-    uvicorn.run("main:app", host=host, port=8000, reload=True)
+    host = os.environ.get("RATES_WORKER_BIND_HOST", os.environ.get("MACROVOL_BIND_HOST", "127.0.0.1"))
+    port = int(os.environ.get("RATES_WORKER_PORT", os.environ.get("MACROVOL_PORT", "8000")))
+    print(f"rates-worker: starting on http://{host}:{port} (loopback-only private service)")
+    uvicorn.run("main:app", host=host, port=port, reload=False)

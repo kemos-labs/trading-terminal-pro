@@ -13,6 +13,7 @@ import { registerSecurityHeaders } from '../api/securityHeaders.js';
 import { registerDeribitMarketRoutes } from './routes/deribitMarket.js';
 import { registerFreeCryptoMarketRoutes } from './routes/freeCryptoMarket.js';
 import { registerMacrovolRoutes } from './routes/macrovol.js';
+import { resolveRatesWorkerUrl } from './ratesWorkerUrl.js';
 import { registerSseRoutes } from './routes/sse.js';
 import { registerEquityFeedsRoutes } from './routes/equityFeeds.js';
 import { registerDeskFeedRoutes } from './routes/deskFeeds.js';
@@ -178,7 +179,9 @@ function registerKsaRoutes(fastify) {
 
 // ── Boot briefing ───────────────────────────────────────────
 function registerBootRoutes(fastify) {
-  const MACROVOL_BASE = (process.env.MACROVOL_API_URL || 'http://127.0.0.1:8765').replace(/\/$/, '');
+  // Canonical RATES_WORKER_URL with loopback validation; MACROVOL_API_URL is a
+  // deprecated compatibility alias (see server/ratesWorkerUrl.js).
+  const MACROVOL_BASE = resolveRatesWorkerUrl();
   fastify.get('/api/boot/briefing', async (request, reply) => {
     try {
       const { data } = await getOrFetch('boot:briefing', TTL.BRIEFING_MS, async () => {

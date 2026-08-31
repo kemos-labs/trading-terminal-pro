@@ -3,6 +3,7 @@
  * Loopback-only, SSRF-safe. Lightweight paths are shared-cached.
  */
 import { getOrFetch, TTL } from '../../api/upstreamCache.js';
+import { resolveRatesWorkerUrl } from '../ratesWorkerUrl.js';
 
 const MACRO_LIGHT_TTL_MS = TTL.BRIEFING_MS;
 const MACRO_LIGHT_PREFIXES = [
@@ -196,12 +197,8 @@ function isMacroDebugPath(suffix) {
 }
 
 function resolveMacrovolBase() {
-  const raw = (process.env.MACROVOL_API_URL || 'http://127.0.0.1:8765').replace(/\/$/, '');
-  try {
-    const u = new URL(raw);
-    if (u.hostname === '127.0.0.1' || u.hostname === 'localhost') return raw;
-  } catch { /* ignore */ }
-  return 'http://127.0.0.1:8765';
+  // Deprecated alias path — canonical resolution lives in ratesWorkerUrl.js.
+  return resolveRatesWorkerUrl();
 }
 
 export async function registerMacrovolRoutes(fastify) {

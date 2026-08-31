@@ -101,12 +101,19 @@ def compound_sofr_rate(
     end: date,
 ) -> float | None:
     """
-    CME-style compounded SOFR % for [start, end) using Actual/360:
+    CME-style compounded SOFR % for [start, end) using Actual/360 publication
+    intervals (CME SR3 settlement reference):
 
-        R = [ Π (1 + SOFR_i * n_i / 360) − 1 ] * 360 / D * 100
+        R = [ Π_i (1 + r_i * n_i / 360) − 1 ] * 360 / D * 100
 
-    Each calendar day uses the most recent published SOFR on or before that day
-    (weekend/holiday fill). Returns None if end is not fully observed or data missing.
+    Each published fixing r_i applies for its full publication interval of
+    n_i calendar days (from its effective/publish date until the next fixing
+    publication or the window end). A Friday fixing therefore contributes one
+    factor with n_i = 3 over a weekend — it is NOT re-compounded once per
+    calendar day. D is the actual calendar-day count of the window.
+
+    Returns None if the window is not fully observed (missing/gap fixings),
+    never a synthetic substitution.
     """
     if end <= start:
         return None
@@ -114,21 +121,29 @@ def compound_sofr_rate(
     if D <= 0:
         return None
 
-    def sofr_on_or_before(day: date) -> float | None:
+    def fixing_on_or_before(day: date) -> tuple[date, float] | None:
         for k in range(0, 14):
             key = (day - timedelta(days=k)).isoformat()
             if key in sofr_by_date:
-                return float(sofr_by_date[key])
+                return (day - timedelta(days=k)), float(sofr_by_date[key])
         return None
 
     product = 1.0
     d = start
     while d < end:
-        rate = sofr_on_or_before(d)
-        if rate is None:
+        hit = fixing_on_or_before(d)
+        if hit is None:
             return None
-        product *= 1.0 + (rate / 100.0) * (1.0 / 360.0)
-        d += timedelta(days=1)
+        fix_day, rate = hit
+        # Count the consecutive calendar days this same fixing covers, up to end.
+        n = 0
+        while d < end:
+            nxt = fixing_on_or_before(d)
+            if nxt is None or nxt[0] != fix_day:
+                break
+            n += 1
+            d += timedelta(days=1)
+        product *= 1.0 + (rate / 100.0) * (n / 360.0)
 
     return round((product - 1.0) * 360.0 / D * 100.0, 4)
 

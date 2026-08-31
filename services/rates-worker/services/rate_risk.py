@@ -379,14 +379,16 @@ def key_rate_shock_pnl(
     }
 
 
-def interpolate_r(curve_points: list[tuple[float, float]], T: float) -> float:
+def interpolate_r(curve_points: list[tuple[float, float]], T: float) -> float | None:
     """
     Piecewise-linear interpolation of continuously-usable risk-free rate.
     curve_points: list of (years, yield_decimal) sorted by years.
-    Returns decimal rate for maturity T (years).
+    Returns decimal rate for maturity T (years), or None when no curve exists.
+    Fail-closed: a missing curve is Unavailable, never a fabricated default
+    rate (no 0.04 / 4% stub).
     """
     if not curve_points:
-        return 0.04
+        return None
     if T <= curve_points[0][0]:
         return curve_points[0][1]
     if T >= curve_points[-1][0]:
@@ -573,41 +575,41 @@ def imply_for_spread(kind: str, name: str, rate_bps: float | None, **extra: Any)
                 confidence="low",
             )
 
-    # ── SERFF / SOFR fut vs cash FF ──
+    # ── SERFF: same-month SR1 − ZQ inter-commodity spread ──
     if kind == "serff":
         if abs_b < 8:
             return _imply(
                 bias="flat",
                 label="NEAR CASH",
-                text="Futures path ≈ cash EFFR — little cumulative ease/hike vs today.",
+                text="1M SOFR futures ≈ 30-Day FF futures — path ≈ funds rate; little ease/hike priced.",
                 confidence="medium",
             )
         if bps is not None and bps <= -15:
             return _imply(
                 bias="easing",
                 label="CUTS PRICED",
-                text="SOFR path below cash EFFR — market prices easing vs today’s funds rate.",
+                text="SR1 leg below ZQ leg — market prices the one-month SOFR path below the funds path (easing).",
                 confidence="high",
             )
         if bps is not None and bps <= -8:
             return _imply(
                 bias="easing",
                 label="MILD EASE",
-                text="Modest cut bias vs cash EFFR in that contract month.",
+                text="Modest SR1-below-ZQ basis in that delivery month.",
                 confidence="medium",
             )
         if bps is not None and bps >= 15:
             return _imply(
                 bias="tightening",
                 label="HIKES / FIRM",
-                text="SOFR path above cash EFFR — tightening or SOFR firm vs FF.",
+                text="SR1 leg above ZQ leg — SOFR path firm vs Fed Funds (tightening or funding pressure).",
                 confidence="high",
             )
         if bps is not None and bps >= 8:
             return _imply(
                 bias="tightening",
                 label="MILD HIKE",
-                text="Slight firm path vs cash EFFR.",
+                text="Slight SR1-above-ZQ firmness in that delivery month.",
                 confidence="medium",
             )
         return _imply(
@@ -1055,7 +1057,7 @@ def _spread_row(
     imply = imply_for_spread(kind, name, bps, implied_rate=implied_rate)
     return {
         "name": name,
-        "kind": kind,  # calendar | fly | pack | serff | inter | cash
+        "kind": kind,  # calendar | fly | pack | calendar-of-calendars | serff | derived-proxy | inter | cash
         "legs": [leg_a, leg_b] if leg_b else [leg_a],
         "ratio": ratio,
         "rate_bps": bps,
@@ -1080,8 +1082,10 @@ def stir_spreads(
 
     Calendars (reds): SR3Z26−SR3Z27, SR3M26−SR3Z26, SR3Z26−SR3Z28, …
     Flies: wing − 2*body + wing on SR3 strip
-    SERFF (SOFR vs EFFR): cash SOFR−EFFR + synthetic SERFF{m} = SR3/SR1 implied − EFFR
-    Inter: SR1 − SR3 same month (1s3s SOFR), SR3 − ZQ when ZQ live
+    SERFF: CME same-delivery-month One-Month SOFR vs 30-Day Fed Funds ICS = SR1 − ZQ (1:1).
+           Missing exact leg → SERFF Unavailable. Cash-EFFR differences are Derived Proxy rows,
+           never listed/observed SERFF.
+    Inter: SR1 − SR3 same month (1s3s SOFR), SR3 − ZQ (own intermarket family, not SERFF)
     Cash corridor: SOFR−EFFR, SOFR−IORB, EFFR−IORB
     """
     sr1 = sr1 or []
@@ -1247,13 +1251,79 @@ def stir_spreads(
                 "imply": imply_for_spread("fly", name, fly_bps),
             }
         )
-    # ── Required four-leg SERFF/calendar-of-calendars: (SR3M5−SR3U5)−(SR3M6−SR3U6) style ──
-    # Audit R4 requires an exact four-leg with resolved legs and ratio, not a guessed single-leg basis.
-    # We implement a generic 4-leg: front calendar minus back calendar. Legs unavailable → null bps, never zero.
+    # ── SERFF — CME inter-commodity spread: same-month One-Month SOFR (SR1) vs
+    # 30-Day Federal Funds (ZQ), ratio 1:1. Exact legs only: if either leg is
+    # absent the row is Unavailable (null bps) — never an SR3 or cash proxy
+    # substitution.
+    _serff_suffixes: list[str] = []
+    for c in sr1:
+        lab = str(c.get("contract") or "")
+        if lab.startswith("SR1"):
+            suf = lab[3:]
+            if suf and suf not in _serff_suffixes:
+                _serff_suffixes.append(suf)
+    for cz in zq:
+        labz = str(cz.get("contract") or "")
+        suf = labz[2:] if labz.startswith("ZQ") else ""
+        if suf and suf not in _serff_suffixes:
+            _serff_suffixes.append(suf)
+    for suf in sorted(_serff_suffixes, key=_contract_sort_key):
+        c1 = m1.get("SR1" + suf)
+        cz = mz.get("ZQ" + suf)
+        legs_ok = (
+            c1 is not None
+            and cz is not None
+            and c1.get("implied_rate") is not None
+            and cz.get("implied_rate") is not None
+        )
+        missing = []
+        if c1 is None or c1.get("implied_rate") is None:
+            missing.append("SR1" + suf)
+        if cz is None or cz.get("implied_rate") is None:
+            missing.append("ZQ" + suf)
+        if legs_ok:
+            bps_serff = round((float(c1["implied_rate"]) - float(cz["implied_rate"])) * 100.0, 2)  # type: ignore[index]
+            px1, pxz = _px(c1), _px(cz)  # type: ignore[arg-type]
+            px_serff = round(px1 - pxz, 4) if px1 is not None and pxz is not None else None
+            spreads.append(
+                _spread_row(
+                    f"SERFF{suf}",
+                    "serff",
+                    "SR1" + suf,
+                    "ZQ" + suf,
+                    float(c1["implied_rate"]),  # type: ignore[index]
+                    float(cz["implied_rate"]),  # type: ignore[index]
+                    price_a=px1,
+                    price_b=pxz,
+                    note=(
+                        "CME SERFF inter-commodity spread: same-month SR1 − ZQ, ratio 1:1. "
+                        "rate_bps = SR1 implied − ZQ implied (leg order as listed). "
+                        "Positive = 1M SOFR futures priced above 30-Day FF futures."
+                    ),
+                    priority=3,
+                )
+            )
+            # keep price spread in the row (set by _spread_row)
+        else:
+            spreads.append(
+                {
+                    "name": f"SERFF{suf}",
+                    "kind": "serff",
+                    "legs": ["SR1" + suf, "ZQ" + suf],
+                    "ratio": "1:1",
+                    "rate_bps": None,
+                    "price_spread": None,
+                    "note": f"SERFF{suf} Unavailable — missing exact leg(s): {', '.join(missing)}. No proxy substitution.",
+                    "priority": 3,
+                    "imply": None,
+                }
+            )
+
+    # ── Four-leg SR3 calendar-of-calendars (curve curvature tools; NOT SERFF) ──
     four_leg_defs = [
         # (legs, name, ratio, note, priority)
-        (["SR3M6", "SR3U6", "SR3M7", "SR3U7"], "SERFF 4-leg (M6−U6)−(M7−U7)", "1:-1:-1:1", "Front Jun-Sep minus back Jun-Sep calendar (SOFR path curvature)", 6),
-        (["SR3Z6", "SR3H7", "SR3Z7", "SR3H8"], "SERFF 4-leg (Z6−H7)−(Z7−H8)", "1:-1:-1:1", "Dec-Mar calendar differential", 6),
+        (["SR3M6", "SR3U6", "SR3M7", "SR3U7"], "SR3 Cal-of-Cal (M6−U6)−(M7−U7)", "1:-1:-1:1", "Front Jun-Sep minus back Jun-Sep calendar (SOFR path curvature). Not SERFF.", 6),
+        (["SR3Z6", "SR3H7", "SR3Z7", "SR3H8"], "SR3 Cal-of-Cal (Z6−H7)−(Z7−H8)", "1:-1:-1:1", "Dec-Mar calendar differential (curve curvature). Not SERFF.", 6),
     ]
     for legs4, name4, ratio4, note4, pri4 in four_leg_defs:
         cs = [m3.get(leg) for leg in legs4]
@@ -1261,14 +1331,14 @@ def stir_spreads(
             # Emit unavailable shape rather than hiding: preserves contract visibility with null bps
             spreads.append({
                 "name": name4,
-                "kind": "serff",
+                "kind": "calendar-of-calendars",
                 "legs": legs4,
                 "ratio": ratio4,
                 "rate_bps": None,
                 "price_spread": None,
                 "note": note4 + " — unavailable (missing live leg).",
                 "priority": pri4,
-                "imply": imply_for_spread("serff", name4, None),
+                "imply": imply_for_spread("calendar-of-calendars", name4, None),
             })
             continue
         rs = [float(c["implied_rate"]) for c in cs]  # type: ignore[index]
@@ -1277,14 +1347,14 @@ def stir_spreads(
         px4 = round(pxs[0] - pxs[1] - pxs[2] + pxs[3], 4) if all(v is not None for v in pxs) else None  # type: ignore[operator]
         spreads.append({
             "name": name4,
-            "kind": "serff",
+            "kind": "calendar-of-calendars",
             "legs": legs4,
             "ratio": ratio4,
             "rate_bps": bps4,
             "price_spread": px4,
             "note": note4,
             "priority": pri4,
-            "imply": imply_for_spread("serff", name4, bps4),
+            "imply": imply_for_spread("calendar-of-calendars", name4, bps4),
         })
 
     # ── Packs (white / green / blue averages) ──
@@ -1330,53 +1400,52 @@ def stir_spreads(
             "imply": imply_for_spread("pack", "White−Green pack", round((pack_avgs["White pack"] - pack_avgs["Green pack"]) * 100.0, 2)),
         })
 
-    # ── SERFF: SOFR futures vs EFFR (synthetic when ZQ unavailable) ──
-    # Named like CME SERFFM6 / SERFFZ6 — traders use these as SOFR−FF basis proxies.
+    # ── Derived Proxy: SOFR futures implied rate − cash EFFR (NOT SERFF) ──
+    # Cash EFFR is not a listed futures leg; these are derived, non-executable
+    # proxy rows kept in their own group and never labelled SERFF.
     if effr is not None:
-        serff_months = [
-            ("SR3M6", "SERFFM6", "Jun26 SOFR fut − EFFR"),
-            ("SR3U6", "SERFFU6", "Sep26 SOFR fut − EFFR"),
-            ("SR3Z6", "SERFFZ6", "Dec26 SOFR fut − EFFR"),
-            ("SR3H7", "SERFFH7", "Mar27 SOFR fut − EFFR"),
-            ("SR3M7", "SERFFM7", "Jun27 SOFR fut − EFFR"),
-            ("SR3Z7", "SERFFZ7", "Dec27 SOFR fut − EFFR"),
-            ("SR3Z8", "SERFFZ8", "Dec28 SOFR fut − EFFR"),
+        proxy_months = [
+            ("SR3M6", "SR3M6−EFFR (proxy)", "Jun26 SR3 implied rate − cash EFFR"),
+            ("SR3U6", "SR3U6−EFFR (proxy)", "Sep26 SR3 implied rate − cash EFFR"),
+            ("SR3Z6", "SR3Z6−EFFR (proxy)", "Dec26 SR3 implied rate − cash EFFR"),
+            ("SR3H7", "SR3H7−EFFR (proxy)", "Mar27 SR3 implied rate − cash EFFR"),
+            ("SR3M7", "SR3M7−EFFR (proxy)", "Jun27 SR3 implied rate − cash EFFR"),
+            ("SR3Z7", "SR3Z7−EFFR (proxy)", "Dec27 SR3 implied rate − cash EFFR"),
+            ("SR3Z8", "SR3Z8−EFFR (proxy)", "Dec28 SR3 implied rate − cash EFFR"),
         ]
-        for leg, name, note in serff_months:
+        for leg, name, note in proxy_months:
             c = m3.get(leg)
             if not c or c.get("implied_rate") is None:
                 continue
             spreads.append(
                 _spread_row(
                     name,
-                    "serff",
+                    "derived-proxy",
                     leg,
-                    "EFFR",
+                    "EFFR (cash)",
                     float(c["implied_rate"]),
                     float(effr),
                     price_a=_px(c),
-                    note=note + " (synth; CME SERFF = listed SOFR−FF inter when ZQ live).",
-                    priority=5,
+                    note=note + ". Derived, non-listed, non-executable proxy — not SERFF.",
+                    priority=7,
                 )
             )
-        # Also monthly SR1 SERFF when available
+        # Monthly SR1 − cash EFFR proxies when available
         for c in sorted(sr1, key=lambda x: _contract_sort_key(str(x.get("contract") or ""))):
             if c.get("implied_rate") is None:
                 continue
             lab = str(c.get("contract"))
-            # SR1M6 → SERFF1M6 style
-            suffix = lab[3:] if lab.startswith("SR1") else lab
-            name = f"SERFF1{suffix}"
+            name = f"{lab}−EFFR (proxy)"
             spreads.append(
                 _spread_row(
                     name,
-                    "serff",
+                    "derived-proxy",
                     lab,
-                    "EFFR",
+                    "EFFR (cash)",
                     float(c["implied_rate"]),
                     float(effr),
                     price_a=_px(c),
-                    note="1M SOFR fut − cash EFFR (monthly SERFF proxy).",
+                    note="1M SOFR implied rate − cash EFFR. Derived, non-listed, non-executable proxy — not SERFF.",
                     priority=8,
                 )
             )
@@ -1411,7 +1480,6 @@ def stir_spreads(
             continue
         suffix = labz[2:] if labz.startswith("ZQ") else ""
         c3 = m3.get("SR3" + suffix)
-        c1 = m1.get("SR1" + suffix)
         if c3 and c3.get("implied_rate") is not None:
             spreads.append(
                 _spread_row(
@@ -1423,22 +1491,7 @@ def stir_spreads(
                     float(cz["implied_rate"]),
                     price_a=_px(c3),
                     price_b=_px(cz),
-                    note="3M SOFR − Fed Funds futures (true SERFF inter).",
-                    priority=4,
-                )
-            )
-        if c1 and c1.get("implied_rate") is not None:
-            spreads.append(
-                _spread_row(
-                    f"SR1{suffix}−{labz} Inter",
-                    "inter",
-                    "SR1" + suffix,
-                    labz,
-                    float(c1["implied_rate"]),
-                    float(cz["implied_rate"]),
-                    price_a=_px(c1),
-                    price_b=_px(cz),
-                    note="1M SOFR − ZQ Fed Funds inter (as on prop boards).",
+                    note="3M SOFR − Fed Funds futures intermarket. Own contract family (different legs/ratio from SERFF) — never label as SERFF.",
                     priority=4,
                 )
             )
@@ -1454,10 +1507,11 @@ def stir_spreads(
         "by_kind": by_kind,
         "counts": {k: len(v) for k, v in by_kind.items()},
         "note": (
-            "Calendars/flies from SR3 strip (SFR). SERFFxx = SOFR fut implied − cash EFFR when ZQ "
-            "unavailable on yfinance. rate_bps = (legA − legB)×100. price_spread = futures pts. "
-            "imply = general trader read (cut/hike/steepen/flat/stress); neutral when the print "
-            "does not force a view. Not a trade recommendation."
+            "Calendars/flies from SR3 strip (SFR). SERFF = CME same-month SR1 − ZQ inter-commodity "
+            "spread (1:1); Unavailable when an exact leg is missing. SR1/SR3 implied − cash EFFR "
+            "rows are Derived Proxies (non-listed, non-executable). rate_bps = (legA − legB)×100. "
+            "price_spread = futures pts. imply = general trader read (cut/hike/steepen/flat/stress); "
+            "neutral when the print does not force a view. Not a trade recommendation."
         ),
         "labels3": labels3,
     }

@@ -48,12 +48,11 @@ function parseDeribitOption(instrument) {
 async function workerJson(suffix, query = '', ttlMs = 60_000) {
   const base = resolveRatesWorkerUrl();
   const url = `${base}${suffix}${query}`;
-  const { data } = await getOrFetch(`v1:worker:${suffix}:${query}`, ttlMs, async () => {
+  return getOrFetch(`v1:worker:${suffix}:${query}`, ttlMs, async () => {
     const res = await fetch(url, { signal: AbortSignal.timeout(25_000) });
     if (!res.ok) throw new Error(`worker ${res.status}`);
     return res.json();
-  }, { allowStaleOnError: true });
-  return data;
+  }, { allowStaleOnError: true, maxStaleMs: 10 * ttlMs });
 }
 
 export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, baseEnvelope, coverage } = {}) {
@@ -90,9 +89,11 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
 
   // ── Rates: STIR / SR3 / SERFF strip (real worker analytics) ────────────
   fastify.get('/api/v1/rates/stir', async (request, reply) => {
+    let worker;
     let strip;
     try {
-      strip = await workerJson('/api/stir/strip');
+      worker = await workerJson('/api/stir/strip');
+      strip = worker.data;
     } catch {
       return sendError(request, reply, {
         statusCode: 502,
@@ -149,6 +150,13 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
       },
       assumptions: ['Forex/yfinance futures prints are delayed; settlement where final, else last print.'],
       warnings: serff.filter((s) => s.rate_bps == null).map((s) => `${s.name}: SERFF Unavailable — missing exact SR1 or ZQ leg.`),
+      cache: {
+        state: worker.stale ? 'stale' : worker.fromCache ? 'fresh' : 'miss',
+        hit: worker.fromCache,
+        ageMs: worker.ageMs,
+        stale: Boolean(worker.stale),
+        coalesced: Boolean(worker.coalesced),
+      },
       data: {
         sr3,
         sr1,
@@ -174,9 +182,11 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
     },
   }, async (request, reply) => {
     const T = finiteOrNull(request.query?.T) ?? 0.25;
+    let worker;
     let data;
     try {
-      data = await workerJson('/api/rates/term-structure', `?T=${T}`);
+      worker = await workerJson('/api/rates/term-structure', `?T=${T}`);
+      data = worker.data;
     } catch {
       return sendError(request, reply, {
         statusCode: 502,
@@ -199,6 +209,13 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
       unitsByField: { 'data.r': 'decimal-rate', 'data.r_pct': 'percent' },
       assumptions: data.warnings ?? [],
       warnings: data.warnings ?? [],
+      cache: {
+        state: worker.stale ? 'stale' : worker.fromCache ? 'fresh' : 'miss',
+        hit: worker.fromCache,
+        ageMs: worker.ageMs,
+        stale: Boolean(worker.stale),
+        coalesced: Boolean(worker.coalesced),
+      },
       data: {
         T,
         r: finiteOrNull(data.r),

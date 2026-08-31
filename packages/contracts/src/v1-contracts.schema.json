@@ -38,6 +38,19 @@
         }
       }
     },
+    "cacheState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "hit", "ageMs", "stale", "coalesced"],
+      "properties": {
+        "state": { "type": "string", "enum": ["fresh", "miss", "stale", "unavailable"] },
+        "hit": { "type": "boolean" },
+        "ageMs": { "type": ["integer", "null"], "minimum": 0 },
+        "stale": { "type": "boolean" },
+        "coalesced": { "type": "boolean" },
+        "providerError": { "type": ["string", "null"] }
+      }
+    },
     "baseEnvelope": {
       "type": "object",
       "additionalProperties": false,
@@ -51,6 +64,7 @@
         "unitsByField",
         "freshness",
         "coverage",
+        "cache",
         "assumptions",
         "warnings",
         "data"
@@ -107,6 +121,9 @@
         },
         "coverage": {
           "$ref": "#/$defs/coverage"
+        },
+        "cache": {
+          "$ref": "#/$defs/cacheState"
         },
         "assumptions": {
           "type": "array",

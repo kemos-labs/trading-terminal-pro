@@ -128,6 +128,7 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(validateContract('ratesStirResponse', body)).toMatchObject({ valid: true });
+    expect(body.cache).toMatchObject({ hit: false, stale: false });
     expect(body.data.serff).toHaveLength(1);
     expect(body.data.serff[0]).toMatchObject({ name: 'SERFFZ6', ratio: '1:1', legs: ['SR1Z6', 'ZQZ6'], rate_bps: 13 });
     expect(body.data.derivedProxies[0].name).toContain('proxy');
@@ -139,6 +140,7 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     const body = response.json();
     expect(validateContract('ratesTermStructureResponse', body)).toMatchObject({ valid: true });
     expect(body.data.r).toBeNull();
+    expect(body.cache).toHaveProperty('state');
     expect(body.data.available).toBe(false);
     expect(body.data.curveCoverage.state).toBe('unavailable');
     expect(body.warnings.length).toBeGreaterThan(0);

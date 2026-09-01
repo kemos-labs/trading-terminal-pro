@@ -4,6 +4,13 @@
  * a separate recovery-plan requirement and must not be inferred from this file.
  */
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+const registry = JSON.parse(
+  readFileSync(new URL('../packages/contracts/src/workflows.json', import.meta.url), 'utf8'),
+) as {
+  workflows: Array<{ id: string; deepLink: string }>;
+};
 
 const EXPECTED_WORKFLOWS = 27;
 
@@ -42,4 +49,28 @@ test('Academy local-content success path renders without browser mocks', async (
   await expect(page.getByTestId('academy-root')).toBeVisible();
   await expect(page.getByText(/Options/i).first()).toBeVisible();
   expect(missingRoutes).toEqual([]);
+});
+
+test('all registry deep links resolve to their exact rendered workflow root', async ({ page }) => {
+  const missingRoutes: string[] = [];
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('response', (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if ((pathname.startsWith('/api/') || pathname.startsWith('/docs/')) && response.status() === 404) {
+      missingRoutes.push(`${response.request().method()} ${pathname}`);
+    }
+  });
+
+  for (const workflow of registry.workflows) {
+    await test.step(`${workflow.id} -> ${workflow.deepLink}`, async () => {
+      await page.goto(workflow.deepLink, { waitUntil: 'domcontentloaded' });
+      const root = page.getByTestId(`workflow-root-${workflow.id}`);
+      await expect(root).toBeVisible({ timeout: 15_000 });
+      await expect(root).toHaveAttribute('data-workflow-id', workflow.id);
+    });
+  }
+
+  expect(missingRoutes).toEqual([]);
+  expect(pageErrors).toEqual([]);
 });

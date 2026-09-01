@@ -19,7 +19,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'NODE_ENV=test LOG_LEVEL=silent PORT=3101 node server.js',
+    command: 'npm run build && NODE_ENV=test LOG_LEVEL=silent PORT=3101 node server.js',
     url: 'http://127.0.0.1:3101/api/health',
     reuseExistingServer: false,
     timeout: 30_000,

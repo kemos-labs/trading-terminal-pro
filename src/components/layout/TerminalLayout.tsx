@@ -32,6 +32,20 @@ import {
 } from '../../lib/market/shellPrefs';
 import { DeskViewGate } from './renderDeskView';
 import { useAccountStore } from '../../store/accountStore';
+import { defaultWorkflowForDesk, workflowById, type DeskId } from '../../config/workflowRegistry';
+
+function activeWorkflowId(activeTab: ActiveTab, deskSectionId: string | null): string {
+  const desk = activeTab as DeskId;
+  if (desk === 'crypto') {
+    const view = new URLSearchParams(window.location.search).get('view') ?? 'overview';
+    const candidate = `crypto-v2-${view}`;
+    return workflowById(candidate)?.desk === desk
+      ? candidate
+      : defaultWorkflowForDesk(desk)?.id ?? candidate;
+  }
+  if (deskSectionId && workflowById(deskSectionId)?.desk === desk) return deskSectionId;
+  return defaultWorkflowForDesk(desk)?.id ?? desk;
+}
 
 /**
  * Space-efficient shell:
@@ -41,7 +55,7 @@ import { useAccountStore } from '../../store/accountStore';
 export function TerminalLayout() {
   const {
     activeTab, setActiveTab, setSymbol, refresh, loading, source, symbol, uiDensity, setDeskContext,
-    snapshot, chainAvailable, lastChainUpdate, historicalFrames,
+    snapshot, chainAvailable, lastChainUpdate, historicalFrames, deskSectionId,
   } = useTerminalStore();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -318,6 +332,8 @@ export function TerminalLayout() {
         role="main"
         aria-label={(activeTab as unknown as string) === 'academy' ? 'Academy publication' : (activeTab as unknown as string) === 'home' ? 'Home launchpad' : 'Function area'}
         id={`panel-${activeTab}`}
+        data-workflow-id={activeWorkflowId(activeTab, deskSectionId)}
+        data-testid={`workflow-root-${activeWorkflowId(activeTab, deskSectionId)}`}
       >
         <DeskViewGate tab={activeTab as never} loading={loading} />
       </main>

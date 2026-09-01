@@ -98,11 +98,12 @@ describe('upstreamCache', () => {
     try {
       // Record against a fresh key; expect the ledger file to be created with correct counts.
       const beforeDay = getBudgetUsed('restart-proof-quota');
-      const beforeMonth = (await import('./upstreamCache.js')).getMonthBudgetUsed('restart-proof-quota');
+      const { getMonthBudgetUsed: getMonth, recordMonthBudget } = await import('./upstreamCache.js');
+      const beforeMonth = getMonth('restart-proof-quota');
       recordBudget('restart-proof-quota', 2);
-      const { recordMonthBudget } = await import('./upstreamCache.js');
       recordMonthBudget('restart-proof-quota', 3);
       expect(getBudgetUsed('restart-proof-quota')).toBe(beforeDay + 2);
+      expect(getMonth('restart-proof-quota')).toBe(beforeMonth + 3);
       // File should exist, be JSON, contain today's counts, and not leak path via cacheStats.
       const raw = read(ledgerPath, 'utf8');
       const parsed = JSON.parse(raw);

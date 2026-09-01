@@ -119,6 +119,11 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     expect(body.data.cache.hits).toBeTypeOf('number');
     expect(body.data.cache.misses).toBeTypeOf('number');
     expect(body.data.cache.inflight).toBe(0);
+    expect(body.data.quota).toMatchObject({ scope: 'process-local', persistent: false, healthy: false });
+    const fmpQuota = body.data.quota.providers.find((row) => row.provider === 'fmp');
+    expect(fmpQuota).toMatchObject({ period: 'day', cap: 250 });
+    expect(fmpQuota.remaining).toBe(Math.max(0, fmpQuota.cap - fmpQuota.used));
+    expect(JSON.stringify(body.data.quota)).not.toMatch(/(path|key|query|token|secret)/i);
     expect(body.data.providerModes.crypto?.mode).toBeTruthy();
     expect(body.data.providerModes.crypto).not.toHaveProperty('veloCredentialPresent');
     expect(body.data.providerModes.crypto).not.toHaveProperty('veloConfigured');

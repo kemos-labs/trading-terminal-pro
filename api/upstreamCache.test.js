@@ -89,6 +89,16 @@ describe('upstreamCache', () => {
     expect(monthBudgetAllows(provider, 10, 0.85)).toBe(false);
   });
 
+  it('rejects invalid quota mutations before counters or the ledger can be corrupted', async () => {
+    const { recordMonthBudget } = await import('./upstreamCache.js');
+    for (const count of [0, -1, 1.5, NaN, Infinity]) {
+      expect(() => recordBudget('valid-provider', count)).toThrow(/positive safe integer/);
+      expect(() => recordMonthBudget('valid-provider', count)).toThrow(/positive safe integer/);
+    }
+    expect(() => recordBudget('../invalid', 1)).toThrow(/bounded identifier/);
+    expect(() => recordMonthBudget('x'.repeat(65), 1)).toThrow(/bounded identifier/);
+  });
+
   it('persists quota counts across module restarts without exposing its path', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'terminal-quota-ledger-'));
     const ledgerPath = join(dir, 'ledger.json');

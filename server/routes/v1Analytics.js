@@ -94,6 +94,13 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
     const now = Date.now();
     const modes = providerEntitlements();
     const stats = cacheStats();
+    const quotaStatus = stats.budgets?.ledger ?? { scope: 'process-local', persistent: false, healthy: false };
+    const quotaRows = [
+      { provider: 'fmp', period: 'day', used: stats.budgets?.fmp?.used ?? 0, cap: stats.budgets?.fmp?.capDaily ?? 250 },
+      { provider: 'alphavantage', period: 'day', used: stats.budgets?.alphavantage?.used ?? 0, cap: stats.budgets?.alphavantage?.capDaily ?? 25 },
+      { provider: 'finnhub', period: 'day', used: stats.budgets?.finnhub?.used ?? 0, cap: stats.budgets?.finnhub?.capDailySoft ?? 5_000 },
+      { provider: 'tradingview', period: 'month', used: stats.budgets?.tradingview?.usedMonth ?? 0, cap: stats.budgets?.tradingview?.capMonthly ?? 150 },
+    ].map((row) => ({ ...row, remaining: Math.max(0, row.cap - row.used) }));
     const envelope = baseEnvelope(request, {
       asOf: now,
       fetchedAt: now,
@@ -104,7 +111,13 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
         'data.providerModes': 'public-provider-policy',
         'data.cache': 'api/upstreamCache',
       },
-      unitsByField: { 'data.cache.entries': 'count', 'data.cache.hits': 'count', 'data.cache.misses': 'count' },
+      unitsByField: {
+        'data.cache.entries': 'count',
+        'data.cache.hits': 'count',
+        'data.cache.misses': 'count',
+        'data.quota.providers[].used': 'upstream-calls',
+        'data.quota.providers[].remaining': 'upstream-calls',
+      },
       assumptions: ['Velo remains unverified until a server-side capability and redistribution probe succeeds; configuration presence is not exposed.'],
       warnings: [],
       data: {
@@ -114,6 +127,12 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
           hits: stats.metrics?.freshHits ?? 0,
           misses: stats.metrics?.misses ?? 0,
           inflight: stats.inFlight ?? 0,
+        },
+        quota: {
+          scope: quotaStatus.scope,
+          persistent: Boolean(quotaStatus.persistent),
+          healthy: Boolean(quotaStatus.healthy),
+          providers: quotaRows,
         },
       },
     });

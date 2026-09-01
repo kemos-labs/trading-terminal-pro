@@ -122,6 +122,16 @@ function persistQuotaLedger() {
 }
 
 loadQuotaLedger();
+persistQuotaLedger();
+
+function assertBudgetMutation(provider, n) {
+  if (typeof provider !== 'string' || !/^[a-z0-9._-]{1,64}$/i.test(provider)) {
+    throw new TypeError('provider must be a bounded identifier');
+  }
+  if (!Number.isSafeInteger(n) || n <= 0) {
+    throw new TypeError('quota increment must be a positive safe integer');
+  }
+}
 
 function dayKey(provider) {
   const d = new Date();
@@ -142,6 +152,7 @@ export function getMonthBudgetUsed(provider) {
 }
 
 export function recordBudget(provider, n = 1) {
+  assertBudgetMutation(provider, n);
   const k = dayKey(provider);
   dayBudget.set(k, (dayBudget.get(k) || 0) + n);
   persistQuotaLedger();
@@ -149,6 +160,7 @@ export function recordBudget(provider, n = 1) {
 }
 
 export function recordMonthBudget(provider, n = 1) {
+  assertBudgetMutation(provider, n);
   const k = monthKey(provider);
   monthBudget.set(k, (monthBudget.get(k) || 0) + n);
   persistQuotaLedger();

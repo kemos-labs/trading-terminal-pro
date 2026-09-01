@@ -1515,7 +1515,8 @@
             "additionalProperties": false,
             "required": [
               "providerModes",
-              "cache"
+              "cache",
+              "quota"
             ],
             "properties": {
               "providerModes": {
@@ -1546,6 +1547,75 @@
                   "inflight": {
                     "type": "integer",
                     "minimum": 0
+                  }
+                }
+              },
+              "quota": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scope",
+                  "persistent",
+                  "healthy",
+                  "providers"
+                ],
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "persistent-file-single-process",
+                      "process-local"
+                    ]
+                  },
+                  "persistent": {
+                    "type": "boolean"
+                  },
+                  "healthy": {
+                    "type": "boolean"
+                  },
+                  "providers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "provider",
+                        "period",
+                        "used",
+                        "cap",
+                        "remaining"
+                      ],
+                      "properties": {
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "fmp",
+                            "alphavantage",
+                            "finnhub",
+                            "tradingview"
+                          ]
+                        },
+                        "period": {
+                          "type": "string",
+                          "enum": [
+                            "day",
+                            "month"
+                          ]
+                        },
+                        "used": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "cap": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "remaining": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
                   }
                 }
               }

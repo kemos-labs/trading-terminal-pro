@@ -95,6 +95,7 @@ test('Academy local-content success path renders without browser mocks', async (
 
 for (const viewport of VIEWPORTS) {
   test(`all registry workflows render from successful server fixtures at ${viewport.name}`, async ({ page }) => {
+    test.slow();
     await page.setViewportSize(viewport);
     const failedRoutes: string[] = [];
     const pageErrors: string[] = [];

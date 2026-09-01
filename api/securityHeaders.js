@@ -16,7 +16,10 @@ export const helmetOptions = {
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'blob:'],
-      connectSrc: ["'self'"],
+      // The document preconnects to the same two fixed Google Fonts origins
+      // already allowlisted by styleSrc/fontSrc. Without these entries the
+      // browser reports a CSP error before the stylesheet request.
+      connectSrc: ["'self'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'],
       frameAncestors: ["'self'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],

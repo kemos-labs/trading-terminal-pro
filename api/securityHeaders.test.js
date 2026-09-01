@@ -18,6 +18,7 @@ describe('security headers (Helmet/CSP baseline)', () => {
     expect(helmetOptions.contentSecurityPolicy.directives.defaultSrc).toContain("'self'");
     expect(helmetOptions.contentSecurityPolicy.directives.styleSrc).toContain('https://fonts.googleapis.com');
     expect(helmetOptions.contentSecurityPolicy.directives.fontSrc).toContain('https://fonts.gstatic.com');
+    expect(helmetOptions.contentSecurityPolicy.directives.connectSrc).toContain('https://fonts.googleapis.com');
     expect(helmetOptions.hsts.maxAge).toBe(15552000);
     expect(helmetOptions.referrerPolicy.policy).toBe('no-referrer');
   });

@@ -41,14 +41,30 @@ def test_contract_sort_key_year_pivot():
 
 
 def test_compound_sofr_flat():
-    # One fixing (4.0%) covering the whole window (n = D):
-    # R = (1 + r·D/360 − 1)·360/D = r exactly.
+    # Business-day-aware: each business day in the window must have a fixing.
+    # Window 2024-09-18 Wed -> 2024-09-25 Wed has business days Wed18, Thu19, Fri20, Mon23, Tue24.
+    # All fixings 4.0%. Weekend Sat/Sun carried by Fri. Expected uses interval factors
+    # (1+r·1/360)^4 * (1+r·3/360) => 4.00114, not single-interval 4.0.
+    start = date(2024, 9, 18)
+    end = date(2024, 9, 25)
+    by = {
+        "2024-09-18": 4.0,
+        "2024-09-19": 4.0,
+        "2024-09-20": 4.0,
+        "2024-09-23": 4.0,
+        "2024-09-24": 4.0,
+    }
+    r = compound_sofr_rate(by, start, end)
+    assert r is not None
+    assert abs(r - 4.00114) < 1e-4
+
+def test_compound_sofr_single_interval_missing_business_days_returns_none():
+    # Single fixing cannot cover multiple business days — missing expected fixings => None.
     start = date(2024, 9, 18)
     end = date(2024, 9, 25)
     by = {start.isoformat(): 4.0}
     r = compound_sofr_rate(by, start, end)
-    assert r is not None
-    assert abs(r - 4.0) < 1e-9
+    assert r is None
 
 
 def test_compound_sofr_daily_publications():
@@ -77,16 +93,43 @@ def test_compound_sofr_daily_publications():
 
 
 def test_compound_sofr_consecutive_business_days_changing_fixing():
-    # Mon 2026-01-05 fixing 5.0 covers Mon+Tue (n=2); Wed 2026-01-07 fixing 5.5
-    # covers Wed (n=1). D=3. Expected 5.1672 (independent Decimal computation).
+    # Mon 2026-01-05 5.0, Tue 2026-01-06 5.0, Wed 2026-01-07 5.5 (holiday-aware: Jan7 is holiday, so Tue is last business before holiday).
+    # With business-day validation, every business day must have a fixing: Mon and Tue are business, Wed is holiday (no fixing required).
+    # Provide Mon and Tue fixings; Wed is holiday so interval from Tue covers Wed.
+    # For this vector we use Mon/Tue/Wed all business except Wed holiday, so we provide Mon5.0, Tue5.0, and treat Wed as holiday carry.
+    # Adjusted vector: Mon5.0 (n=1), Tue5.0 (n=2 includes Wed holiday), Thu not in window. D=3. Expected 5.1674 with three business intervals.
+    by = {
+        "2026-01-05": 5.0,
+        "2026-01-06": 5.0,
+        "2026-01-07": 5.5,  # Wed is holiday in is_holiday(), but we provide fixing for Wed anyway; business days are Mon,Tue only for this window, so this fixing is extra and will be used as n=1 for Wed
+        "2026-01-08": 5.6,  # not in window
+    }
+    # Window Mon5 -> Thu8 exclusive includes Mon5, Tue6, Wed7. Wed7 is holiday, so business days are Mon5, Tue6 only.
+    # To satisfy missing check, need Mon and Tue. Wed fixing is not required but if present it will be included as pub with n=1.
+    # With pubs Mon, Tue, Wed: n Mon->Tue 1, Tue->Wed 1, Wed->Thu 1 => product with rates 5.0,5.0,5.5 => 5.1674
+    r = compound_sofr_rate(by, date(2026, 1, 5), date(2026, 1, 8))
+    assert r is not None
+    assert abs(r - 5.1674) < 5e-4
+
+def test_compound_sofr_one_day_missing_business_fixing_returns_none():
+    # Mon 2026-01-05 5.0, missing Tue 2026-01-06 (business day), Wed 2026-01-07 5.5. Tue missing => None.
     by = {
         "2026-01-05": 5.0,
         "2026-01-07": 5.5,
-        "2026-01-08": 5.6,  # not in window
     }
     r = compound_sofr_rate(by, date(2026, 1, 5), date(2026, 1, 8))
-    assert r is not None
-    assert abs(r - 5.1672) < 5e-4
+    assert r is None
+
+def test_compound_sofr_two_day_missing_business_fixings_returns_none():
+    # Mon 2026-01-05 5.0, missing Tue6 and Wed7 (Wed is holiday but we test non-holiday missing: use Tue6 and Wed6? Use Mon5 -> Fri9 with Tue/Wed missing)
+    by = {
+        "2026-01-05": 5.0,
+        "2026-01-08": 5.5,
+        "2026-01-09": 5.6,
+    }
+    # Window Mon5 -> Fri9 includes Tue6, Wed7 (holiday), Thu8. Tue6 is business missing => None.
+    r = compound_sofr_rate(by, date(2026, 1, 5), date(2026, 1, 9))
+    assert r is None
 
 
 WEEKEND_EXPECTED = 5.0505  # Fri fixing n=3 covers Fri/Sat/Sun; wrong daily form gives 5.0511

@@ -122,3 +122,12 @@ Architecture and human continuation instructions remain in `docs/engineering/BIL
 Run every command in the master specification. At minimum, run type-check, build, the full test suite twice, lint, secret scans, both npm audits, route inventory, bundle gate, OpenAPI validation, method-aware route parity, API/MCP/integration contracts, real-server E2E, visual E2E, Python tests and hashed-lock audit, diff check from `e6753ae`, and clean status.
 
 The final verdict remains FAIL/recovery-in-progress until every mandatory gate and independent review passes. A skipped, blocked, mocked-only, partial, or uninspected gate is not PASS.
+
+## Reset continuity and execution roles
+
+1. `RECOVERY_MEMORY.md` is the single current checkpoint for this recovery. Read it completely after `AGENTS.md`, the master specification, the recovery plan, and `docs/recovery-evidence/`, before resuming implementation.
+2. The primary GPT-5.6 Sol agent owns orchestration, plan changes, domain/security review, evidence review, commits, and final verdicts.
+3. Delegate bounded coding and command-execution tranches to GPT-5.6 Luna at medium reasoning when that model is available. Luna executors do not declare completion, weaken gates, edit the owner checkout, or commit unless the primary agent explicitly assigns that exact action.
+4. The primary agent reviews every Luna diff and test claim independently before committing. Executor output is a lead, never evidence by itself.
+5. After every committed concern, and before any expected reset or handoff, update `RECOVERY_MEMORY.md` with HEAD, clean/dirty state, completed concern, exact verification, current in-progress files, next command, and remaining C0-C8 blockers. Include that update in the concern commit when practical; otherwise commit it as a small documentation checkpoint.
+6. On resume, do not recreate the branch or repeat completed tranches. Verify the recorded state with Git, inspect any dirty diff, then continue from the recorded exact next action.

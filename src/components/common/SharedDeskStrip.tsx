@@ -12,6 +12,7 @@ import { cn } from '../../lib/utils';
 import { PrintStrip } from '../desk/PrintStrip';
 import { DeskSpark } from '../desk/DeskSpark';
 import { DESK_SERIES } from '../desk/seriesGrammar';
+import { startVisibilityPolling } from '../../lib/polling/visibilityPolling';
 
 function fmtAge(ms?: number): string {
   if (ms == null || !Number.isFinite(ms)) return '';
@@ -66,7 +67,7 @@ export function SharedDeskStrip({
   useEffect(() => {
     let cancelled = false;
     const load = () => {
-      fetchDeskPack(symbol)
+      return fetchDeskPack(symbol)
         .then((d) => {
           if (!cancelled) {
             setPack(d);
@@ -77,15 +78,8 @@ export function SharedDeskStrip({
           if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
         });
     };
-    load();
-    const id = window.setInterval(() => {
-      if (document.hidden) return; // background-tab discipline
-      load();
-    }, 60_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
+    const stop = startVisibilityPolling(load, 60_000);
+    return () => { cancelled = true; stop(); };
   }, [symbol]);
 
   const fh = pack?.finnhub_quote;

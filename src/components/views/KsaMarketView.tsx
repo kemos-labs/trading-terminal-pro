@@ -34,6 +34,7 @@ import {
   type KsaQuote,
 } from '../../lib/data/ksaClient';
 import { riyadhSessionSnapshot } from '../../lib/data/ksaSession';
+import { startVisibilityPolling } from '../../lib/polling/visibilityPolling';
 
 function findFocusOnBoard(board: KsaBoard | null, sym: string): KsaQuote | KsaMover | null {
   if (!board) return null;
@@ -471,13 +472,8 @@ export function KsaMarketView() {
   }, []);
 
   useEffect(() => {
-    void load();
-    const id = window.setInterval(() => {
-      // Shared-cache read only — but skip while the tab is hidden (§10.5).
-      if (document.hidden) return;
-      void load();
-    }, KSA_BOARD_POLL_MS);
-    return () => window.clearInterval(id);
+    const stop = startVisibilityPolling(load, KSA_BOARD_POLL_MS);
+    return stop;
   }, [load]);
 
   // Focus from shared board only (free tier — no per-symbol SAHMK /quote on free path).

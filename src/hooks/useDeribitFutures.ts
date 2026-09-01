@@ -18,6 +18,7 @@ import {
   type DeribitFundingHistoryBundle,
 } from '../lib/data/deribitFutures';
 import { buildBasisRows, type BasisRow } from '../lib/data/futuresMath';
+import { startVisibilityPolling } from '../lib/polling/visibilityPolling';
 
 export interface UseDeribitFuturesResult {
   currency: DeribitCurrency;
@@ -89,12 +90,10 @@ export function useDeribitFutures(
       setLoading(false);
     };
 
-    void load();
-    const id = setInterval(() => void load(), refreshMs);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+    const initiallyHidden = typeof document !== 'undefined' && document.hidden;
+    if (initiallyHidden) setLoading(false);
+    const stop = startVisibilityPolling(load, refreshMs, !initiallyHidden);
+    return () => { cancelled = true; stop(); };
   }, [currency, nonce, refreshMs]);
 
   const rows = useMemo(() => {
@@ -156,7 +155,7 @@ export function useDeribitFundingHistory(params?: {
     setError(null);
     setBundle(null);
 
-    void (async () => {
+    const load = async () => {
       if (typeof document !== 'undefined' && document.hidden) {
         setLoading(false);
         return;
@@ -169,25 +168,11 @@ export function useDeribitFundingHistory(params?: {
         setBundle(data);
       }
       setLoading(false);
-    })();
-
-    const id = setInterval(
-      () =>
-        void (async () => {
-          if (typeof document !== 'undefined' && document.hidden) return;
-          const data = await fetchFundingHistory(instrumentName, days);
-          if (cancelled) return;
-          if (data && data.points.length > 0) {
-            setBundle(data);
-            setError(null);
-          }
-        })(),
-      refreshMs,
-    );
-    return () => {
-      cancelled = true;
-      clearInterval(id);
     };
+    const initiallyHidden = typeof document !== 'undefined' && document.hidden;
+    if (initiallyHidden) setLoading(false);
+    const stop = startVisibilityPolling(load, refreshMs, !initiallyHidden);
+    return () => { cancelled = true; stop(); };
   }, [instrumentName, days, nonce, refreshMs]);
 
   return {

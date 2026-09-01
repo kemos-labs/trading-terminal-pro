@@ -38,6 +38,7 @@ import {
   type SurfaceUpdatePath,
 } from '../lib/options/surfaceMetrics';
 import { prefetchGreeks, invalidateGreeksCache } from '../lib/macrovol/greeksCache';
+import { startVisibilityPolling } from '../lib/polling/visibilityPolling';
 
 function processSurface(surface: SurfaceGrid, spot: number) {
   const readout = sviReadout(surface, spot);
@@ -169,7 +170,7 @@ interface TerminalStore {
   surfaceWingMode: SurfaceWingMode;
 
   playbackInterval: ReturnType<typeof setInterval> | null;
-  refreshInterval: ReturnType<typeof setInterval> | null;
+  refreshInterval: (() => void) | null;
 
   setSymbol: (symbol: string) => void;
   setActiveTab: (tab: ActiveTab) => void;
@@ -301,7 +302,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     }
 
     const { refreshInterval, playbackInterval } = get();
-    if (refreshInterval) clearInterval(refreshInterval);
+    if (refreshInterval) refreshInterval();
     if (playbackInterval) clearInterval(playbackInterval);
 
     // Bump gen so any in-flight live fetch for the previous symbol is dropped.
@@ -691,7 +692,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       });
     }
     const { refreshInterval } = get();
-    if (refreshInterval) clearInterval(refreshInterval);
+    if (refreshInterval) refreshInterval();
     set({ source: 'live', lastSpotUpdate: 0, lastChainUpdate: 0, loading: true });
     startRefreshLoop(get, set, 'live');
     // Non-blocking: chain first; enrichment parallel (never gate surface).
@@ -719,19 +720,14 @@ function clearWarned() {
 /** Monotonic token so late async replies for a previous symbol cannot clobber state. */
 let liveFetchGen = 0;
 
-function startRefreshLoop(
+export function startRefreshLoop(
   get: () => TerminalStore,
   set: (partial: Partial<TerminalStore>) => void,
   _source: 'demo' | 'live',
 ) {
   const { refreshInterval } = get();
-  if (refreshInterval) clearInterval(refreshInterval);
-  const id = setInterval(() => {
-    // Background-tab discipline (§6/§10.5): hidden tabs never drive active-cadence
-    // polling. A single slow liveness tick keeps state warm without upstream churn.
-    if (typeof document !== 'undefined' && document.hidden) return;
-    get().refresh();
-  }, REFRESH_CONFIG.LIVE_INTERVAL_MS);
+  if (refreshInterval) refreshInterval();
+  const id = startVisibilityPolling(() => get().refresh(), REFRESH_CONFIG.LIVE_INTERVAL_MS, false);
   set({ refreshInterval: id });
 }
 

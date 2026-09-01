@@ -1,6 +1,29 @@
-import { describe, expect, it } from 'vitest';
-import { shouldFetchCcy, summarizeDeribitTape } from './useCryptoDualBooks';
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fetchDeribitMarket } from '../lib/data/deribitClient';
+import { macrovolApi } from '../lib/macrovol/api';
+import { shouldFetchCcy, summarizeDeribitTape, useCryptoDualBooks } from './useCryptoDualBooks';
 import type { DeribitBookRow, DeribitMarketBundle } from '../lib/data/deribitClient';
+
+vi.mock('../lib/data/deribitClient', async () => {
+  const actual = await vi.importActual<typeof import('../lib/data/deribitClient')>('../lib/data/deribitClient');
+  return { ...actual, fetchDeribitMarket: vi.fn() };
+});
+vi.mock('../lib/macrovol/api', () => ({ macrovolApi: { cryptoSpot: vi.fn() } }));
+vi.mock('../store/terminalStore', () => ({
+  useTerminalStore: (selector: (state: { symbol: string; snapshot: null }) => unknown) => selector({ symbol: 'BTC', snapshot: null }),
+}));
+
+const market = (): DeribitMarketBundle => ({
+  currency: 'BTC', indexPrice: 75_000, fetchedAt: Date.now(), source: 'deribit',
+  fundingAnn: null, futures: [], perp: null, options: [],
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.clearAllMocks();
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+});
 
 function option(instrument_name: string, mark_iv: number, open_interest: number, volume: number): DeribitBookRow {
   return {
@@ -73,5 +96,28 @@ describe('shouldFetchCcy', () => {
 
   it('force always fetches (mount + dual-chart rebuild)', () => {
     expect(shouldFetchCcy(false, Date.now(), Date.now(), true)).toBe(true);
+  });
+});
+
+describe('useCryptoDualBooks polling ownership', () => {
+  it('fetches on the active cadence, pauses while hidden, resumes once, and cleans up', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetchDeribitMarket).mockResolvedValue(market());
+    vi.mocked(macrovolApi.cryptoSpot).mockResolvedValue({ btc: null, eth: null } as never);
+    const { unmount } = renderHook(() => useCryptoDualBooks(false));
+    await act(async () => { await Promise.resolve(); });
+    expect(fetchDeribitMarket).toHaveBeenCalledTimes(2);
+
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(fetchDeribitMarket).toHaveBeenCalledTimes(2);
+
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(fetchDeribitMarket).toHaveBeenCalledTimes(4);
+    const callsAfterResume = fetchDeribitMarket.mock.calls.length;
+    unmount();
+    await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
+    expect(fetchDeribitMarket).toHaveBeenCalledTimes(callsAfterResume);
   });
 });

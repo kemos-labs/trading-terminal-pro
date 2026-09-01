@@ -115,30 +115,6 @@ describe('quota & single-flight (server cache)', () => {
   });
 });
 
-describe('background-tab discipline (frontend)', () => {
-  it('refresh loop, KSA poll and desk strip all gate on document.hidden', async () => {
-    const fs = await import('node:fs');
-    const path = await import('node:path');
-    const root = path.join(import.meta.dirname, '..');
-    const storeSrc = fs.readFileSync(path.join(root, 'src/store/terminalStore.ts'), 'utf8');
-    const ksaSrc = fs.readFileSync(path.join(root, 'src/components/views/KsaMarketView.tsx'), 'utf8');
-    const stripSrc = fs.readFileSync(path.join(root, 'src/components/common/SharedDeskStrip.tsx'), 'utf8');
-    const cryptoBooksSrc = fs.readFileSync(path.join(root, 'src/hooks/useCryptoDualBooks.ts'), 'utf8');
-    const futuresSrc = fs.readFileSync(path.join(root, 'src/hooks/useDeribitFutures.ts'), 'utf8');
-    for (const [name, src] of [
-      ['terminalStore', storeSrc],
-      ['KsaMarketView', ksaSrc],
-      ['SharedDeskStrip', stripSrc],
-      ['useCryptoDualBooks', cryptoBooksSrc],
-      ['useDeribitFutures', futuresSrc],
-    ]) {
-      expect(src.includes('document.hidden'), `${name} must gate polling on document.hidden`).toBe(true);
-    }
-    // The gate sits INSIDE the interval callback (poll skipped, timer alive)
-    expect(storeSrc).toMatch(/setInterval\(\(\) => \{\s*\/\/ Background-tab discipline[\s\S]*?if \(typeof document !== 'undefined' && document\.hidden\) return;/);
-  });
-});
-
 describe('serialization honesty', () => {
   it('JSON.stringify of NaN/Infinity produces null — typed envelopes must guard at build time', async () => {
     expect(JSON.stringify({ v: NaN })).toBe('{"v":null}');

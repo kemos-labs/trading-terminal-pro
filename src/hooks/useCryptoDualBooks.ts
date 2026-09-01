@@ -10,6 +10,7 @@ import type { VolSnapshot } from '../lib/options/types';
 import { makeProvenance, type DataProvenance } from '../lib/data/freshness';
 import { useTerminalStore } from '../store/terminalStore';
 import { macrovolApi, type CryptoSpotAsset, type CryptoSpotData } from '../lib/macrovol/api';
+import { startVisibilityPolling } from '../lib/polling/visibilityPolling';
 
 export type DualTapeSnap = {
   ccy: 'BTC' | 'ETH';
@@ -279,10 +280,10 @@ export function useCryptoDualBooks(opts?: { dualCharts?: boolean }) {
     };
 
     void load(true);
-    const id = setInterval(() => void load(false), ACTIVE_MS);
+    const stop = startVisibilityPolling(() => load(false), ACTIVE_MS, false);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      stop();
     };
   }, [active, dualCharts, storeSnap]);
 

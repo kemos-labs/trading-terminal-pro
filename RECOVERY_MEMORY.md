@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-01T13:59:03Z
+Updated: 2026-09-01T14:03:46Z
 
 This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-rebuild`. It records execution state, not proof of completion. The master specification, audited recovery plan, and `AGENTS.md` remain authoritative when a statement conflicts.
 
@@ -22,7 +22,8 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD before the current dirty tranche: `d37ee40` (`feat(analytics): add canonical surface Greeks and positioning`).
+- Recovery HEAD: `0eb54e8` (`fix(cache): propagate sanitized provider errors`).
+- Recovery worktree was clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
 - C0 and C1 are substantially repaired.
@@ -32,28 +33,14 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-C3 provider-error propagation is dirty and not yet committed. Expected touched files include:
+No dirty implementation tranche exists at this checkpoint. The next bounded C3 concern is circuit-breaker truth for provider-owned upstream fills.
 
-- `api/upstreamCache.js`
-- `api/upstreamCache.test.js`
-- `packages/contracts/src/v1-contracts.schema.json`
-- `packages/contracts/src/runtime.js`
-- `server/routes/v1.js`
-- `server/routes/v1Analytics.js`
-- `server/routes/v1Analytics.test.js`
-- `server/providers/freeCrypto/client.test.js`
-
-Intent:
-
-- stale cache serves expose a bounded, sanitized `providerError` code;
-- fresh/miss results carry `providerError: null`;
-- canonical cache envelopes require and propagate the field;
-- raw provider messages, bodies, credentials, and arbitrary internal codes never cross the boundary.
-
-Exact next action: inspect the dirty diff and run the focused upstream-cache, free-crypto, v1, v1-analytics, and MCP contract tests. Fix all resulting contract omissions, then run type-check, lint, OpenAPI validation, method-aware route parity, secret scan, and `git diff --check`. Sol reviews the diff and commits the concern.
+Exact next action: inventory existing provider call ownership and design a shared bounded closed/open/half-open circuit keyed by provider, not unbounded user queries. Integrate it first with Deribit and the free Binance/Bybit adapter without weakening independent partial-failure behavior. Add deterministic fake-timer tests for failure threshold, open fast-fail, one half-open probe, successful close, failed reopen, stale serve with `providerError`, and N-client single-flight behavior. Luna medium implements the bounded tranche; Sol reviews the design, diff, market-data semantics, and evidence before commit.
 
 ## Recent verified commits
 
+- `0eb54e8` — bounded/redacted provider-error codes now survive stale cache results and are mandatory through canonical REST/OpenAPI/MCP cache envelopes; 71 focused tests, type-check, lint, OpenAPI, route parity, secrets, and diff checks passed.
+- `5faa987` — reset-safe repository memory and Sol/Luna execution-role rules.
 - `d37ee40` — canonical observed surface, explicit-rate BSM Greeks, honest OI positioning proxy, strict REST/OpenAPI/MCP contracts, bounded analytical rows, and negative/golden tests.
 - `7c6e690` — deterministic rates fixture completion.
 - `216ab84` — full real-server workflow accessibility time budget.

@@ -133,9 +133,9 @@ function ratesPayload(pathname) {
   if (pathname.endsWith('/rates/summary')) return { ...meta, sofr: 4.53, effr: 4.32, usy2: 4.25, usy10: 4.55, spread_2s10s: 0.30, spread_3m10y: 0.18 };
   if (pathname.endsWith('/rates/curve')) return { ...meta, labels: ['1M','3M','6M','1Y','2Y','5Y','10Y','30Y'], yields: [4.4,4.42,4.39,4.31,4.25,4.36,4.55,4.7] };
   if (pathname.endsWith('/rates/curve-history')) return { ...meta, labels: ['1M','3M','6M','1Y','2Y','5Y','10Y','30Y'], today: [4.4,4.42,4.39,4.31,4.25,4.36,4.55,4.7], historical: [4.3,4.32,4.29,4.21,4.15,4.26,4.45,4.6] };
-  if (pathname.endsWith('/rates/plumbing')) return { ...meta, sofr: 4.53, effr: 4.32, iorb: 4.4, obfr: 4.33, rrp: 110, reserves: 3_250 };
+  if (pathname.endsWith('/rates/plumbing')) return { ...meta, sofr: 4.53, effr: 4.32, iorb: 4.4, rrp_rate: 4.30, rrp_volume_latest: 110, rrp_volume_history: [{ date: '2026-08-29', volume: 112 }, { date: '2026-08-30', volume: 111 }, { date: '2026-08-31', volume: 110 }], wresbal_history: [{ date: '2026-08-29', reserves: 3_240 }, { date: '2026-08-30', reserves: 3_245 }, { date: '2026-08-31', reserves: 3_250 }] };
   if (pathname.endsWith('/rates/basis-history')) return { ...meta, history: Array.from({ length: 60 }, (_, i) => ({ date: new Date(FIXED_NOW - (59 - i) * DAY).toISOString().slice(0,10), sofr: 4.47 + i * 0.001, effr: 4.28 + i * 0.0007, iorb: 4.40, sofr_effr_bps: 19 + i * 0.03, sofr_iorb_bps: 7 + i * 0.1, effr_iorb_bps: -12 + i * 0.07 })) };
-  if (pathname.endsWith('/rates/basis')) return { ...meta, sofr_effr_bps: 21, sofr_iorb_bps: 13, effr_iorb_bps: -8, regime: 'wide' };
+  if (pathname.endsWith('/rates/basis')) return { ...meta, sofr: 4.53, effr: 4.32, iorb: 4.40, sofr_effr: 21, sofr_iorb: 13, effr_iorb: -8, unit: 'bps', regime: 'wide' };
   if (pathname.endsWith('/rates/shape')) return { ...meta, spreads: { '2s10s': { bps: 30 }, '5s30s': { bps: 34 }, '2s5s': { bps: 11 }, '5s10s': { bps: 19 }, '10s30s': { bps: 15 }, '3m10y': { bps: 13 }, 'fly_2s5s10s': { bps: -8 } }, history: {} };
   if (pathname.endsWith('/rates/correlations')) return { ...meta, labels: [], matrix: [] };
   if (pathname.endsWith('/stir/strip')) {
@@ -158,11 +158,16 @@ function ratesPayload(pathname) {
   }
   if (pathname.endsWith('/rates/global-yields')) return { ...meta, points: [{ code: 'US', label: 'United States', yield_pct: 4.55 }, { code: 'DE', label: 'Germany', yield_pct: 2.55 }] };
   if (pathname.endsWith('/rates/fx')) return { ...meta, pairs: [{ pair: 'EURUSD', rate: 1.08 }, { pair: 'USDJPY', rate: 146.2 }] };
-  if (pathname.endsWith('/rates/jgb-curve')) return { ...meta, labels: ['2Y','5Y','10Y','30Y'], yields: [0.4,0.7,1.1,1.8], historical: [0.3,0.6,1.0,1.7] };
+  if (pathname.endsWith('/rates/jgb-curve')) {
+    const labels = ['2Y','5Y','10Y','20Y','30Y'];
+    const today = [0.40,0.70,1.10,1.52,1.80];
+    const historical = [0.30,0.60,1.00,1.42,1.70];
+    return { ...meta, labels, today, historical, today_as_of: '2026-08-31', compare_as_of: '2025-08-31', points: labels.map((label, index) => ({ label, today: today[index], historical: historical[index], delta_bps: Number(((today[index] - historical[index]) * 100).toFixed(1)) })) };
+  }
   if (pathname.endsWith('/rates/auctions')) return { ...meta, auctions: [{ security_type: 'Note', security_term: '2-Year', auction_date: '2029-01-20', offering_amt: 60_000_000_000 }], count: 1 };
-  if (pathname.endsWith('/macro/summary')) return { ...meta, regime: 'neutral', indicators: [] };
-  if (pathname.endsWith('/macro/stress')) return { ...meta, indicators: [] };
-  if (pathname.endsWith('/macro/primary')) return { ...meta, indicators: [] };
+  if (pathname.endsWith('/macro/summary')) return { ...meta, cpi_yoy: 2.7, core_cpi_yoy: 3.0, core_pce_yoy: 2.8, nfp_mom: 165, unemployment: 4.1, retail_sales: 0.4, housing_starts: 1_420, fed_balance_sheet: 6_650 };
+  if (pathname.endsWith('/macro/stress')) return { ...meta, term_sofr_3m: 4.48, real_10y: 1.92, bei_5y: 2.25, bei_10y: 2.31, hy_oas: 3.18, ig_oas: 0.91, usd_broad: 121.4, nfci: -0.42, vix: 16.8 };
+  if (pathname.endsWith('/macro/primary')) return { ...meta, bgcr: 4.35, tgcr: 4.34, sofr_ofr: 4.53, ecb_dfr: 2.25 };
   return { ...meta };
 }
 

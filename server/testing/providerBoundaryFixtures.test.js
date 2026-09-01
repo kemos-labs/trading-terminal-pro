@@ -33,5 +33,9 @@ describe('provider-boundary E2E fixtures', () => {
       expect(row.legs[1]).toMatch(/^ZQ/);
       expect(row.price_spread).toBeCloseTo(-row.last_bps / 100, 8);
     }
+
+    const jgb = await fetch('http://127.0.0.1:8765/api/rates/jgb-curve').then((response) => response.json());
+    expect(jgb.points).toHaveLength(5);
+    expect(jgb.points.every((row) => Number.isFinite(row.today) && Number.isFinite(row.historical))).toBe(true);
   });
 });

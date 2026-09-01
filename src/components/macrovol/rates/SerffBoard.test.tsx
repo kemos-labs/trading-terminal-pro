@@ -41,6 +41,8 @@ describe('SerffBoard — CME SERFF = same-month SR1 − ZQ (1:1)', () => {
     ] as unknown as Parameters<typeof SerffBoard>[0]['rows'];
     render(<SerffBoard rows={rows} onOpenImply={() => {}} />);
     expect(screen.getByTestId('serff-sign-note').textContent).toMatch(/1:1 ratio/);
+    expect(screen.getByTestId('serff-sign-note').textContent).toMatch(/price_spread.*opposite sign/);
+    expect(screen.getByTestId('serff-sign-note').textContent).toMatch(/100 −/);
     const titleEl = screen.getByText(/SERFF · SR1Z6 − ZQZ6 \[1:1\]/);
     expect(titleEl.textContent).toContain('SR1Z6');
     expect(titleEl.textContent).toContain('ZQZ6');

@@ -1297,8 +1297,11 @@ def stir_spreads(
                     price_b=pxz,
                     note=(
                         "CME SERFF inter-commodity spread: same-month SR1 − ZQ, ratio 1:1. "
-                        "rate_bps = SR1 implied − ZQ implied (leg order as listed). "
-                        "Positive = 1M SOFR futures priced above 30-Day FF futures."
+                        "CME price-display convention: price = 100 − implied rate; "
+                        "rate_bps = SR1 implied rate − ZQ implied rate (leg order as listed); "
+                        "price_spread = SR1 price − ZQ price = −rate_bps/100 (opposite sign). "
+                        "Positive rate_bps = SR1 rate above ZQ rate (secured firmer), "
+                        "so SR1 price below ZQ price."
                     ),
                     priority=3,
                 )

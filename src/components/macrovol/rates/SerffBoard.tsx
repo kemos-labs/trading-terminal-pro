@@ -140,9 +140,8 @@ export function SerffBoard({
         height={140}
       />
       <p className="border-b border-border bg-background/30 px-2 py-1 font-mono text-type-2xs leading-snug text-muted-foreground" data-testid="serff-sign-note">
-        Sign convention: rate_bps = SR1 implied − ZQ implied (leg order as listed), 1:1 ratio.
-        Positive = One-Month SOFR futures above 30-Day Fed Funds futures (secured funding priced
-        firmer than unsecured). Negative = SOFR leg below FF leg. Missing exact leg → Unavailable —
+        Sign convention: CME price = 100 − implied rate; rate_bps = SR1 implied − ZQ implied (leg order as listed), 1:1 ratio;
+        price_spread = SR1 price − ZQ price = −rate_bps/100 (opposite sign). Positive rate_bps = SR1 rate above ZQ rate (secured funding firmer), so SR1 price below ZQ price. Missing exact leg → Unavailable —
         never an SR3 or cash-EFFR substitution. X = common delivery month; Y = spread in basis
         points, never mixed with outright rates.
       </p>

@@ -114,6 +114,11 @@ export function evaluateCombo(
   let missingReason = '';
 
   for (const leg of legs) {
+    if (!Number.isFinite(leg.qty) || leg.qty <= 0) {
+      hasMissing = true;
+      missingReason = 'invalid qty (must be finite positive; negative qty cannot reverse side)';
+      continue;
+    }
     const sgn = signOf(leg.side) * leg.qty;
     const ep = leg.entryPrice as unknown as number | null;
     if (ep == null || !isFinite(ep)) {
@@ -130,6 +135,23 @@ export function evaluateCombo(
       hasMissing = true;
       missingReason = `invalid entry basis '${leg.entryBasis}' for ${leg.side} leg (long requires observed ask, short requires observed bid)`;
       continue;
+    }
+    // Provenance: ask/bid legs must match the snapshot's observed quote, not just the label.
+    if (leg.kind !== 'spot' && leg.kind !== 'future' && leg.entryBasis !== 'user') {
+      const qte = findQuote(snap, leg.kind as 'call' | 'put', leg.strike!, leg.expiry!);
+      if (leg.entryBasis === 'ask') {
+        if (qte?.ask == null || !Number.isFinite(qte.ask) || qte.ask <= 0 || Math.abs(qte.ask - ep) > 1e-9) {
+          hasMissing = true;
+          missingReason = 'ask basis requires entryPrice to equal observed positive ask at that strike/expiry';
+          continue;
+        }
+      } else if (leg.entryBasis === 'bid') {
+        if (qte?.bid == null || !Number.isFinite(qte.bid) || qte.bid <= 0 || Math.abs(qte.bid - ep) > 1e-9) {
+          hasMissing = true;
+          missingReason = 'bid basis requires entryPrice to equal observed positive bid at that strike/expiry';
+          continue;
+        }
+      }
     }
     entryCost += sgn * ep;
 
@@ -342,6 +364,7 @@ export function templateLegs(
 export function comboPayoffAtExpiry(legs: PortfolioLeg[], S: number): number | null {
   let pnl = 0;
   for (const leg of legs) {
+    if (!Number.isFinite(leg.qty) || leg.qty <= 0) return null;
     const sgn = signOf(leg.side) * leg.qty;
     const ep = leg.entryPrice as unknown as number | null;
     if (ep == null || !Number.isFinite(ep)) {
@@ -379,6 +402,9 @@ export function breakEvenSpots(legs: PortfolioLeg[], spot: number, loMult = 0.5,
   // Fail-closed: any missing executable entry price → unavailable
   if (legs.some(l => l.entryPrice == null || !Number.isFinite(l.entryPrice as number))) {
     return { available: false, breakEvens: [], reason: 'missing entryPrice' };
+  }
+  if (legs.some(l => !Number.isFinite(l.qty) || l.qty <= 0)) {
+    return { available: false, breakEvens: [], reason: 'invalid qty' };
   }
   if (legs.some(l => !entryBasisValidFor(l))) {
     return { available: false, breakEvens: [], reason: "invalid entry basis (long requires observed ask, short requires observed bid)" };

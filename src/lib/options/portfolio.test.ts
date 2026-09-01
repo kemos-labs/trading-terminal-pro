@@ -43,11 +43,26 @@ describe('portfolio / combo', () => {
 
   // ── Structural executable-entry law (C1) ────────────────────────────────
 
-  const legWith = (over: Partial<PortfolioLeg>): PortfolioLeg => ({
-    id: 't', kind: 'call', side: 'long', qty: 1,
-    strike: snap.expiries[0]!.calls[0]!.strike, expiry: snap.expiries[0]!.expiry,
-    entryPrice: 2.5, entryBasis: 'ask', ...over,
-  });
+  const quoteForLeg = (kind: 'call' | 'put' = 'call') => {
+    const slice = snap.expiries[0]!;
+    const q = kind === 'call' ? slice.calls[0]! : slice.puts[0]!;
+    return q;
+  };
+  const legWith = (over: Partial<PortfolioLeg>): PortfolioLeg => {
+    const kind = (over.kind as 'call' | 'put') ?? 'call';
+    const side = (over.side as 'long' | 'short') ?? 'long';
+    const q = quoteForLeg(kind);
+    const basis = (over.entryBasis as string | null) ?? (side === 'long' ? 'ask' : 'bid');
+    const price = basis === 'ask' ? q.ask : basis === 'bid' ? q.bid : 2.5;
+    return {
+      id: 't', kind, side, qty: 1,
+      strike: q.strike, expiry: snap.expiries[0]!.expiry,
+      entryPrice: price, entryBasis: basis as 'ask' | 'bid' | 'user', ...over,
+      // If over specifies entryPrice explicitly, keep it (to test invalid cases)
+      ...(over.entryPrice !== undefined ? { entryPrice: over.entryPrice } : {}),
+      ...(over.entryBasis !== undefined ? { entryBasis: over.entryBasis as any } : {}),
+    };
+  };
 
   it('enforces long = observed ask, short = observed bid (fail closed)', () => {
     // long with 'bid' basis → unavailable

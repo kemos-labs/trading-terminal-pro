@@ -127,6 +127,22 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     expect(body.data.providerModes.crypto?.mode).toBeTruthy();
     expect(body.data.providerModes.crypto).not.toHaveProperty('veloCredentialPresent');
     expect(body.data.providerModes.crypto).not.toHaveProperty('veloConfigured');
+    expect(body.data.circuits).toHaveLength(3);
+    expect(body.data.circuits.map((row) => row.provider)).toEqual(['deribit', 'binance-futures', 'bybit-linear']);
+    for (const row of body.data.circuits) {
+      expect(row).toEqual({
+        provider: row.provider,
+        status: 'closed',
+        failures: 0,
+        cooldownRemainingMs: 0,
+        probeInFlight: false,
+      });
+      expect(row).not.toHaveProperty('openedAt');
+      expect(JSON.stringify(row)).not.toMatch(/(secret|token|query|error)/i);
+    }
+    const duplicate = structuredClone(body);
+    duplicate.data.circuits[1] = { ...duplicate.data.circuits[0] };
+    expect(validateContract('providerStatusResponse', duplicate).valid).toBe(false);
   });
 
   it('rates/stir surfaces exact same-month SR1-ZQ SERFF rows and separate proxies', async () => {

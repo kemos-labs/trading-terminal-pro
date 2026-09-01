@@ -7,6 +7,7 @@
  */
 
 import { deleteCache, getOrFetch } from '../../../api/upstreamCache.js';
+import { PROVIDER_CIRCUITS, withProviderCircuit } from '../../../api/providerCircuitBreaker.js';
 
 const VENUES = {
   binance: 'https://fapi.binance.com',
@@ -60,6 +61,10 @@ function assertMatchingSymbol(payload, requested) {
 }
 
 async function fetchBinance(symbol) {
+  return withProviderCircuit(PROVIDER_CIRCUITS.BINANCE_FUTURES, () => fetchBinanceUnprotected(symbol));
+}
+
+async function fetchBinanceUnprotected(symbol) {
   const [ticker, premium, oi] = await Promise.all([
     getJson(`${VENUES.binance}/fapi/v1/ticker/24hr?symbol=${symbol}`),
     getJson(`${VENUES.binance}/fapi/v1/premiumIndex?symbol=${symbol}`),
@@ -77,6 +82,10 @@ async function fetchBinance(symbol) {
 }
 
 async function fetchBybit(symbol) {
+  return withProviderCircuit(PROVIDER_CIRCUITS.BYBIT_LINEAR, () => fetchBybitUnprotected(symbol));
+}
+
+async function fetchBybitUnprotected(symbol) {
   const url = `${VENUES.bybit}/v5/market/tickers?category=linear&symbol=${symbol}`;
   const json = await getJson(url);
   if (json.retCode !== 0) throw new Error(`Bybit returned error ${json.retCode}`);
@@ -108,7 +117,9 @@ export async function fetchFreeCryptoMarketResult(currency) {
       const venues = results
         .filter((result) => result.status === 'fulfilled')
         .map((result) => result.value);
-      if (venues.length === 0) throw Object.assign(new Error('All free crypto venues unavailable'), { status: 502 });
+      if (venues.length === 0) {
+        throw Object.assign(new Error('All free crypto venues unavailable'), { status: 502, code: 'provider_unavailable' });
+      }
       return {
         currency: c,
         symbol,

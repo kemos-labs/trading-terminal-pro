@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { fetchFreeCryptoMarket, fetchFreeCryptoMarketResult, resetFreeCryptoMarketCache } from './client.js';
+import { resetProviderCircuitsForTests } from '../../../api/providerCircuitBreaker.js';
 
 const realFetch = global.fetch;
 const payload = (price = '100') => ({
@@ -17,7 +18,7 @@ function mockFetch(data) {
 }
 
 describe('free crypto provider normalization', () => {
-  beforeEach(() => { resetFreeCryptoMarketCache(); });
+  beforeEach(() => { resetFreeCryptoMarketCache(); resetProviderCircuitsForTests(); });
   afterEach(() => { global.fetch = realFetch; vi.restoreAllMocks(); });
 
   it('accepts both venues, preserves observed fields, and has no aggregate', async () => {
@@ -39,6 +40,23 @@ describe('free crypto provider normalization', () => {
     mockFetch(p);
     const result = await fetchFreeCryptoMarket('BTC');
     expect(result.venues.map(v => v.venue)).toEqual(['Bybit Linear']);
+  });
+
+  it('opens one venue circuit without disabling the independent venue', async () => {
+    vi.useFakeTimers();
+    const p = payload();
+    p.binance = [new Error('binance down'), new Error('binance down'), new Error('binance down')];
+    mockFetch(p);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await expect(fetchFreeCryptoMarketResult('BTC')).resolves.toMatchObject({ data: { venues: [{ venue: 'Bybit Linear' }] } });
+      await vi.advanceTimersByTimeAsync(15_001);
+    }
+    const callsBeforeOpen = global.fetch.mock.calls.filter(([url]) => String(url).includes('binance')).length;
+    const next = await fetchFreeCryptoMarketResult('BTC');
+    expect(next.data.venues.map((venue) => venue.venue)).toEqual(['Bybit Linear']);
+    expect(global.fetch.mock.calls.filter(([url]) => String(url).includes('binance')).length).toBe(callsBeforeOpen);
+    expect(global.fetch.mock.calls.filter(([url]) => String(url).includes('bybit')).length).toBe(4);
+    vi.useRealTimers();
   });
 
   it('rejects both unavailable and malformed/all-null payloads', async () => {
@@ -88,7 +106,7 @@ describe('free crypto provider normalization', () => {
     await vi.advanceTimersByTimeAsync(15_001);
     mockFetch({ binance: [new Error('down'), new Error('down'), new Error('down')], bybit: new Error('down') });
     const stale = await fetchFreeCryptoMarketResult('BTC');
-    expect(stale).toMatchObject({ fromCache: true, stale: true, coalesced: false, providerError: 'http-502' });
+    expect(stale).toMatchObject({ fromCache: true, stale: true, coalesced: false, providerError: 'provider_unavailable' });
     expect(stale.ageMs).toBeGreaterThanOrEqual(15_001);
     vi.useRealTimers();
   });

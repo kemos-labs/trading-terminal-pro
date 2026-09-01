@@ -1183,7 +1183,8 @@
       "required": [
         "providerModes",
         "cache",
-        "quota"
+        "quota",
+        "circuits"
       ],
       "properties": {
         "providerModes": {
@@ -1239,6 +1240,41 @@
                   "remaining": { "type": "integer", "minimum": 0 }
                 }
               }
+            }
+          }
+        },
+        "circuits": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "allOf": [
+            {
+              "contains": { "type": "object", "properties": { "provider": { "const": "deribit" } } },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": { "type": "object", "properties": { "provider": { "const": "binance-futures" } } },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": { "type": "object", "properties": { "provider": { "const": "bybit-linear" } } },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["provider", "status", "failures", "cooldownRemainingMs", "probeInFlight"],
+            "properties": {
+              "provider": { "type": "string", "enum": ["deribit", "binance-futures", "bybit-linear"] },
+              "status": { "type": "string", "enum": ["closed", "open", "half-open"] },
+              "failures": { "type": "integer", "minimum": 0 },
+              "cooldownRemainingMs": { "type": "integer", "minimum": 0 },
+              "probeInFlight": { "type": "boolean" }
             }
           }
         }

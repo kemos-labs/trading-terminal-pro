@@ -8,6 +8,7 @@
  */
 import { providerEntitlements } from '../providers/entitlements.js';
 import { cacheStats, getOrFetch, sanitizeProviderErrorCode } from '../../api/upstreamCache.js';
+import { providerCircuitStatuses } from '../../api/providerCircuitBreaker.js';
 import { resolveRatesWorkerUrl } from '../ratesWorkerUrl.js';
 import {
   getDeribitFundingSnapshotResult,
@@ -287,6 +288,7 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
       provenanceByField: {
         'data.providerModes': 'public-provider-policy',
         'data.cache': 'api/upstreamCache',
+        'data.circuits': 'api/providerCircuitBreaker',
       },
       unitsByField: {
         'data.cache.entries': 'count',
@@ -294,6 +296,8 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
         'data.cache.misses': 'count',
         'data.quota.providers[].used': 'upstream-calls',
         'data.quota.providers[].remaining': 'upstream-calls',
+        'data.circuits[].failures': 'provider-circuit-failure-count',
+        'data.circuits[].cooldownRemainingMs': 'milliseconds',
       },
       assumptions: ['Velo remains unverified until a server-side capability and redistribution probe succeeds; configuration presence is not exposed.'],
       warnings: [],
@@ -305,6 +309,7 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
           misses: stats.metrics?.misses ?? 0,
           inflight: stats.inFlight ?? 0,
         },
+        circuits: providerCircuitStatuses(),
         quota: {
           scope: quotaStatus.scope,
           persistent: Boolean(quotaStatus.persistent),

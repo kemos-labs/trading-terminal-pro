@@ -18,11 +18,18 @@ import {
   getBudgetUsed,
   MAX_CACHE_ENTRIES,
   TTL,
+  sanitizeProviderErrorCode,
 } from './upstreamCache.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe('upstreamCache', () => {
+  it('accepts only the documented provider-error code vocabulary', () => {
+    expect(sanitizeProviderErrorCode('rate_limited')).toBe('rate_limited');
+    expect(sanitizeProviderErrorCode('http-502')).toBe('http-502');
+    expect(sanitizeProviderErrorCode('provider_internal_reference')).toBeNull();
+    expect(sanitizeProviderErrorCode('http-200')).toBeNull();
+  });
   beforeEach(() => {
     // Isolate budget counters by using unique provider keys per test where needed.
   });
@@ -184,6 +191,47 @@ describe('upstreamCache', () => {
     expect(r.data).toEqual({ v: 1 });
     expect(r.stale).toBe(true);
     expect(r.fromCache).toBe(true);
+    expect(r.providerError).toBe('upstream-error');
+  });
+
+  it('preserves only bounded provider error codes on stale serves', async () => {
+    const key = `test:stale-code:${Date.now()}`;
+    await getOrFetch(key, 1, async () => ({ v: 1 }));
+    await new Promise((r) => setTimeout(r, 5));
+    const coded = await getOrFetch(key, 1, async () => {
+      throw Object.assign(new Error('sensitive provider body must not cross the cache boundary'), { code: 'rate_limited' });
+    });
+    expect(coded).toMatchObject({ stale: true, providerError: 'rate_limited' });
+    expect(JSON.stringify(coded)).not.toContain('sensitive provider body');
+
+    const unknownKey = `test:stale-unknown-code:${Date.now()}`;
+    await getOrFetch(unknownKey, 1, async () => ({ v: 2 }));
+    await new Promise((r) => setTimeout(r, 5));
+    const redacted = await getOrFetch(unknownKey, 1, async () => {
+      throw Object.assign(new Error('private diagnostic'), { code: 'provider_internal_reference' });
+    });
+    expect(redacted.providerError).toBe('upstream-error');
+    expect(JSON.stringify(redacted)).not.toContain('provider_internal_reference');
+  });
+
+  it('normalizes status and abort failures to safe stale provider codes', async () => {
+    const statusKey = `test:stale-status:${Date.now()}`;
+    await getOrFetch(statusKey, 1, async () => ({ v: 3 }));
+    await new Promise((r) => setTimeout(r, 5));
+    const status = await getOrFetch(statusKey, 1, async () => {
+      throw Object.assign(new Error('provider response leaked body'), { status: 503 });
+    });
+    expect(status.providerError).toBe('http-503');
+    expect(JSON.stringify(status)).not.toContain('provider response leaked body');
+
+    const abortKey = `test:stale-abort:${Date.now()}`;
+    await getOrFetch(abortKey, 1, async () => ({ v: 4 }));
+    await new Promise((r) => setTimeout(r, 5));
+    const aborted = await getOrFetch(abortKey, 1, async () => {
+      throw Object.assign(new Error('private timeout diagnostic'), { name: 'AbortError' });
+    });
+    expect(aborted.providerError).toBe('timeout');
+    expect(JSON.stringify(aborted)).not.toContain('private timeout diagnostic');
   });
 
   it('exports TTLs used by options and Deribit routes', () => {

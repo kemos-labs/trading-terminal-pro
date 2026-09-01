@@ -41,14 +41,19 @@
     "cacheState": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["state", "hit", "ageMs", "stale", "coalesced"],
+      "required": ["state", "hit", "ageMs", "stale", "coalesced", "providerError"],
       "properties": {
         "state": { "type": "string", "enum": ["fresh", "miss", "stale", "unavailable"] },
         "hit": { "type": "boolean" },
         "ageMs": { "type": ["integer", "null"], "minimum": 0 },
         "stale": { "type": "boolean" },
         "coalesced": { "type": "boolean" },
-        "providerError": { "type": ["string", "null"] }
+        "providerError": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^(rate_limited|timeout|http_error|provider_unavailable|invalid_payload|not_allowlisted|insufficient_coverage|upstream-error|http-[45][0-9]{2})$" }
+          ]
+        }
       }
     },
     "baseEnvelope": {

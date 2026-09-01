@@ -88,7 +88,7 @@ describe('free crypto provider normalization', () => {
     await vi.advanceTimersByTimeAsync(15_001);
     mockFetch({ binance: [new Error('down'), new Error('down'), new Error('down')], bybit: new Error('down') });
     const stale = await fetchFreeCryptoMarketResult('BTC');
-    expect(stale).toMatchObject({ fromCache: true, stale: true, coalesced: false });
+    expect(stale).toMatchObject({ fromCache: true, stale: true, coalesced: false, providerError: 'http-502' });
     expect(stale.ageMs).toBeGreaterThanOrEqual(15_001);
     vi.useRealTimers();
   });

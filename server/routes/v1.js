@@ -14,6 +14,7 @@ import {
   getDeribitFundingSnapshotResult,
 } from './deribitMarket.js';
 import { registerV1AnalyticsRoutes } from './v1Analytics.js';
+import { sanitizeProviderErrorCode } from '../../api/upstreamCache.js';
 import {
   assertContract,
   createEnvelope,
@@ -147,7 +148,7 @@ function baseEnvelope(request, {
   source,
   freshness,
   coverage: responseCoverage,
-  cache = { state: 'unavailable', hit: false, ageMs: null, stale: false, coalesced: false },
+  cache = { state: 'unavailable', hit: false, ageMs: null, stale: false, coalesced: false, providerError: null },
   provenanceByField,
   unitsByField,
   assumptions,
@@ -177,6 +178,7 @@ function cacheEnvelope(result) {
     ageMs: Number.isFinite(result.ageMs) ? Math.max(0, result.ageMs) : null,
     stale: Boolean(result.stale),
     coalesced: Boolean(result.coalesced),
+    providerError: sanitizeProviderErrorCode(result.providerError),
   };
 }
 

@@ -135,6 +135,7 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     const body = response.json();
     expect(validateContract('ratesStirResponse', body)).toMatchObject({ valid: true });
     expect(body.cache).toMatchObject({ hit: false, stale: false });
+    expect(body.cache.providerError).toBeNull();
     expect(body.data.serff).toHaveLength(1);
     expect(body.data.serff[0]).toMatchObject({ name: 'SERFFZ6', ratio: '1:1', legs: ['SR1Z6', 'ZQZ6'], rate_bps: 13 });
     expect(body.data.derivedProxies[0].name).toContain('proxy');

@@ -7,7 +7,7 @@
  * provider calls; no raw provider payloads leak into the contract.
  */
 import { providerEntitlements } from '../providers/entitlements.js';
-import { cacheStats, getOrFetch } from '../../api/upstreamCache.js';
+import { cacheStats, getOrFetch, sanitizeProviderErrorCode } from '../../api/upstreamCache.js';
 import { resolveRatesWorkerUrl } from '../ratesWorkerUrl.js';
 import {
   getDeribitFundingSnapshotResult,
@@ -72,6 +72,7 @@ function cacheEnvelope(result) {
     ageMs: Number.isFinite(result.ageMs) ? Math.max(0, result.ageMs) : null,
     stale: Boolean(result.stale),
     coalesced: Boolean(result.coalesced),
+    providerError: sanitizeProviderErrorCode(result.providerError),
   };
 }
 
@@ -80,7 +81,7 @@ function combinedCacheEnvelope(settledResults) {
     .filter((result) => result.status === 'fulfilled')
     .map((result) => result.value);
   if (results.length === 0) {
-    return { state: 'unavailable', hit: false, ageMs: null, stale: false, coalesced: false };
+    return { state: 'unavailable', hit: false, ageMs: null, stale: false, coalesced: false, providerError: null };
   }
   const stale = results.some((result) => result.stale);
   const allHits = results.every((result) => result.fromCache);
@@ -90,6 +91,7 @@ function combinedCacheEnvelope(settledResults) {
     ageMs: Math.max(...results.map((result) => Number.isFinite(result.ageMs) ? Math.max(0, result.ageMs) : 0)),
     stale,
     coalesced: results.some((result) => result.coalesced),
+    providerError: results.map((result) => sanitizeProviderErrorCode(result.providerError)).find(Boolean) ?? null,
   };
 }
 
@@ -383,6 +385,7 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
         ageMs: worker.ageMs,
         stale: Boolean(worker.stale),
         coalesced: Boolean(worker.coalesced),
+        providerError: sanitizeProviderErrorCode(worker.providerError),
       },
       data: {
         sr3,
@@ -442,6 +445,7 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
         ageMs: worker.ageMs,
         stale: Boolean(worker.stale),
         coalesced: Boolean(worker.coalesced),
+        providerError: sanitizeProviderErrorCode(worker.providerError),
       },
       data: {
         T,

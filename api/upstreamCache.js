@@ -31,6 +31,28 @@ const metrics = {
   loadErrors: 0,
   rejectedPayloads: 0,
 };
+const SAFE_PROVIDER_ERROR_CODES = new Set([
+  'rate_limited',
+  'timeout',
+  'http_error',
+  'provider_unavailable',
+  'invalid_payload',
+  'not_allowlisted',
+  'insufficient_coverage',
+]);
+
+export function sanitizeProviderErrorCode(value) {
+  if (SAFE_PROVIDER_ERROR_CODES.has(value)) return value;
+  return typeof value === 'string' && /^http-[45][0-9]{2}$/.test(value) ? value : null;
+}
+
+function safeProviderError(error) {
+  const code = sanitizeProviderErrorCode(error?.code);
+  if (code) return code;
+  if (Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599) return `http-${error.status}`;
+  if (error?.name === 'AbortError') return 'timeout';
+  return 'upstream-error';
+}
 
 function setEntry(key, entry) {
   store.delete(key);
@@ -200,7 +222,7 @@ export function monthBudgetAllows(provider, maxPerMonth, headroom = 0.85) {
  * @param {number} ttlMs
  * @param {() => Promise<T>} loader
  * @param {{ allowStaleOnError?: boolean, maxStaleMs?: number, force?: boolean, cacheIf?: (data: T) => boolean }} [opts]
- * @returns {Promise<{ data: T, fromCache: boolean, ageMs: number, stale?: boolean, coalesced?: boolean }>}
+ * @returns {Promise<{ data: T, fromCache: boolean, ageMs: number, stale?: boolean, coalesced?: boolean, providerError: string | null }>}
  *
  * `cacheIf` — when provided, only persist loader results that pass the predicate
  * (e.g. MacroVol proxy: cache only HTTP 2xx envelopes; never sticky 5xx bodies).
@@ -213,7 +235,7 @@ export async function getOrFetch(key, ttlMs, loader, opts = {}) {
   const hitAgeMs = hit ? now - hit.timestamp : null;
   if (!opts.force && hit && hitAgeMs < ttlMs) {
     metrics.freshHits += 1;
-    return { data: hit.data, fromCache: true, ageMs: hitAgeMs, stale: false, coalesced: false };
+    return { data: hit.data, fromCache: true, ageMs: hitAgeMs, stale: false, coalesced: false, providerError: null };
   }
 
   metrics.misses += 1;
@@ -241,7 +263,7 @@ export async function getOrFetch(key, ttlMs, loader, opts = {}) {
         const staleAgeMs = hit ? Date.now() - hit.timestamp : Infinity;
         if (opts.allowStaleOnError !== false && hit && staleAgeMs <= maxStaleMs) {
           metrics.staleServes += 1;
-          return { data: hit.data, stale: true, hitTs: hit.timestamp };
+          return { data: hit.data, stale: true, hitTs: hit.timestamp, providerError: safeProviderError(err) };
         }
         throw err;
       } finally {
@@ -259,12 +281,13 @@ export async function getOrFetch(key, ttlMs, loader, opts = {}) {
       ageMs: result.hitTs != null ? Date.now() - result.hitTs : 0,
       stale: true,
       coalesced: joinedInflight,
+      providerError: result.providerError ?? 'upstream-error',
     };
   }
   const entry = store.get(key);
   const ageMs = entry ? Date.now() - entry.timestamp : 0;
   // A single-flight join shares a successful upstream fill; it is not a prior cache hit.
-  return { data: result.data, fromCache: false, ageMs, stale: false, coalesced: joinedInflight };
+  return { data: result.data, fromCache: false, ageMs, stale: false, coalesced: joinedInflight, providerError: null };
 }
 
 export function peek(key) {

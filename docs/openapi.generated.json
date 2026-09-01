@@ -477,7 +477,8 @@
               "hit",
               "ageMs",
               "stale",
-              "coalesced"
+              "coalesced",
+              "providerError"
             ],
             "properties": {
               "state": {
@@ -506,9 +507,14 @@
                 "type": "boolean"
               },
               "providerError": {
-                "type": [
-                  "string",
-                  "null"
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^(rate_limited|timeout|http_error|provider_unavailable|invalid_payload|not_allowlisted|insufficient_coverage|upstream-error|http-[45][0-9]{2})$"
+                  }
                 ]
               }
             }

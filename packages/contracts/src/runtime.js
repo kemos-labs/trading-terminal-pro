@@ -57,7 +57,7 @@ export function createEnvelope({
   unitsByField = {},
   freshness,
   coverage,
-  cache = { state: 'unavailable', hit: false, ageMs: null, stale: false, coalesced: false },
+  cache = { state: 'unavailable', hit: false, ageMs: null, stale: false, coalesced: false, providerError: null },
   assumptions = [],
   warnings = [],
   data,

@@ -214,6 +214,49 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
           },
         },
       },
+      '/api/v1/analytics/volatility-surface/{symbol}': {
+        get: {
+          operationId: 'v1GetVolatilitySurface', tags: ['v1', 'equities', 'crypto'], summary: 'Observed option IV nodes with explicit model-layer availability',
+          parameters: [symbolParam(), { name: 'maxRows', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 5_000 } }],
+          responses: {
+            200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/volatilitySurfaceResponse' }, 'Validated observed volatility surface envelope'),
+            400: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed request error'),
+            502: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed provider/coverage error'),
+          },
+        },
+      },
+      '/api/v1/analytics/greeks/{symbol}': {
+        get: {
+          operationId: 'v1GetGreeks', tags: ['v1', 'equities', 'crypto'], summary: 'BSM Greeks from observed venue mark IV and explicit rates',
+          parameters: [
+            symbolParam(),
+            { name: 'riskFreeRate', in: 'query', description: 'Decimal annual rate; supply together with carryRate. No default.', schema: { type: 'number', minimum: -0.25, maximum: 1 } },
+            { name: 'carryRate', in: 'query', description: 'Decimal annual dividend/carry rate; supply together with riskFreeRate. No default.', schema: { type: 'number', minimum: -0.25, maximum: 1 } },
+            { name: 'maxRows', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 5_000 } },
+          ],
+          responses: {
+            200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/greeksResponse' }, 'Validated Greeks envelope'),
+            400: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed request error'),
+            502: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed provider/coverage error'),
+          },
+        },
+      },
+      '/api/v1/analytics/positioning/{symbol}': {
+        get: {
+          operationId: 'v1GetPositioning', tags: ['v1', 'equities', 'crypto'], summary: 'OI-weighted customer-long exposure proxy; never dealer inventory',
+          parameters: [
+            symbolParam(),
+            { name: 'riskFreeRate', in: 'query', description: 'Decimal annual rate; supply together with carryRate. No default.', schema: { type: 'number', minimum: -0.25, maximum: 1 } },
+            { name: 'carryRate', in: 'query', description: 'Decimal annual dividend/carry rate; supply together with riskFreeRate. No default.', schema: { type: 'number', minimum: -0.25, maximum: 1 } },
+            { name: 'maxRows', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 5_000 } },
+          ],
+          responses: {
+            200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/positioningResponse' }, 'Validated positioning-proxy envelope'),
+            400: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed request error'),
+            502: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed provider/coverage error'),
+          },
+        },
+      },
       '/api/v1/provider/status': { get: { operationId: 'v1GetProviderStatus', tags: ['v1', 'system'], summary: 'Provider entitlement and cache status', responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/providerStatusResponse' }, 'Validated provider status envelope') } } },
       '/api/v1/rates/stir': { get: { operationId: 'v1GetRatesStir', tags: ['v1', 'rates'], summary: 'STIR/SR3/SR1/ZQ strip and exact SERFF analytics', responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/ratesStirResponse' }, 'Validated STIR envelope') } } },
       '/api/v1/rates/term-structure': { get: { operationId: 'v1GetRatesTermStructure', tags: ['v1', 'rates'], summary: 'Nullable Treasury/SOFR term structure', parameters: [{ name: 'T', in: 'query', schema: { type: 'number', minimum: 0.01, maximum: 40 } }], responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/ratesTermStructureResponse' }, 'Validated term structure envelope') } } },

@@ -19,6 +19,11 @@ import { buildAcademyIndex } from '../../api/academyCatalog.js';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gateInfoForRequest } from '../../api/stripeBilling.js';
+import {
+  buildGreeks,
+  buildPositioning,
+  buildVolatilitySurface,
+} from '../services/optionsAnalytics.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const DOCS_ROOT = join(ROOT, 'docs');
@@ -88,7 +93,177 @@ function combinedCacheEnvelope(settledResults) {
   };
 }
 
+const ANALYTICS_PARAMS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['symbol'],
+  properties: { symbol: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' } },
+};
+
+const MODEL_QUERY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    riskFreeRate: { type: 'number', minimum: -0.25, maximum: 1 },
+    carryRate: { type: 'number', minimum: -0.25, maximum: 1 },
+    maxRows: { type: 'integer', minimum: 1, maximum: 5_000 },
+  },
+};
+
+async function loadCanonicalOptions(fastify, symbol) {
+  const path = symbol === 'BTC' || symbol === 'ETH'
+    ? `/api/v1/market/crypto/${symbol}`
+    : `/api/v1/market/options/${encodeURIComponent(symbol)}`;
+  const response = await fastify.inject({ method: 'GET', url: path });
+  return { statusCode: response.statusCode, body: response.json() };
+}
+
+function derivedCoverage(coverageFn, result) {
+  return coverageFn(result.coverage.numerator, result.coverage.denominator, result.coverage.missing);
+}
+
+function modelInputsFrom(request) {
+  const riskFreeRate = request.query?.riskFreeRate;
+  const carryRate = request.query?.carryRate;
+  if ((riskFreeRate == null) !== (carryRate == null)) return null;
+  return {
+    riskFreeRate: riskFreeRate == null ? null : Number(riskFreeRate),
+    carryRate: carryRate == null ? null : Number(carryRate),
+    maxRows: request.query?.maxRows == null ? undefined : Number(request.query.maxRows),
+  };
+}
+
 export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, baseEnvelope, coverage } = {}) {
+  fastify.get('/api/v1/analytics/volatility-surface/:symbol', {
+    schema: {
+      params: ANALYTICS_PARAMS_SCHEMA,
+      querystring: {
+        type: 'object', additionalProperties: false,
+        properties: { maxRows: { type: 'integer', minimum: 1, maximum: 5_000 } },
+      },
+    },
+  }, async (request, reply) => {
+    const symbol = String(request.params.symbol).toUpperCase();
+    const upstream = await loadCanonicalOptions(fastify, symbol);
+    if (upstream.statusCode !== 200) {
+      return sendError(request, reply, {
+        statusCode: upstream.statusCode >= 400 && upstream.statusCode < 500 ? upstream.statusCode : 502,
+        code: upstream.body?.error?.code ?? 'PROVIDER_UNAVAILABLE',
+        message: 'The canonical option snapshot required for surface analytics is unavailable.',
+        retryable: upstream.statusCode >= 500,
+      });
+    }
+    const result = buildVolatilitySurface(upstream.body, symbol, { maxRows: request.query?.maxRows });
+    const envelope = baseEnvelope(request, {
+      asOf: upstream.body.asOf,
+      fetchedAt: upstream.body.fetchedAt,
+      source: [...new Set([...upstream.body.source, 'terminal-options-analytics'])],
+      freshness: upstream.body.freshness,
+      coverage: derivedCoverage(coverage, result),
+      cache: upstream.body.cache,
+      provenanceByField: {
+        'data.observedNodes[].bidIv': 'observed-provider-bid-iv',
+        'data.observedNodes[].askIv': 'observed-provider-ask-iv',
+        'data.observedNodes[].venueMarkIv': 'observed-provider-mark-iv',
+        'data.modelLayer': 'unavailable-no-calibration',
+      },
+      unitsByField: {
+        'data.spot': 'USD',
+        'data.observedNodes[].strike': 'USD',
+        'data.observedNodes[].bidIv': 'decimal-volatility',
+        'data.observedNodes[].askIv': 'decimal-volatility',
+        'data.observedNodes[].venueMarkIv': 'decimal-volatility',
+      },
+      assumptions: [],
+      warnings: [...upstream.body.warnings, ...result.warnings],
+      data: result.data,
+    });
+    return sendContract(request, reply, 'volatilitySurfaceResponse', envelope);
+  });
+
+  for (const [path, contractName, builder] of [
+    ['/api/v1/analytics/greeks/:symbol', 'greeksResponse', buildGreeks],
+    ['/api/v1/analytics/positioning/:symbol', 'positioningResponse', buildPositioning],
+  ]) {
+    fastify.get(path, {
+      schema: { params: ANALYTICS_PARAMS_SCHEMA, querystring: MODEL_QUERY_SCHEMA },
+    }, async (request, reply) => {
+      const symbol = String(request.params.symbol).toUpperCase();
+      const modelInputs = modelInputsFrom(request);
+      if (modelInputs == null) {
+        return sendError(request, reply, {
+          statusCode: 400,
+          code: 'INVALID_REQUEST',
+          message: 'riskFreeRate and carryRate must be supplied together; neither is silently defaulted.',
+          retryable: false,
+        });
+      }
+      const upstream = await loadCanonicalOptions(fastify, symbol);
+      if (upstream.statusCode !== 200) {
+        return sendError(request, reply, {
+          statusCode: upstream.statusCode >= 400 && upstream.statusCode < 500 ? upstream.statusCode : 502,
+          code: upstream.body?.error?.code ?? 'PROVIDER_UNAVAILABLE',
+          message: 'The canonical option snapshot required for analytics is unavailable.',
+          retryable: upstream.statusCode >= 500,
+        });
+      }
+      const result = builder(upstream.body, symbol, modelInputs);
+      const positioning = contractName === 'positioningResponse';
+      const envelope = baseEnvelope(request, {
+        asOf: upstream.body.asOf,
+        fetchedAt: upstream.body.fetchedAt,
+        source: [...new Set([...upstream.body.source, 'terminal-options-analytics'])],
+        freshness: upstream.body.freshness,
+        coverage: derivedCoverage(coverage, result),
+        cache: upstream.body.cache,
+        provenanceByField: positioning ? {
+          'data.points[].openInterest': 'observed-provider-open-interest',
+          'data.points[].gex1PctUsd': 'derived-bsm-customer-long-oi-proxy',
+          'data.points[].dexUsd': 'derived-bsm-customer-long-oi-proxy',
+          'data.points[].vannaUsdPerUnitVol': 'derived-bsm-customer-long-oi-proxy',
+          'data.points[].charmUsdPerDay': 'derived-bsm-customer-long-oi-proxy',
+        } : {
+          'data.points[].iv': 'observed-provider-mark-iv',
+          'data.points[].delta': 'derived-black-scholes-merton',
+          'data.points[].gamma': 'derived-black-scholes-merton',
+          'data.points[].vega': 'derived-black-scholes-merton',
+          'data.points[].theta': 'derived-black-scholes-merton-finite-difference',
+          'data.points[].vanna': 'derived-black-scholes-merton',
+          'data.points[].charm': 'derived-black-scholes-merton-finite-difference',
+        },
+        unitsByField: positioning ? {
+          'data.spot': 'USD',
+          'data.points[].openInterest': 'listed-contracts',
+          'data.points[].gex1PctUsd': 'USD-per-1-percent-spot-move',
+          'data.points[].dexUsd': 'USD-delta-notional',
+          'data.points[].vannaUsdPerUnitVol': 'USD-delta-notional-per-unit-volatility',
+          'data.points[].charmUsdPerDay': 'USD-delta-notional-per-calendar-day',
+        } : {
+          'data.spot': 'USD',
+          'data.points[].iv': 'decimal-volatility',
+          'data.points[].delta': 'option-delta',
+          'data.points[].gamma': 'option-delta-per-USD',
+          'data.points[].vega': 'USD-per-share-per-1-vol-point',
+          'data.points[].theta': 'USD-per-share-per-calendar-day',
+          'data.points[].vanna': 'option-delta-per-unit-volatility',
+          'data.points[].charm': 'option-delta-per-calendar-day',
+        },
+        assumptions: positioning
+          ? [
+            'Customer-long sign model; equity contract multiplier 100; missing OI stays unavailable.',
+            'Equity expiry dates use 20:00 UTC as a labelled model-time approximation; crypto uses the provider expiry timestamp.',
+          ]
+          : [
+            'Black-Scholes-Merton with explicit riskFreeRate and carryRate inputs; no rate is defaulted.',
+            'Equity expiry dates use 20:00 UTC as a labelled model-time approximation; crypto uses the provider expiry timestamp.',
+          ],
+        warnings: [...upstream.body.warnings, ...result.warnings],
+        data: result.data,
+      });
+      return sendContract(request, reply, contractName, envelope);
+    });
+  }
+
   // ── Provider / cache status ────────────────────────────────────────────
   fastify.get('/api/v1/provider/status', async (request, reply) => {
     const now = Date.now();

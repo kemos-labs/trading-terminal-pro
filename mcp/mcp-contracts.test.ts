@@ -208,6 +208,23 @@ describe('MCP read-only server (contract)', () => {
     expect(JSON.stringify(res).toLowerCase()).not.toMatch(/(api[_-]?key|token|secret|authorization)/);
   });
 
+  it('analytical tools return their own strict contracts rather than raw chains', async () => {
+    const listed = (await client.call('tools/list', {})) as { tools: { name: string; outputSchema: object }[] };
+    for (const [name, args, expectedField] of [
+      ['terminal.get_volatility_surface', { symbol: 'BTC' }, 'observedNodes'],
+      ['terminal.get_greeks', { symbol: 'BTC', riskFreeRate: 0.04, carryRate: 0 }, 'points'],
+      ['terminal.get_positioning', { symbol: 'BTC', riskFreeRate: 0.04, carryRate: 0 }, 'points'],
+    ] as const) {
+      const result = (await client.call('tools/call', { name, arguments: args })) as { structuredContent: { data: Record<string, unknown> }; content: { text: string }[] };
+      const schema = listed.tools.find((tool) => tool.name === name)?.outputSchema;
+      expect(ajv.compile(schema)(result.structuredContent), `${name}: ${ajv.errorsText()}`).toBe(true);
+      expect(result.structuredContent.data).toHaveProperty(expectedField);
+      expect(result.structuredContent.data).not.toHaveProperty('instruments');
+      expect(result.structuredContent.data).not.toHaveProperty('quotes');
+      expect(JSON.parse(result.content[0].text)).toEqual(result.structuredContent);
+    }
+  }, 30_000);
+
   it('invalid symbol errors with typed error (never fabricates)', async () => {
     await expect(client.call('tools/call', { name: 'terminal.get_options_chain', arguments: { symbol: 'AA++bad' } })).rejects.toThrow(/invalid format/i);
   });
@@ -244,6 +261,10 @@ describe('MCP read-only server (contract)', () => {
     await expect(client.call('tools/call', { name: 'terminal.get_crypto_carry', arguments: { currency: 'DOGE' } })).rejects.toThrow(/one of/i);
     await expect(client.call('tools/call', { name: 'terminal.get_options_chain', arguments: { symbol: 123 } })).rejects.toThrow(/string/i);
     await expect(client.call('tools/call', { name: 'terminal.get_market_snapshot', arguments: { symbol: '123' } })).rejects.toThrow(/invalid format/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_greeks', arguments: { symbol: 'BTC', riskFreeRate: 0.04 } })).rejects.toThrow(/carryRate is required/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_greeks', arguments: { symbol: 'BTC', riskFreeRate: Infinity, carryRate: 0 } })).rejects.toThrow(/finite number/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_positioning', arguments: { symbol: 'BTC', riskFreeRate: 2, carryRate: 0 } })).rejects.toThrow(/must be <= 1/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_volatility_surface', arguments: { symbol: 'BTC', maxRows: 1.5 } })).rejects.toThrow(/integer/i);
     expect(client.lines.at(-1)?.error?.code).toBe(-32602);
   });
 

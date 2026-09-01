@@ -181,6 +181,56 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     expect(validateContract('errorResponse', bad.json())).toMatchObject({ valid: true });
   });
 
+  it('surface analytics returns observed IV nodes and no fabricated model mesh', async () => {
+    const response = await app.inject('/api/v1/analytics/volatility-surface/BTC');
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(validateContract('volatilitySurfaceResponse', body)).toMatchObject({ valid: true });
+    expect(body.data.observedNodes).toEqual([
+      expect.objectContaining({ strike: 60000, right: 'call', bidIv: 0.54, askIv: 0.56, venueMarkIv: 0.55 }),
+    ]);
+    expect(body.data.modelLayer).toEqual({ status: 'unavailable', name: null, calibratedAt: null, nodes: [] });
+    expect(body.provenanceByField['data.modelLayer']).toBe('unavailable-no-calibration');
+    const oversized = await app.inject('/api/v1/analytics/volatility-surface/BTC?maxRows=5001');
+    expect(oversized.statusCode).toBe(400);
+  });
+
+  it('Greeks require explicit paired rates and remain model-labelled', async () => {
+    const missingRates = await app.inject('/api/v1/analytics/greeks/BTC');
+    expect(missingRates.statusCode).toBe(200);
+    expect(missingRates.json().data.points[0].delta).toBeNull();
+
+    const oneRate = await app.inject('/api/v1/analytics/greeks/BTC?riskFreeRate=0.04');
+    expect(oneRate.statusCode).toBe(400);
+    expect(validateContract('errorResponse', oneRate.json())).toMatchObject({ valid: true });
+
+    const response = await app.inject('/api/v1/analytics/greeks/BTC?riskFreeRate=0.04&carryRate=0');
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(validateContract('greeksResponse', body)).toMatchObject({ valid: true });
+    expect(body.data.points[0]).toMatchObject({
+      iv: 0.55,
+      ivBasis: 'venue-mark',
+      delta: expect.any(Number),
+      gamma: expect.any(Number),
+      vega: expect.any(Number),
+      theta: expect.any(Number),
+      vanna: expect.any(Number),
+      charm: expect.any(Number),
+    });
+    expect(body.assumptions.join(' ')).toContain('no rate is defaulted');
+  });
+
+  it('inverse crypto positioning fails closed instead of applying an equity multiplier', async () => {
+    const response = await app.inject('/api/v1/analytics/positioning/BTC?riskFreeRate=0.04&carryRate=0');
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(validateContract('positioningResponse', body)).toMatchObject({ valid: true });
+    expect(body.data.contractMultiplier).toBeNull();
+    expect(body.data.points[0]).toMatchObject({ openInterest: 100, oiState: 'observed', gex1PctUsd: null });
+    expect(body.coverage.missing).toContain('inverse-contract-normalization');
+  });
+
   it('academy/index validates from the real docs catalog', async () => {
     const response = await app.inject('/api/v1/academy/index');
     expect(response.statusCode).toBe(200);

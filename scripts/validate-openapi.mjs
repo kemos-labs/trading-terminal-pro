@@ -73,6 +73,7 @@ const requiredV1 = [
   'v1GetCryptoTrades',
   'v1GetProviderStatus', 'v1GetRatesStir', 'v1GetRatesTermStructure',
   'v1GetCryptoCarry', 'v1GetCryptoFlow', 'v1GetAcademyIndex', 'v1GetKsaBoard',
+  'v1GetVolatilitySurface', 'v1GetGreeks', 'v1GetPositioning',
 ];
 for (const operationId of requiredV1) {
   if (!seen.has(operationId)) errors.push(`canonical operation missing: ${operationId}`);
@@ -84,6 +85,8 @@ const strictDataDefs = [
   'cryptoTradesData', 'cryptoTrade', 'errorResponse',
   'providerStatusData', 'ratesStirData', 'ratesTermStructureData',
   'cryptoCarryData', 'cryptoFlowData', 'academyIndexData', 'ksaBoardData',
+  'volatilitySurfaceData', 'surfaceNode', 'greeksData', 'greekPoint',
+  'positioningData', 'positioningPoint',
 ];
 const definitions = doc.components?.schemas?.V1Contracts?.$defs ?? {};
 for (const name of strictDataDefs) {

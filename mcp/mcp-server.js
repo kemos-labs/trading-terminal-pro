@@ -68,8 +68,26 @@ function validateArgs(schema, args) {
       if (rule.enum && !rule.enum.includes(value)) return `${key} must be one of: ${rule.enum.join(', ')}`;
       if (rule.pattern && !(new RegExp(rule.pattern).test(value))) return `${key} has invalid format`;
     }
+    if (rule.type === 'number' || rule.type === 'integer') {
+      if (typeof value !== 'number' || !Number.isFinite(value)) return `${key} must be a finite number`;
+      if (rule.type === 'integer' && !Number.isInteger(value)) return `${key} must be an integer`;
+      if (rule.minimum != null && value < rule.minimum) return `${key} must be >= ${rule.minimum}`;
+      if (rule.maximum != null && value > rule.maximum) return `${key} must be <= ${rule.maximum}`;
+    }
+  }
+  for (const [key, dependencies] of Object.entries(schema.dependentRequired ?? {})) {
+    if (key in args) for (const dependency of dependencies) if (!(dependency in args)) return `${dependency} is required with ${key}`;
   }
   return null;
+}
+
+function analyticsQuery({ riskFreeRate, carryRate, maxRows }) {
+  const params = new URLSearchParams();
+  if (riskFreeRate != null) params.set('riskFreeRate', String(riskFreeRate));
+  if (carryRate != null) params.set('carryRate', String(carryRate));
+  if (maxRows != null) params.set('maxRows', String(maxRows));
+  if (params.size === 0) return '';
+  return `?${params.toString()}`;
 }
 
 function requireSymbol(args, def = null) {
@@ -148,22 +166,23 @@ const TOOLS = [
   },
   {
     name: 'terminal.get_volatility_surface',
-    description: 'Volatility surface — observed matrix with a separately-labelled SVI model layer. Never fabricates missing cells.',
+    description: 'Volatility surface — observed IV nodes with an explicitly unavailable model layer. Never fabricates missing cells.',
     inputSchema: {
       type: 'object', additionalProperties: false,
       properties: {
         symbol: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' },
+        maxRows: { type: 'integer', minimum: 1, maximum: 5_000 },
       },
       required: ['symbol'],
     },
-    outputContracts: ['optionsResponse', 'cryptoMarketResponse'],
-    handler: async ({ symbol }) => {
+    outputContracts: ['volatilitySurfaceResponse'],
+    handler: async ({ symbol, maxRows }) => {
       const sym = requireSymbol({ symbol });
       if (!sym) return err('INVALID_SYMBOL', String(symbol));
-      const path = sym === 'BTC' || sym === 'ETH' ? `/api/v1/market/crypto/${sym}` : `/api/v1/market/options/${encodeURIComponent(sym)}`;
+      const path = `/api/v1/analytics/volatility-surface/${encodeURIComponent(sym)}${analyticsQuery({ maxRows })}`;
       const { status, body } = await api(path);
       if (status !== 200) return err('PROVIDER_UNAVAILABLE', `options ${status}`);
-      return okContract(body, sym === 'BTC' || sym === 'ETH' ? 'cryptoMarketResponse' : 'optionsResponse');
+      return okContract(body, 'volatilitySurfaceResponse');
     },
   },
   {
@@ -173,16 +192,20 @@ const TOOLS = [
       type: 'object', additionalProperties: false,
       properties: {
         symbol: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' },
+        riskFreeRate: { type: 'number', minimum: -0.25, maximum: 1 },
+        carryRate: { type: 'number', minimum: -0.25, maximum: 1 },
+        maxRows: { type: 'integer', minimum: 1, maximum: 5_000 },
       },
       required: ['symbol'],
+      dependentRequired: { riskFreeRate: ['carryRate'], carryRate: ['riskFreeRate'] },
     },
-    outputContracts: ['optionsResponse', 'cryptoMarketResponse'],
-    handler: async ({ symbol }) => {
+    outputContracts: ['greeksResponse'],
+    handler: async ({ symbol, riskFreeRate, carryRate, maxRows }) => {
       const sym = requireSymbol({ symbol });
       if (!sym) return err('INVALID_SYMBOL', String(symbol));
-      const path = sym === 'BTC' || sym === 'ETH' ? `/api/v1/market/crypto/${sym}` : `/api/v1/market/options/${encodeURIComponent(sym)}`;
+      const path = `/api/v1/analytics/greeks/${encodeURIComponent(sym)}${analyticsQuery({ riskFreeRate, carryRate, maxRows })}`;
       const { status, body } = await api(path);
-      return status === 200 ? okContract(body, sym === 'BTC' || sym === 'ETH' ? 'cryptoMarketResponse' : 'optionsResponse') : err('PROVIDER_UNAVAILABLE', `options ${status}`);
+      return status === 200 ? okContract(body, 'greeksResponse') : err('PROVIDER_UNAVAILABLE', `greeks ${status}`);
     },
   },
   {
@@ -192,16 +215,20 @@ const TOOLS = [
       type: 'object', additionalProperties: false,
       properties: {
         symbol: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' },
+        riskFreeRate: { type: 'number', minimum: -0.25, maximum: 1 },
+        carryRate: { type: 'number', minimum: -0.25, maximum: 1 },
+        maxRows: { type: 'integer', minimum: 1, maximum: 5_000 },
       },
       required: ['symbol'],
+      dependentRequired: { riskFreeRate: ['carryRate'], carryRate: ['riskFreeRate'] },
     },
-    outputContracts: ['optionsResponse', 'cryptoMarketResponse'],
-    handler: async ({ symbol }) => {
+    outputContracts: ['positioningResponse'],
+    handler: async ({ symbol, riskFreeRate, carryRate, maxRows }) => {
       const sym = requireSymbol({ symbol });
       if (!sym) return err('INVALID_SYMBOL', String(symbol));
-      const path = sym === 'BTC' || sym === 'ETH' ? `/api/v1/market/crypto/${sym}` : `/api/v1/market/options/${encodeURIComponent(sym)}`;
+      const path = `/api/v1/analytics/positioning/${encodeURIComponent(sym)}${analyticsQuery({ riskFreeRate, carryRate, maxRows })}`;
       const { status, body } = await api(path);
-      return status === 200 ? okContract(body, sym === 'BTC' || sym === 'ETH' ? 'cryptoMarketResponse' : 'optionsResponse') : err('PROVIDER_UNAVAILABLE', `options ${status}`);
+      return status === 200 ? okContract(body, 'positioningResponse') : err('PROVIDER_UNAVAILABLE', `positioning ${status}`);
     },
   },
   {

@@ -1353,6 +1353,401 @@
               }
             }
           },
+          "surfaceNode": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "expiry",
+              "strike",
+              "right",
+              "bidIv",
+              "askIv",
+              "venueMarkIv"
+            ],
+            "properties": {
+              "expiry": {
+                "type": "string",
+                "format": "date"
+              },
+              "strike": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "right": {
+                "type": "string",
+                "enum": [
+                  "call",
+                  "put"
+                ]
+              },
+              "bidIv": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 10
+              },
+              "askIv": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 10
+              },
+              "venueMarkIv": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 10
+              }
+            }
+          },
+          "volatilitySurfaceData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "symbol",
+              "spot",
+              "axes",
+              "observedNodes",
+              "modelLayer",
+              "observedCount"
+            ],
+            "properties": {
+              "symbol": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+              },
+              "spot": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "axes": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "x",
+                  "y",
+                  "z"
+                ],
+                "properties": {
+                  "x": {
+                    "const": "strike"
+                  },
+                  "y": {
+                    "const": "expiry"
+                  },
+                  "z": {
+                    "const": "decimal-volatility"
+                  }
+                }
+              },
+              "observedNodes": {
+                "type": "array",
+                "maxItems": 5000,
+                "items": {
+                  "$ref": "#/$defs/surfaceNode"
+                }
+              },
+              "modelLayer": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "status",
+                  "name",
+                  "calibratedAt",
+                  "nodes"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "unavailable"
+                  },
+                  "name": {
+                    "type": "null"
+                  },
+                  "calibratedAt": {
+                    "type": "null"
+                  },
+                  "nodes": {
+                    "type": "array",
+                    "maxItems": 0
+                  }
+                }
+              },
+              "observedCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "greekPoint": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "expiry",
+              "strike",
+              "right",
+              "iv",
+              "ivBasis",
+              "delta",
+              "gamma",
+              "vega",
+              "theta",
+              "vanna",
+              "charm"
+            ],
+            "properties": {
+              "expiry": {
+                "type": "string",
+                "format": "date"
+              },
+              "strike": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "right": {
+                "type": "string",
+                "enum": [
+                  "call",
+                  "put"
+                ]
+              },
+              "iv": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 10
+              },
+              "ivBasis": {
+                "type": "string",
+                "enum": [
+                  "venue-mark",
+                  "unavailable"
+                ]
+              },
+              "delta": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -1,
+                "maximum": 1
+              },
+              "gamma": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "vega": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "theta": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "vanna": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "charm": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          },
+          "greeksData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "symbol",
+              "spot",
+              "model",
+              "riskFreeRate",
+              "carryRate",
+              "points",
+              "computedCount"
+            ],
+            "properties": {
+              "symbol": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+              },
+              "spot": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "model": {
+                "const": "Black-Scholes-Merton"
+              },
+              "riskFreeRate": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -0.25,
+                "maximum": 1
+              },
+              "carryRate": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -0.25,
+                "maximum": 1
+              },
+              "points": {
+                "type": "array",
+                "maxItems": 5000,
+                "items": {
+                  "$ref": "#/$defs/greekPoint"
+                }
+              },
+              "computedCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "positioningPoint": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "expiry",
+              "strike",
+              "right",
+              "openInterest",
+              "oiState",
+              "gex1PctUsd",
+              "dexUsd",
+              "vannaUsdPerUnitVol",
+              "charmUsdPerDay"
+            ],
+            "properties": {
+              "expiry": {
+                "type": "string",
+                "format": "date"
+              },
+              "strike": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "right": {
+                "type": "string",
+                "enum": [
+                  "call",
+                  "put"
+                ]
+              },
+              "openInterest": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "oiState": {
+                "type": "string",
+                "enum": [
+                  "observed",
+                  "missing"
+                ]
+              },
+              "gex1PctUsd": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "dexUsd": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "vannaUsdPerUnitVol": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "charmUsdPerDay": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          },
+          "positioningData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "symbol",
+              "spot",
+              "signModel",
+              "contractMultiplier",
+              "points",
+              "computedCount"
+            ],
+            "properties": {
+              "symbol": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+              },
+              "spot": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "signModel": {
+                "const": "customer-long-oi-proxy"
+              },
+              "contractMultiplier": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "points": {
+                "type": "array",
+                "maxItems": 5000,
+                "items": {
+                  "$ref": "#/$defs/positioningPoint"
+                }
+              },
+              "computedCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
           "healthResponse": {
             "allOf": [
               {
@@ -1393,6 +1788,51 @@
                 "properties": {
                   "data": {
                     "$ref": "#/$defs/optionsData"
+                  }
+                }
+              }
+            ]
+          },
+          "volatilitySurfaceResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/volatilitySurfaceData"
+                  }
+                }
+              }
+            ]
+          },
+          "greeksResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/greeksData"
+                  }
+                }
+              }
+            ]
+          },
+          "positioningResponse": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/baseEnvelope"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/$defs/positioningData"
                   }
                 }
               }
@@ -2648,6 +3088,238 @@
           },
           "502": {
             "description": "Typed provider error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/volatility-surface/{symbol}": {
+      "get": {
+        "operationId": "v1GetVolatilitySurface",
+        "tags": [
+          "v1",
+          "equities",
+          "crypto"
+        ],
+        "summary": "Observed option IV nodes with explicit model-layer availability",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+            },
+            "description": "Observed equity chain (yfinance, delayed)"
+          },
+          {
+            "name": "maxRows",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated observed volatility surface envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/volatilitySurfaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed request error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed provider/coverage error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/greeks/{symbol}": {
+      "get": {
+        "operationId": "v1GetGreeks",
+        "tags": [
+          "v1",
+          "equities",
+          "crypto"
+        ],
+        "summary": "BSM Greeks from observed venue mark IV and explicit rates",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+            },
+            "description": "Observed equity chain (yfinance, delayed)"
+          },
+          {
+            "name": "riskFreeRate",
+            "in": "query",
+            "description": "Decimal annual rate; supply together with carryRate. No default.",
+            "schema": {
+              "type": "number",
+              "minimum": -0.25,
+              "maximum": 1
+            }
+          },
+          {
+            "name": "carryRate",
+            "in": "query",
+            "description": "Decimal annual dividend/carry rate; supply together with riskFreeRate. No default.",
+            "schema": {
+              "type": "number",
+              "minimum": -0.25,
+              "maximum": 1
+            }
+          },
+          {
+            "name": "maxRows",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated Greeks envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/greeksResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed request error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed provider/coverage error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/positioning/{symbol}": {
+      "get": {
+        "operationId": "v1GetPositioning",
+        "tags": [
+          "v1",
+          "equities",
+          "crypto"
+        ],
+        "summary": "OI-weighted customer-long exposure proxy; never dealer inventory",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+            },
+            "description": "Observed equity chain (yfinance, delayed)"
+          },
+          {
+            "name": "riskFreeRate",
+            "in": "query",
+            "description": "Decimal annual rate; supply together with carryRate. No default.",
+            "schema": {
+              "type": "number",
+              "minimum": -0.25,
+              "maximum": 1
+            }
+          },
+          {
+            "name": "carryRate",
+            "in": "query",
+            "description": "Decimal annual dividend/carry rate; supply together with riskFreeRate. No default.",
+            "schema": {
+              "type": "number",
+              "minimum": -0.25,
+              "maximum": 1
+            }
+          },
+          {
+            "name": "maxRows",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated positioning-proxy envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/positioningResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed request error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Contracts/$defs/errorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed provider/coverage error",
             "content": {
               "application/json": {
                 "schema": {

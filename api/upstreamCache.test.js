@@ -3,7 +3,8 @@
  * After the shared-cache refactor, routes must use getOrFetch/peek, never a
  * removed cacheStore global (that 500'd Deribit + yfinance on production).
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -86,6 +87,40 @@ describe('upstreamCache', () => {
     expect(monthBudgetAllows(provider, 10, 0.85)).toBe(true);
     for (let i = 0; i < 8; i++) recordMonthBudget(provider, 1);
     expect(monthBudgetAllows(provider, 10, 0.85)).toBe(false);
+  });
+
+  it('persists quota counts across module restarts without exposing its path', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'terminal-quota-ledger-'));
+    const ledgerPath = join(dir, 'ledger.json');
+    const prior = process.env.QUOTA_LEDGER_PATH;
+    process.env.QUOTA_LEDGER_PATH = ledgerPath;
+    const { readFileSync: read } = await import('node:fs');
+    try {
+      // Record against a fresh key; expect the ledger file to be created with correct counts.
+      const beforeDay = getBudgetUsed('restart-proof-quota');
+      const beforeMonth = (await import('./upstreamCache.js')).getMonthBudgetUsed('restart-proof-quota');
+      recordBudget('restart-proof-quota', 2);
+      const { recordMonthBudget } = await import('./upstreamCache.js');
+      recordMonthBudget('restart-proof-quota', 3);
+      expect(getBudgetUsed('restart-proof-quota')).toBe(beforeDay + 2);
+      // File should exist, be JSON, contain today's counts, and not leak path via cacheStats.
+      const raw = read(ledgerPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      expect(parsed.daily).toBeTruthy();
+      expect(parsed.monthly).toBeTruthy();
+      const dayKey = Object.keys(parsed.daily).find(k => k.startsWith('restart-proof-quota:'));
+      const monthKey = Object.keys(parsed.monthly).find(k => k.startsWith('restart-proof-quota:'));
+      expect(dayKey).toBeTruthy();
+      expect(monthKey).toBeTruthy();
+      expect(parsed.daily[dayKey]).toBeGreaterThanOrEqual(2);
+      expect(parsed.monthly[monthKey]).toBeGreaterThanOrEqual(3);
+      expect(JSON.stringify(cacheStats())).not.toContain(ledgerPath);
+      expect(statSync(ledgerPath).mode & 0o077).toBe(0);
+      expect(cacheStats().budgets.ledger.persistent).toBe(true);
+    } finally {
+      if (prior === undefined) delete process.env.QUOTA_LEDGER_PATH; else process.env.QUOTA_LEDGER_PATH = prior;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('cacheStats exposes multi-provider budgets', () => {
@@ -214,4 +249,3 @@ describe('server cache wiring (regression)', () => {
     expect(sseBlock).not.toMatch(/proxyFmp\(/);
   });
 });
-

@@ -4,6 +4,9 @@
  * Railway (or any single Node process) is the sole owner of free-tier API keys.
  */
 
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
 /** @typedef {{ data: unknown, timestamp: number, source?: string }} CacheEntry */
 
 const store = new Map();
@@ -55,6 +58,71 @@ const dayBudget = new Map();
 /** Per-calendar-month counters (TradingView RapidAPI 150/mo). */
 const monthBudget = new Map();
 
+function getLedgerPath() {
+  const configured = String(process.env.QUOTA_LEDGER_PATH ?? '').trim();
+  if (configured) return resolve(configured);
+  return process.env.NODE_ENV === 'test' ? null : resolve(process.cwd(), '.data', 'quota-ledger.json');
+}
+let quotaLedgerPath = getLedgerPath();
+let quotaLedgerPersistent = Boolean(quotaLedgerPath);
+let quotaLedgerError = null;
+
+function currentDaySuffix() {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+}
+
+function currentMonthSuffix() {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
+}
+
+function safeEntries(value, suffix) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  return Object.entries(value).flatMap(([key, count]) => (
+    key.endsWith(`:${suffix}`) && Number.isSafeInteger(count) && count >= 0 ? [[key, count]] : []
+  ));
+}
+
+function loadQuotaLedger() {
+  quotaLedgerPath = getLedgerPath();
+  quotaLedgerPersistent = Boolean(quotaLedgerPath);
+  if (!quotaLedgerPath || !existsSync(quotaLedgerPath)) return;
+  try {
+    const parsed = JSON.parse(readFileSync(quotaLedgerPath, 'utf8'));
+    for (const [key, count] of safeEntries(parsed?.daily, currentDaySuffix())) dayBudget.set(key, count);
+    for (const [key, count] of safeEntries(parsed?.monthly, currentMonthSuffix())) monthBudget.set(key, count);
+  } catch (error) {
+    quotaLedgerPersistent = false;
+    quotaLedgerError = `load-failed:${error?.code ?? 'invalid-ledger'}`;
+  }
+}
+
+function persistQuotaLedger() {
+  quotaLedgerPath = getLedgerPath();
+  quotaLedgerPersistent = Boolean(quotaLedgerPath);
+  if (!quotaLedgerPath || !quotaLedgerPersistent) return;
+  try {
+    const parent = dirname(quotaLedgerPath);
+    mkdirSync(parent, { recursive: true, mode: 0o700 });
+    const tempPath = `${quotaLedgerPath}.${process.pid}.tmp`;
+    const payload = JSON.stringify({
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      daily: Object.fromEntries([...dayBudget].filter(([key]) => key.endsWith(`:${currentDaySuffix()}`))),
+      monthly: Object.fromEntries([...monthBudget].filter(([key]) => key.endsWith(`:${currentMonthSuffix()}`))),
+    });
+    writeFileSync(tempPath, payload, { encoding: 'utf8', mode: 0o600 });
+    renameSync(tempPath, quotaLedgerPath);
+    quotaLedgerError = null;
+  } catch (error) {
+    quotaLedgerPersistent = false;
+    quotaLedgerError = `write-failed:${error?.code ?? 'io-error'}`;
+  }
+}
+
+loadQuotaLedger();
+
 function dayKey(provider) {
   const d = new Date();
   return `${provider}:${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
@@ -76,13 +144,24 @@ export function getMonthBudgetUsed(provider) {
 export function recordBudget(provider, n = 1) {
   const k = dayKey(provider);
   dayBudget.set(k, (dayBudget.get(k) || 0) + n);
+  persistQuotaLedger();
   return dayBudget.get(k);
 }
 
 export function recordMonthBudget(provider, n = 1) {
   const k = monthKey(provider);
   monthBudget.set(k, (monthBudget.get(k) || 0) + n);
+  persistQuotaLedger();
   return monthBudget.get(k);
+}
+
+export function quotaLedgerStatus() {
+  return {
+    scope: quotaLedgerPersistent ? 'persistent-file-single-process' : 'process-local',
+    persistent: quotaLedgerPersistent,
+    healthy: quotaLedgerPersistent && quotaLedgerError == null,
+    error: quotaLedgerError,
+  };
 }
 
 /**
@@ -254,6 +333,7 @@ export function cacheStats() {
     metrics: { ...metrics },
     keys,
     budgets: {
+      ledger: quotaLedgerStatus(),
       fmp: { used: getBudgetUsed('fmp'), capDaily: FMP_FREE_DAILY },
       alphavantage: {
         used: getBudgetUsed('alphavantage'),

@@ -95,7 +95,7 @@ export function TermView() {
   const chrome = deskChartChrome();
 
   return (
-    <Panel title="Term Structure" className="h-full">
+    <Panel title="Term Structure" className="h-full" data-testid="vol-term-view">
       <div className="flex h-full min-h-0 flex-col gap-1">
         <PrintStrip
           className="mx-1 mt-1"

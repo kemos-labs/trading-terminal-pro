@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 import { cn } from '../../lib/utils';
 import { ApiSources } from '../macrovol/ApiSources';
 
-interface PanelProps {
+interface PanelProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   title?: ReactNode;
   subtitle?: string;
   /** API provenance chips (Phase B panel chrome). */
@@ -27,10 +27,11 @@ export function Panel({
   badge,
   children,
   className,
+  ...htmlProps
 }: PanelProps) {
   const showHead = title || actions || (apis && apis.length) || asOf || badge;
   return (
-    <div className={cn('term-panel flex flex-col overflow-hidden', className)}>
+    <div {...htmlProps} className={cn('term-panel flex flex-col overflow-hidden', className)}>
       {showHead && (
         <div className="term-fn-bar justify-between gap-2 normal-case tracking-normal">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">

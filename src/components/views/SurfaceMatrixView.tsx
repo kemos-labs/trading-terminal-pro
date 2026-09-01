@@ -95,7 +95,7 @@ export function SurfaceMatrixView() {
   const effectiveSide = (side === 'bid' && !availability.hasBidIv) || (side === 'ask' && !availability.hasAskIv) ? 'mid' as const : side;
 
   return (
-    <Panel title="IV Surface — strike × expiry matrix">
+    <Panel title="IV Surface — strike × expiry matrix" data-testid="vol-surface-matrix">
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2 px-2 py-1 border-b border-border">
           <DeskModeBar

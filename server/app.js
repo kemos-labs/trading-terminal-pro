@@ -79,6 +79,7 @@ function rateLimitClassForUrl(url) {
   return 'global';
 }
 function rateLimitMaxForUrl(url) {
+  if (process.env.NODE_ENV === 'test' && process.env.E2E_FIXTURE_SCENARIO) return 10_000;
   const c = rateLimitClassForUrl(url);
   return c === 'scarce' ? RL_SCARCE : c === 'upstream' ? RL_UPSTREAM : RL_GLOBAL;
 }

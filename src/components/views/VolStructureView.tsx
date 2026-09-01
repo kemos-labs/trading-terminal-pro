@@ -226,7 +226,7 @@ export function VolStructureView() {
             )}
             {focusSub === 'quality' && (
               <SectionErrorBoundary name="Quality">
-                <div className="flex h-full flex-col">
+                <div className="flex h-full flex-col" data-testid="vol-surface-quality">
                   <p className="shrink-0 border-b border-border px-3 py-1.5 font-mono text-type-2xs text-muted-foreground">
                     Surface Fit / Model Convergence — validates SVI fit, not raw feed
                   </p>

@@ -202,7 +202,7 @@ export function HedgeWorkflow() {
             <span className="text-zinc-400">Roll / funding PnL</span>
             <span>Cols: <span className="text-foreground">hold horizon (days)</span></span>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div className="min-h-0 flex-1 overflow-auto" tabIndex={0} aria-label="Roll and funding risk matrix">
             <table className="w-full border-collapse font-mono text-type-xs">
               <thead className="sticky top-0 z-10 bg-card">
                 <tr>

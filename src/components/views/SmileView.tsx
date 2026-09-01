@@ -274,7 +274,7 @@ export function SmileView() {
   ];
 
   return (
-    <Panel title="IV Smile / Skew" className="h-full">
+    <Panel title="IV Smile / Skew" className="h-full" data-testid="vol-smile-view">
       <div className="flex h-full min-h-0 flex-col gap-1">
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-2 py-1">
           <DeskModeBar

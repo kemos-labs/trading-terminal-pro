@@ -3,7 +3,7 @@ export interface ChainRow { strike: number; expiry: string; callBid?: number | n
 export function ChainTable({ rows, maxRows = 60 }: { rows: ChainRow[]; maxRows?: number }) {
   const display = rows.slice(0, maxRows);
   return (
-    <div className="overflow-auto rounded border" style={{ maxHeight: 320 }}>
+    <div className="overflow-auto rounded border" style={{ maxHeight: 320 }} tabIndex={0} aria-label="Option chain table">
       <table className="w-full font-mono text-xs">
         <thead className="sticky top-0 bg-card">
           <tr className="border-b text-muted-foreground">

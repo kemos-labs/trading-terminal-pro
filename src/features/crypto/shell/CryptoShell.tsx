@@ -96,6 +96,7 @@ export function CryptoShell() {
       <div
         id={`panel-${workflow}`}
         role="tabpanel"
+        tabIndex={0}
         aria-label={active.label}
         className="flex-1 min-h-0 overflow-auto rounded border border-border bg-card p-4"
       >

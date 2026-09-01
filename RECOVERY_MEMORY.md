@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-01T14:03:46Z
+Updated: 2026-09-01T17:47:04Z
 
 This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-rebuild`. It records execution state, not proof of completion. The master specification, audited recovery plan, and `AGENTS.md` remain authoritative when a statement conflicts.
 
@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `0eb54e8` (`fix(cache): propagate sanitized provider errors`).
+- Recovery HEAD: `35bea43` (`feat(providers): add bounded circuit breakers`).
 - Recovery worktree was clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -33,12 +33,14 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. The next bounded C3 concern is circuit-breaker truth for provider-owned upstream fills.
+No dirty implementation tranche exists at this checkpoint. The next bounded C3 concern is runtime proof that hidden browser tabs do not continue polling at the active cadence.
 
-Exact next action: inventory existing provider call ownership and design a shared bounded closed/open/half-open circuit keyed by provider, not unbounded user queries. Integrate it first with Deribit and the free Binance/Bybit adapter without weakening independent partial-failure behavior. Add deterministic fake-timer tests for failure threshold, open fast-fail, one half-open probe, successful close, failed reopen, stale serve with `providerError`, and N-client single-flight behavior. Luna medium implements the bounded tranche; Sol reviews the design, diff, market-data semantics, and evidence before commit.
+Exact next action: inspect `src/store/terminalStore.ts`, `src/hooks/useDeribitFutures.ts`, `src/hooks/useCryptoDualBooks.ts`, and their consumers. Replace the weak source-string hidden-tab assertion with deterministic fake-timer/runtime tests that count actual network/service calls while `document.hidden` changes. Prove active cadence, hidden pause or documented reduction, visibility-resume behavior without a retry storm, and timer cleanup on unmount/reset. Luna medium implements the bounded tranche; Sol reviews the diff and independently runs the timer/network evidence before commit.
 
 ## Recent verified commits
 
+- `35bea43` — fixed-ID closed/open/half-open circuits protect Deribit, Binance Futures, and Bybit Linear; one half-open probe is enforced, an older request cannot close a newer probe, free venues remain independent, and canonical provider status exposes a strict safe three-row projection. Independent evidence: 60 focused tests, OpenAPI 65 paths/66 operations, method-aware parity, type-check, lint, all secret-scan modes, and diff checks passed.
+- `ad27efc` — checkpointed provider-error completion and circuit-breaker next action.
 - `0eb54e8` — bounded/redacted provider-error codes now survive stale cache results and are mandatory through canonical REST/OpenAPI/MCP cache envelopes; 71 focused tests, type-check, lint, OpenAPI, route parity, secrets, and diff checks passed.
 - `5faa987` — reset-safe repository memory and Sol/Luna execution-role rules.
 - `d37ee40` — canonical observed surface, explicit-rate BSM Greeks, honest OI positioning proxy, strict REST/OpenAPI/MCP contracts, bounded analytical rows, and negative/golden tests.
@@ -50,7 +52,7 @@ Exact next action: inventory existing provider call ownership and design a share
 
 ## Remaining major blockers after the current concern
 
-- C3: circuit open/half-open behavior, direct-provider ownership cleanup, adversarial cache cardinality, and runtime timer/network proof for hidden-tab cadence.
+- C3: direct-provider ownership cleanup, adversarial cache cardinality, and runtime timer/network proof for hidden-tab cadence; circuit open/half-open behavior is now implemented for Deribit and the two free futures venues.
 - C4: migrate Fastify/MCP incrementally to strict TypeScript and close remaining schema-authority/negative-test gaps.
 - C5: complete explicit-entry professional IV and Greeks 3D, geometry assertions, and remaining desktop/mobile dead-space defects.
 - C6: real-server loading, empty, stale, partial, malformed-provider, provider-down, and entitlement matrices; inspect their pixels.

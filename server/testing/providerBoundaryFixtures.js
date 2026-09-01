@@ -5,7 +5,7 @@
  */
 import { __testHooks as equityHooks } from '../routes/equityFeeds.js';
 
-const FIXED_NOW = Date.UTC(2029, 0, 15, 14, 30);
+const FIXED_NOW = Date.UTC(2026, 8, 1, 1, 30);
 const DAY = 86_400_000;
 const MONTH_CODES = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
@@ -134,7 +134,7 @@ function ratesPayload(pathname) {
   if (pathname.endsWith('/rates/curve')) return { ...meta, labels: ['1M','3M','6M','1Y','2Y','5Y','10Y','30Y'], yields: [4.4,4.42,4.39,4.31,4.25,4.36,4.55,4.7] };
   if (pathname.endsWith('/rates/curve-history')) return { ...meta, labels: ['1M','3M','6M','1Y','2Y','5Y','10Y','30Y'], today: [4.4,4.42,4.39,4.31,4.25,4.36,4.55,4.7], historical: [4.3,4.32,4.29,4.21,4.15,4.26,4.45,4.6] };
   if (pathname.endsWith('/rates/plumbing')) return { ...meta, sofr: 4.53, effr: 4.32, iorb: 4.4, obfr: 4.33, rrp: 110, reserves: 3_250 };
-  if (pathname.endsWith('/rates/basis-history')) return { ...meta, history: Array.from({ length: 60 }, (_, i) => ({ date: new Date(FIXED_NOW - (59 - i) * DAY).toISOString().slice(0,10), sofr_effr_bps: 21, sofr_iorb_bps: 13, effr_iorb_bps: -8 })) };
+  if (pathname.endsWith('/rates/basis-history')) return { ...meta, history: Array.from({ length: 60 }, (_, i) => ({ date: new Date(FIXED_NOW - (59 - i) * DAY).toISOString().slice(0,10), sofr: 4.47 + i * 0.001, effr: 4.28 + i * 0.0007, iorb: 4.40, sofr_effr_bps: 19 + i * 0.03, sofr_iorb_bps: 7 + i * 0.1, effr_iorb_bps: -12 + i * 0.07 })) };
   if (pathname.endsWith('/rates/basis')) return { ...meta, sofr_effr_bps: 21, sofr_iorb_bps: 13, effr_iorb_bps: -8, regime: 'wide' };
   if (pathname.endsWith('/rates/shape')) return { ...meta, spreads: { '2s10s': { bps: 30 }, '5s30s': { bps: 34 }, '2s5s': { bps: 11 }, '5s10s': { bps: 19 }, '10s30s': { bps: 15 }, '3m10y': { bps: 13 }, 'fly_2s5s10s': { bps: -8 } }, history: {} };
   if (pathname.endsWith('/rates/correlations')) return { ...meta, labels: [], matrix: [] };

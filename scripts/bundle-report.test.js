@@ -34,8 +34,11 @@ describe('bundle budgets (enforced)', () => {
   const chunks = jsChunks();
 
   // Master spec §10.6: normal chunks ≤180 kB gzip; documented lazy analytical
-  // exceptions carry their own cap (3D IV surface — never on the initial path).
-  const ANALYTICAL_EXCEPTIONS = { IvSurface3D: 300 * 1024 };
+  // exceptions carry their own cap (3D IV/Greeks surface — never on the initial path).
+  // The shared drei OrbitControls vendor chunk (pulls r3f + three) is reachable
+  // only via the explicit-entry dynamic imports ("Open 3D") and is never part of
+  // the initial index chunk.
+  const ANALYTICAL_EXCEPTIONS = { IvSurface3D: 300 * 1024, OrbitControls: 300 * 1024 };
   function capFor(name) {
     for (const [key, cap] of Object.entries(ANALYTICAL_EXCEPTIONS)) {
       if (name.startsWith(key)) return cap;

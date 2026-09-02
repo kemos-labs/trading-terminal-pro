@@ -97,16 +97,37 @@ describe('GreeksView (Greeks 1.0 host)', () => {
     expect(screen.queryByText('QQQ')).toBeNull();
   });
 
-  it('exposes 2D fallback surface (Plotly/3D removed per P0)', async () => {
+  it('exposes observed 2D profiles, exact tables, and a lazy 3D entry gate', async () => {
     render(<GreeksView />);
     await waitFor(
       () => {
-        expect(screen.getByText(/2D Fallback — Plotly\/3D removed/i)).toBeInTheDocument();
+        expect(screen.getByText(/Strike profile/i)).toBeInTheDocument();
       },
       { timeout: 8000 },
     );
-    expect(screen.getByText(/Strike profile/i)).toBeInTheDocument();
     expect(screen.getByText(/Term profile/i)).toBeInTheDocument();
+    expect(screen.getByText(/observed grid · exact table below/i)).toBeInTheDocument();
+    expect(screen.queryByText(/3D removed/i)).toBeNull();
+    // 3D is NOT mounted before explicit entry (WebGL engine not loaded).
+    expect(screen.queryByTestId('greeks-surface-3d')).toBeNull();
+  });
+
+  it('mounts the 3D Greeks surface only after explicit Open 3D (lazy engine)', async () => {
+    render(<GreeksView />);
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('open-3d-greeks')).toBeInTheDocument();
+      },
+      { timeout: 8000 },
+    );
+    expect(screen.queryByTestId('greeks-surface-3d')).toBeNull();
+    screen.getByTestId('open-3d-greeks').click();
+    await waitFor(
+      () => {
+        expect(screen.queryByText(/3D engine loads on open/i)).toBeInTheDocument();
+      },
+      { timeout: 8000 },
+    );
   });
 
   it('ATM greek cards drive selection labels', async () => {

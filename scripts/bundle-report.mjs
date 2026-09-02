@@ -30,6 +30,12 @@ const budgets = {
   analyticalExceptions: {
     // IvSurface3D = three + @react-three/fiber + drei (3D IV/Greeks capability).
     IvSurface3D: 300 * 1024,
+    // Shared lazy 3D vendor: drei OrbitControls pulls @react-three/fiber + three.
+    // Reachable only through the explicit-entry dynamic imports (Vol Surface
+    // "Open 3D" and Vol Greeks "Open 3D", both gate tests prove no mount before
+    // activation). Not part of the initial index chunk (index gzip gate applies)
+    // and never present in an ordinary desk load.
+    OrbitControls: 300 * 1024,
   },
 };
 

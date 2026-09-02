@@ -3,7 +3,7 @@
  * Surfaces / GEX from shared greeksCache (prefetched after terminal chain).
  * FlashAlpha GEX levels live on Flow · Tools (single-name free tier, not SPY).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
   ComposedChart, Line,
@@ -34,17 +34,20 @@ import type { GreekKey } from './greeksTypes';
 import { cn } from '../../lib/utils';
 import { ChartZoom, useChartZoom } from '../common/ChartZoom';
 
-// P0 Fix: Plotly/Three removed — no null stubs. Surface uses 2D accessible fallback + table.
-// 3D mesh theme deleted; 2D profiles are the product.
+// 3D Greeks restored as an explicit-entry lazy chunk (observed nodes, true
+// holes, ATM ridge, exact units); 2D profiles + exact tables remain the default.
 
-const GREEKS = [
-  { key: 'delta', label: 'DELTA', desc: 'Rate of price change per $1 move in spot', formula: '∂V/∂S = Φ(d₁)', color: CHART_GREEK_EXT.delta },
-  { key: 'gamma', label: 'GAMMA', desc: 'Rate of delta change. Peaks ATM', formula: '∂²V/∂S² = φ(d₁)/(S·σ·√T)', color: CHART_GREEK_EXT.gamma },
-  { key: 'vega', label: 'VEGA', desc: 'P&L per 1% IV move. Always positive', formula: 'raw S·φ(d₁)·√T → desk ÷100 / vol pt', color: CHART_GREEK_EXT.vega },
-  { key: 'theta', label: 'THETA', desc: 'θ ≠ free income — pays for Γ/volga/vanna risk', formula: 'raw ∂V/∂T → desk ÷365 / day', color: CHART_GREEK_EXT.theta },
-  { key: 'vanna', label: 'VANNA', desc: 'dVega/dSpot. How vega changes with spot', formula: '∂²V/∂S∂σ = −φ(d₁)·d₂/σ (raw σ)', color: CHART_GREEK_EXT.vanna },
-  { key: 'charm', label: 'CHARM', desc: 'dDelta/dTime. Delta decay per day', formula: '∂²V/∂S∂t annual → desk ÷365 / day', color: CHART_GREEK_EXT.charm },
+const GREEKS: { key: GreekKey; label: string; desc: string; formula: string; color: string; unit: string; diverging: boolean }[] = [
+  { key: 'delta', label: 'DELTA', desc: 'Rate of price change per $1 move in spot', formula: '∂V/∂S = Φ(d₁)', color: CHART_GREEK_EXT.delta, unit: 'Δ', diverging: true },
+  { key: 'gamma', label: 'GAMMA', desc: 'Rate of delta change. Peaks ATM', formula: '∂²V/∂S² = φ(d₁)/(S·σ·√T)', color: CHART_GREEK_EXT.gamma, unit: 'per $', diverging: false },
+  { key: 'vega', label: 'VEGA', desc: 'P&L per 1% IV move. Always positive', formula: 'raw S·φ(d₁)·√T → desk ÷100 / vol pt', color: CHART_GREEK_EXT.vega, unit: 'per vol pt', diverging: false },
+  { key: 'theta', label: 'THETA', desc: 'θ ≠ free income — pays for Γ/volga/vanna risk', formula: 'raw ∂V/∂T → desk ÷365 / day', color: CHART_GREEK_EXT.theta, unit: 'per day', diverging: true },
+  { key: 'vanna', label: 'VANNA', desc: 'dVega/dSpot. How vega changes with spot', formula: '∂²V/∂S∂σ = −φ(d₁)·d₂/σ (raw σ)', color: CHART_GREEK_EXT.vanna, unit: 'raw', diverging: true },
+  { key: 'charm', label: 'CHARM', desc: 'dDelta/dTime. Delta decay per day', formula: '∂²V/∂S∂t annual → desk ÷365 / day', color: CHART_GREEK_EXT.charm, unit: 'per day', diverging: true },
 ];
+
+/** Restored lazy 3D Greek surface — WebGL engine loads only after explicit entry. */
+const GreeksSurface3D = lazy(() => import('../charts/GreeksSurface3D'));
 
 export function Greeks10View() {
   const storeSymbol = useTerminalStore((s) => s.symbol);
@@ -131,6 +134,7 @@ export function Greeks10View() {
   }, [ticker]);
 
   const greek = GREEKS.find((g) => g.key === selectedGreek)!;
+  const [show3d, setShow3d] = useState(false);
   const surfaceData = data?.surfaces?.[selectedGreek];
 
   const gexData = data?.gex?.filter((g) => Math.abs(g.gex) > 0) || [];
@@ -238,11 +242,21 @@ export function Greeks10View() {
                   </div>
                 </div>
 
-                {/* Greek field — 2D accessible profiles (Plotly/3D removed per P0). */}
+                {/* Greek field — 2D accessible profiles + exact table + lazy 3D on explicit entry. */}
                 <div>
                   <div className="mb-1 flex flex-wrap items-center gap-2">
                     <h3 className="text-xs font-semibold" style={{ color: greek.color }}>{greek.label} SURFACE</h3>
-                    <span className="text-type-xs text-muted-foreground">{greek.desc} · 2D profiles + table (3D removed)</span>
+                    <span className="text-type-xs text-muted-foreground">{greek.desc} · 2D profiles + table</span>
+                    <button
+                      type="button"
+                      data-testid="open-3d-greeks"
+                      aria-expanded={show3d}
+                      disabled={!surfaceData || surfaceData.T_vals.length === 0}
+                      onClick={() => setShow3d((open) => !open)}
+                      className="rounded border border-border px-2 py-0.5 font-mono text-type-2xs text-foreground hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-40 focus-ring-term"
+                    >
+                      {show3d ? 'Close 3D' : 'Open 3D'}
+                    </button>
                   </div>
                   <p className="mb-1 text-type-2xs text-muted-foreground">
                     Surface · yfinance OTM field (same API as ATM cards)
@@ -253,7 +267,7 @@ export function Greeks10View() {
                         {data.q != null ? ` · q=${(data.q * 100).toFixed(2)}%` : ''}
                       </span>
                     )}
-                    <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-400">2D Fallback — Plotly/3D removed</span>
+                    <span className="ml-2 rounded bg-border/40 px-1.5 py-0.5 text-muted-foreground">observed grid · exact table below</span>
                   </p>
                   <div className="overflow-hidden rounded-xl border border-border bg-card">
                     {surfaceData && surfaceData.T_vals?.length > 0 ? (
@@ -299,7 +313,27 @@ export function Greeks10View() {
                             </div>
                           </div>
                         </div>
-                        <p className="text-type-2xs text-muted-foreground">Full 3D Plotly surface removed per product coherence. Use Options desk for vol term/smile and Trade desk for position-specific Greeks.</p>
+                        <p className="text-type-2xs text-muted-foreground">
+                          Observed cells only — missing cells stay unavailable. The 3D view renders
+                          the same observed grid with holes preserved; there is no fitted model layer
+                          for Greeks, so no model mesh is shown.{' '}
+                          {data?.units?.[selectedGreek as keyof typeof data.units]
+                            ? `Units: ${data.units[selectedGreek as keyof typeof data.units]}.` : ''}
+                        </p>
+                        {show3d && surfaceData && surfaceData.T_vals.length > 0 && (
+                          <div className="mt-2 h-[380px] overflow-hidden rounded-xl border border-border bg-card">
+                            <Suspense fallback={<div className="flex h-full items-center justify-center font-mono text-type-2xs text-muted-foreground">3D engine loads on open…</div>}>
+                              <GreeksSurface3D
+                                grid={surfaceData}
+                                spot={data?.spot ?? surfaceData.K_vals[Math.floor(surfaceData.K_vals.length / 2)] ?? 0}
+                                greek={greek.key}
+                                label={greek.label}
+                                unit={String(data?.units?.[greek.key as keyof typeof data.units] ?? greek.unit)}
+                                diverging={Boolean(greek.diverging)}
+                              />
+                            </Suspense>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="p-4 text-center text-type-2xs text-muted-foreground">

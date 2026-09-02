@@ -209,6 +209,68 @@ describe('restored routes (Phase 1 parity)', () => {
     }
   });
 
+  it('home briefing exposes truthful cache state and explicit provider-down desks', async () => {
+    global.fetch = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/finnhub/quote')) return new Response(JSON.stringify({ available: false, provider: 'finnhub', reason: 'upstream_error', price: null }), { status: 200 });
+      if (url.includes('/api/rates/summary')) return new Response(JSON.stringify({ sofr: null, usy10: null }), { status: 200 });
+      if (url.includes('/api/macro/primary')) return new Response('{}', { status: 503 });
+      return new Response(JSON.stringify({ available: false, reason: 'upstream_error' }), { status: 502 });
+    });
+    const first = await app.inject('/api/home/briefing');
+    expect(first.statusCode).toBe(200);
+    expect(first.json().cache).toMatchObject({ state: 'miss', hit: false, stale: false, coalesced: false, providerError: null });
+    expect(first.json().desks.equities.available).toBe(false);
+    expect(first.json().freshness).toMatchObject({ live: false, state: 'unavailable' });
+    const second = await app.inject('/api/home/briefing');
+    expect(second.statusCode).toBe(200);
+    expect(second.json().cache).toMatchObject({ state: 'fresh', hit: true, stale: false, coalesced: false });
+  });
+
+  it('home briefing coalesces joined requests and expires malformed stale snapshots', async () => {
+    let malformed = false;
+    let gate = null;
+    let release = null;
+    global.fetch = vi.fn(async (input) => {
+      if (gate) await gate;
+      const url = String(input);
+      if (url.includes('/api/finnhub/quote')) return new Response(JSON.stringify({ available: true, provider: 'finnhub', price: 500, change_pct: 0, as_of: new Date().toISOString() }), { status: 200 });
+      if (url.includes('/api/free-crypto/market/BTC') && malformed) return new Response(JSON.stringify({ available: true, venues: 'malformed' }), { status: 200 });
+      if (url.includes('/api/free-crypto/market/BTC')) return new Response(JSON.stringify({ available: false, reason: 'unavailable' }), { status: 200 });
+      if (url.includes('/api/rates/summary')) return new Response(JSON.stringify({ sofr: null, usy10: null }), { status: 200 });
+      if (url.includes('/api/macro/primary')) return new Response('{}', { status: 503 });
+      return new Response(JSON.stringify({ available: false, reason: 'upstream_error' }), { status: 502 });
+    });
+    gate = new Promise((resolve) => { release = resolve; });
+    const joinedA = app.inject('/api/home/briefing?symbol=JOIN');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const joinedB = app.inject('/api/home/briefing?symbol=JOIN');
+    release();
+    gate = null;
+    const [a, b] = await Promise.all([joinedA, joinedB]);
+    expect(a.statusCode).toBe(200);
+    expect(b.statusCode).toBe(200);
+    expect(b.json().cache).toMatchObject({ coalesced: true, hit: false, stale: false });
+
+    const warm = await app.inject('/api/home/briefing?symbol=STALE');
+    expect(warm.statusCode).toBe(200);
+    malformed = true;
+    vi.useFakeTimers();
+    try {
+      vi.advanceTimersByTime(60_001);
+      const stale = await app.inject('/api/home/briefing?symbol=STALE');
+      expect(stale.statusCode).toBe(200);
+      expect(stale.json().cache).toMatchObject({ state: 'stale', hit: true, stale: true, providerError: 'invalid_payload' });
+      expect(stale.json().freshness).toMatchObject({ live: false, state: 'stale' });
+      vi.advanceTimersByTime(600_001);
+      const expired = await app.inject('/api/home/briefing?symbol=STALE');
+      expect(expired.statusCode).toBe(502);
+      expect(expired.json().error).toBe('home_briefing_failed');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('venues/options validates currency; success shape is a typed bundle', async () => {
     const bad = await app.inject('/api/venues/options/DOGE');
     expect(bad.statusCode).toBe(400);

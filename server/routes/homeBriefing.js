@@ -6,7 +6,7 @@
  * upstream polling. Missing providers become typed unavailable entries — never
  * synthetic values, never zeros for missing data.
  */
-import { getOrFetch, cacheStats } from '../../api/upstreamCache.js';
+import { getOrFetch, cacheStats, sanitizeProviderErrorCode } from '../../api/upstreamCache.js';
 import { validateSymbol } from '../validation.js';
 
 const BRIEFING_TTL_MS = 60_000;
@@ -22,7 +22,14 @@ export function registerHomeBriefingRoutes(fastify, opts = {}) {
   fastify.get('/api/home/briefing', async (request, reply) => {
     const symbol = validateSymbol(String(request.query?.symbol || 'SPY')) || 'SPY';
     try {
-      const { data, fromCache, ageMs } = await getOrFetch(`home:briefing:${symbol}`, BRIEFING_TTL_MS, async () => {
+      const {
+        data,
+        fromCache,
+        ageMs,
+        stale,
+        coalesced,
+        providerError,
+      } = await getOrFetch(`home:briefing:${symbol}`, BRIEFING_TTL_MS, async () => {
         const base = selfBase();
 
         // Equity quote — shared finnhub route (typed fail-closed 503/502 bodies).
@@ -71,6 +78,10 @@ export function registerHomeBriefingRoutes(fastify, opts = {}) {
         const perp = deribit && deribit.available !== false
           ? (deribit.instruments ?? []).find((t) => t.kind === 'perp') ?? null
           : null;
+
+        if (freeCrypto?.available === true && !Array.isArray(freeCrypto.venues)) {
+          throw Object.assign(new Error('Malformed free-crypto venue payload'), { code: 'invalid_payload' });
+        }
 
         const sources = [];
         if (quoteOk) sources.push('finnhub/quote');
@@ -138,7 +149,33 @@ export function registerHomeBriefingRoutes(fastify, opts = {}) {
       }, { allowStaleOnError: true });
 
       const cache = cacheStats();
-      return { ...data, fromCache, ageMs, cacheStatus: { entries: cache.entries ?? null, budgets: cache.budgets ?? null } };
+      const cacheEnvelope = {
+        state: stale ? 'stale' : fromCache ? 'fresh' : 'miss',
+        hit: Boolean(fromCache),
+        ageMs: Number.isFinite(ageMs) ? Math.max(0, ageMs) : null,
+        stale: Boolean(stale),
+        coalesced: Boolean(coalesced),
+        providerError: sanitizeProviderErrorCode(providerError),
+      };
+      const availableDeskCount = Object.values(data.desks ?? {}).filter((desk) => desk?.available === true).length;
+      const freshnessState = stale
+        ? 'stale'
+        : availableDeskCount === 0 || (data.sources ?? []).length === 0
+          ? 'unavailable'
+          : availableDeskCount < Object.keys(data.desks ?? {}).length
+            ? 'partial'
+            : 'live';
+      return {
+        ...data,
+        fromCache,
+        ageMs,
+        stale: Boolean(stale),
+        cache: cacheEnvelope,
+        // Preserve legacy cacheStatus fields while exposing the complete
+        // envelope above; stale snapshots are never labelled live.
+        cacheStatus: { ...cacheEnvelope, entries: cache.entries ?? null, budgets: cache.budgets ?? null },
+        freshness: { ...data.freshness, live: freshnessState === 'live', state: freshnessState },
+      };
     } catch (err) {
       reply.code(502);
       return { error: 'home_briefing_failed', detail: err.message, symbol };

@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-02T12:10:00Z
+Updated: 2026-09-02T21:55:00Z
 
 This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-rebuild`. It records execution state, not proof of completion. The master specification, audited recovery plan, and `AGENTS.md` remain authoritative when a statement conflicts.
 
@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `efd78b3` (`fix(boot): preserve legacy briefing freshness`).
+- Recovery HEAD: `5f9a8d3` (`fix(macrovol): preserve worker cache truth`).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -33,25 +33,52 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. The legacy boot-briefing
-concern is committed (`efd78b3`). Independent review of the tranche found and fixed
-three defects before commit: HTTP status/content-type are now validated from headers
-before any body bytes are read; HTTP-layer `Deprecation` + `Link </api/home/briefing>;
-rel="successor-version"` headers were added; and the partial-failure test now asserts
-the worker error body never leaks.
+No dirty implementation tranche exists at this checkpoint. Boot briefing (`efd78b3`)
+and the MacroVol adapter metadata/leakage concern (`5f9a8d3`) are committed.
 
-Exact next action: inventory every allowlisted path in `server/routes/macrovol.js`
-(classify cached light/heavy/uncached, canonical-service owners, frontend/MCP
-consumers, response-size behavior, stale behavior, metadata behavior, OpenAPI
-status, tests present/missing), then implement one coherent concern at a time —
-first full sanitized cache metadata propagation (`coalesced`/`providerError` are
-reportedly discarded in cached light routes) with real Fastify tests covering
-cold miss, fresh hit, N-client single flight, stale success with reason, stale
-expiry, malformed JSON, wrong content type, oversized stream, worker timeout,
-canonicalized equivalent queries, forbidden query/path, and no secret/body leakage.
+MacroVol adapter inventory (T3, complete): 16 cached-light prefixes (5 min shared
+cache), greeks/surface cached-heavy (3 min), intentionally uncached (health,
+sec/context, crypto/spot, crypto/perp-basis, feed/*, macro/series, jgb-curve,
+global-yields/:c), POST/OPTIONS never allowlisted. Defects fixed in `5f9a8d3`:
+buffer-then-check size enforcement (now bounded streaming with Content-Length
+precheck + reader cancel), 2xx malformed JSON served and cached as 200 error body
+(now typed 502, never cached), verbatim worker error bodies crossing the public
+boundary (now sanitized typed errors with status preserved), `coalesced`/
+`providerError` discarded (now full cache envelope in body + headers), implicit
+stale ceiling (now explicit 50/30 min, fail-closed), missing deprecation marking
+(now HTTP `Deprecation` header).
+
+Remaining MacroVol adapter concerns (next tranche): the generic wildcard OpenAPI
+contract — the generated document advertises POST for `/api/macrovol/{wildcard}`
+though runtime never allows POST, and cached responses lack the `cache` envelope
+schema; per-path deprecation/migration descriptions. Also canonical REST/MCP
+ownership: MCP does not consume `/api/macrovol/*` (verified), but several light
+rate-panel paths still have no canonical /api/v1 operation, so frontend consumers
+remain on the legacy adapter.
+
+Exact next action: replace the generic `/api/macrovol/{wildcard}` OpenAPI entry
+with an explicitly deprecated, correctly-typed contract (GET-only, safe error
+envelope, optional `cache` envelope on cached paths, migration note to /api/v1),
+regenerate `docs/openapi.generated.json`, then continue to the remaining C3
+provider/cache/quota items (persistent quota scope is documented single-process;
+deployment-wide accounting still requires a single owner or shared atomic counter).
 
 ## Recent verified commits
 
+- `5f9a8d3` — MacroVol legacy adapter: bounded streamed reads (Content-Length
+  precheck, reader cancel, 500 kB byte cap), status/content-type/JSON/plain-object
+  validation before caching (malformed 2xx payloads now typed 502 and never
+  cached), full sanitized cache envelope (state/hit/ageMs/stale/coalesced/
+  providerError) in frontend-visible body plus X-Cache-Coalesced/X-Provider-Error
+  headers, explicit max stale windows (50 min light / 30 min heavy) with
+  fail-closed expiry, sanitized typed errors that preserve worker status
+  semantics while never leaking worker bodies/fragments/diagnostics, HTTP
+  Deprecation header. Independent evidence: 14 tests across
+  `server/routes/macrovol.cache.test.js` (11 new route-injection tests) and
+  `macrovol.validation.test.js`, OpenAPI 65 paths/66 operations/16 strict v1,
+  method-aware parity 38/65, type-check, lint, all three secret-scan modes,
+  owner-clean, `git diff --check` clean.
+- `ad29700` — checkpointed boot-briefing completion and MacroVol inventory next action.
 - `efd78b3` — deprecated `GET /api/boot/briefing` compatibility adapter now settles
   rates/macro/stress worker calls independently with per-source coverage/warnings,
   bounded streamed reads (500 kB cap, Content-Length precheck, reader cancel),

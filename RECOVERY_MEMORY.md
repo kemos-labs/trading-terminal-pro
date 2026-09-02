@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-02T09:57:03Z
+Updated: 2026-09-02T10:04:31Z
 
 This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-rebuild`. It records execution state, not proof of completion. The master specification, audited recovery plan, and `AGENTS.md` remain authoritative when a statement conflicts.
 
@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `7c118bb` (`fix(options): propagate canonical cache state`).
+- Recovery HEAD: `a311d4e` (`fix(home): expose truthful briefing freshness`).
 - Recovery worktree was clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -33,12 +33,13 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. The next bounded C3 concern is remaining provider/cache metadata propagation.
+No dirty implementation tranche exists at this checkpoint. The next bounded C3 concern is legacy desk-feed cache metadata propagation.
 
-Exact next action: audit the highest-impact remaining legacy boundaries that destructure `getOrFetch` down to partial metadata, beginning with Home briefing and Finnhub/AlphaVantage/TradingView desk feeds. Select one coherent response family, preserve stale/coalesced/providerError through a shared public cache projection, and add route tests for stale and provider-down behavior without broad contract churn. Luna medium implements the bounded tranche; Sol reviews metadata truth and evidence before commit.
+Exact next action: audit Finnhub, AlphaVantage, and TradingView routes in `server/routes/deskFeeds.js`, which still destructure `getOrFetch` to partial metadata. Introduce one shared legacy cache projection, preserve stale/coalesced/providerError consistently, and add real route tests for miss/hit/join/stale/expired behavior on a bounded response family. Luna medium implements the bounded tranche; Sol reviews metadata truth and evidence before commit.
 
 ## Recent verified commits
 
+- `a311d4e` — Home briefing now exposes a full sanitized cache envelope and derives freshness from actual desk/source coverage; all-provider-down is unavailable, partial is not live, stale is never live, malformed child data triggers stale fallback, and expired stale data fails closed. Independent evidence: 16 real route tests, OpenAPI, method-aware parity, type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.
 - `7c118bb` — legacy and canonical equity-options responses now preserve hit, age, stale, coalesced, and bounded provider-error state; real canonical route tests prove miss/hit, concurrent join, stale fallback, and expired-stale typed failure. The quota-ledger deployment contract now explicitly limits restart-persistent file accounting to one process and rejects deployment-wide claims without a single owner or shared atomic counter. Independent evidence: 44 focused tests across three files, OpenAPI, method-aware parity, type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.
 - `fcf849b` — canonical FMP endpoints now collapse equivalent query order, bound query dimensions, use a hard 500-entry LRU and bounded same-key in-flight coalescing, and charge quota exactly once at the actual upstream-attempt boundary including failures; FlashAlpha dimensions and the options-venue query surface now reject uncontrolled variants before cache/provider work. Independent evidence: 34 focused tests across three files, OpenAPI 65 paths/66 operations, method-aware parity, type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.
 - `4b23d76` — provider-owned OKX and Bybit public option-summary adapters now use canonical BTC/ETH keys, separate bounded circuits, timeout/content-type/schema/stream-size guards, stale-aware shared cache metadata, and partial-failure isolation; the route reuses the canonical Deribit snapshot and exposes explicit nullable unit fields under a strict OpenAPI contract. Independent evidence: 61 focused tests across six files, OpenAPI 65 paths/66 operations, method-aware parity, type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.
@@ -56,7 +57,7 @@ Exact next action: audit the highest-impact remaining legacy boundaries that des
 
 ## Remaining major blockers after the current concern
 
-- C3: remaining legacy Home/desk-feed metadata propagation remains. The file-backed quota ledger is now explicitly documented and exposed as single-process only; deployment-wide quota completion still requires a single quota owner or shared atomic counter. Circuit behavior, provider key cardinality, canonical options metadata, free-options ownership, and runtime hidden-tab cadence are implemented and tested for the current bounded owners.
+- C3: remaining legacy Finnhub/AlphaVantage/TradingView metadata propagation remains. The file-backed quota ledger is explicitly documented and exposed as single-process only; deployment-wide quota completion still requires a single quota owner or shared atomic counter. Circuit behavior, provider key cardinality, canonical options and Home metadata, free-options ownership, and runtime hidden-tab cadence are implemented and tested for the current bounded owners.
 - C4: migrate Fastify/MCP incrementally to strict TypeScript and close remaining schema-authority/negative-test gaps.
 - C5: complete explicit-entry professional IV and Greeks 3D, geometry assertions, and remaining desktop/mobile dead-space defects.
 - C6: real-server loading, empty, stale, partial, malformed-provider, provider-down, and entitlement matrices; inspect their pixels.

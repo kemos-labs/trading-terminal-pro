@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-02T10:11:34Z
+Updated: 2026-09-02T10:25:13Z
 
 This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-rebuild`. It records execution state, not proof of completion. The master specification, audited recovery plan, and `AGENTS.md` remain authoritative when a statement conflicts.
 
@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `ab7b033` (`fix(feeds): preserve Finnhub cache diagnostics`).
+- Recovery HEAD: `8cb88bd` (`fix(feeds): bound budget-served stale quotes`).
 - Recovery worktree was clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -33,12 +33,13 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. The next bounded C3 concern is bounded budget-stale behavior for AlphaVantage and TradingView.
+No dirty implementation tranche exists at this checkpoint. The next bounded action is to inventory the remaining C3 legacy-feed metadata owners against the recovery plan and actual route consumers, then select one independently testable propagation concern.
 
-Exact next action: fix `/api/alphavantage/quote` and `/api/tradingview/snapshot` budget-exhaustion branches, which currently serve any `peek()` entry regardless of age and omit complete cache metadata. Enforce explicit maximum stale windows, fail closed after expiry, reuse the sanitized cache projection, and add real route tests for budget stale and expired rejection. Luna medium implements the bounded tranche; Sol reviews market-data truth and evidence before commit.
+Exact next action: inspect Finnhub earnings/economic/recommendation/peers, boot briefing, yfinance enrichments, and selected MacroVol adapters for discarded cache/freshness/provenance state. Cross-check frontend consumers and OpenAPI before assigning the next bounded Luna tranche; do not infer C3 completion from the repaired quote routes.
 
 ## Recent verified commits
 
+- `8cb88bd` — AlphaVantage and TradingView budget exhaustion now serves cached quotes only within an explicit ten-TTL stale ceiling and fails closed with typed 429/null values after expiry; both routes expose full cache diagnostics, failed upstream attempts consume quota, and TradingView now increments the monthly ledger rather than the unrelated daily counter. Independent evidence: 41 focused tests across two files, OpenAPI 65 paths/66 operations, method-aware parity, project-reference type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.
 - `ab7b033` — Finnhub quote/news responses now expose full sanitized cache projections, the shared provider-error vocabulary consistently permits the internally generated `upstream-error` code, and real Finnhub quote route tests prove miss/hit, one-fill concurrent joins, bounded stale fallback, and expired-stale 502 behavior. Independent evidence: 47 focused tests across three files, OpenAPI, method-aware parity, type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.
 - `a311d4e` — Home briefing now exposes a full sanitized cache envelope and derives freshness from actual desk/source coverage; all-provider-down is unavailable, partial is not live, stale is never live, malformed child data triggers stale fallback, and expired stale data fails closed. Independent evidence: 16 real route tests, OpenAPI, method-aware parity, type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.
 - `7c118bb` — legacy and canonical equity-options responses now preserve hit, age, stale, coalesced, and bounded provider-error state; real canonical route tests prove miss/hit, concurrent join, stale fallback, and expired-stale typed failure. The quota-ledger deployment contract now explicitly limits restart-persistent file accounting to one process and rejects deployment-wide claims without a single owner or shared atomic counter. Independent evidence: 44 focused tests across three files, OpenAPI, method-aware parity, type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.
@@ -58,7 +59,7 @@ Exact next action: fix `/api/alphavantage/quote` and `/api/tradingview/snapshot`
 
 ## Remaining major blockers after the current concern
 
-- C3: AlphaVantage/TradingView budget-stale bounds and remaining legacy feed metadata propagation remain. The file-backed quota ledger is explicitly documented and exposed as single-process only; deployment-wide quota completion still requires a single quota owner or shared atomic counter. Circuit behavior, provider key cardinality, canonical options/Home/Finnhub metadata, free-options ownership, and runtime hidden-tab cadence are implemented and tested for the current bounded owners.
+- C3: remaining legacy feed metadata propagation remains. The file-backed quota ledger is explicitly documented and exposed as single-process only; deployment-wide quota completion still requires a single quota owner or shared atomic counter. Circuit behavior, provider key cardinality, canonical options/Home/Finnhub quote/news metadata, AlphaVantage/TradingView bounded budget stale behavior, free-options ownership, and runtime hidden-tab cadence are implemented and tested for the current bounded owners.
 - C4: migrate Fastify/MCP incrementally to strict TypeScript and close remaining schema-authority/negative-test gaps.
 - C5: complete explicit-entry professional IV and Greeks 3D, geometry assertions, and remaining desktop/mobile dead-space defects.
 - C6: real-server loading, empty, stale, partial, malformed-provider, provider-down, and entitlement matrices; inspect their pixels.

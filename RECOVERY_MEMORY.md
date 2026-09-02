@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `66ec44b` (`fix(a11y): make option grid scrollable region focusable`).
+- Recovery HEAD: `3d5a120` (`fix(a11y): remove duplicate sec-mm-strip section id`).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -38,7 +38,8 @@ briefing (`efd78b3`), MacroVol cache truth (`5f9a8d3`), MacroVol OpenAPI contrac
 (`2c1a087`), legacy Deribit cache truth (`b52b401`), fastify security patch +
 full-suite race fix (`534433a`), legacy deribit deprecation marking +
 real-server evidence (`29eb677`), and 3D Greeks restore + bundle analytical
-exception docs (`66853af`), and StructureWorkflow a11y fix (`66ec44b`).
+exception docs (`66853af`), StructureWorkflow a11y fix (`66ec44b`), and
+RatesPanel duplicate-id fix (`3d5a120`).
 
 3D Greeks restore (audit P0 '3D Greeks removed'): lazy explicit-entry module
 mirroring the accepted IvSurface3D pattern — observed nodes with true holes,
@@ -53,11 +54,23 @@ Full suite 156 files/864 tests pass twice; bundle gate PASS.
 C6 real-server Playwright regression: the StructureWorkflow option grid
 scrollable region failed axe 'scrollable-region-focusable' (WCAG 2.1.1);
 fixed with tabIndex=0 + aria-label (advances the suite past the violation;
-deterministic render test added). Remaining success-path gap: rates-mode-
-funding #sec-mm-strip not visible — the Playwright webServer does not start
-the rates worker, so worker-dependent rate panels don't render in that suite.
-The success-path suite needs the worker started (scripts/start-production.sh
-style) to exercise rates/STIR/SERFF workflows against the real server.
+deterministic render test added). The rates funding panel also carried a
+duplicate `id="sec-mm-strip"` (invalid HTML, non-deterministic locator);
+removed the redundant wrapper so exactly one section owns the id, with a
+deterministic render test. Canonical suite `npm run test:e2e:real-server`
+(NODE_ENV=test, E2E_FIXTURE_SCENARIO=success, deterministic adapter
+fixtures, no live upstreams) passes: 6/6 (contracts, Academy path, 27
+workflows x 4 viewports incl. axe, no-overflow, no-NaN, zero console/page
+errors) in 4.3m with 108 fresh screenshots; inspected vol-greeks (Open 3D
+entry renders, no auto-mount), rates-funding (populated strip, honest
+EXPIRED/fixture labels), trade-structure (populated blotter/grid/payoff),
+and home (truthful session/desk states) pixels directly. IMPORTANT
+CORRECTION: earlier failed Playwright runs this session used the WRONG
+config (default mocked-suite config without fixture env, hitting live
+throttled upstreams) — an invocation error, not a product regression.
+The canonical fixture suite is the authority and is green. A transient
+experiment (Playwright webServer starting a real rates worker via a helper
+script) was fully reverted; deterministic fixtures stub the worker boundary.
 
 Real-server evidence captured (docs/recovery-evidence/REAL_SERVER_2026-09-02.md):
 typed 502 fail-closed with the rates worker down, live Deribit 200 with a
@@ -79,6 +92,10 @@ geometry/overlap assertions for the restored 3D surfaces.
 
 ## Recent verified commits
 
+- `3d5a120` — removed duplicate `sec-mm-strip` section id (RatesPanel wrapper
+  vs MoneyMarketStrip's CollapsibleSection): exactly one owns the id now.
+  Deterministic render test (single id + observed cells). Canonical C6
+  real-server suite green.
 - `66ec44b` — StructureWorkflow option grid scrollable region made focusable
   (tabIndex=0 + aria-label) fixing axe 'scrollable-region-focusable' WCAG 2.1.1
   violation surfaced by the real-server C6 suite; deterministic render test

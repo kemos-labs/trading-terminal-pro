@@ -45,8 +45,8 @@ async function finnhubGet(path, params = {}) {
     if (v != null && v !== '') u.searchParams.set(k, String(v));
   }
   u.searchParams.set('token', key);
-  const res = await fetch(u.toString(), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
   recordBudget('finnhub', 1);
+  const res = await fetch(u.toString(), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`Finnhub HTTP ${res.status}: ${body.slice(0, 200)}`);
@@ -70,6 +70,12 @@ function cacheMetadata(result) {
 
 function budgetStaleMetadata(ageMs) {
   return { state: 'stale', hit: true, ageMs: Math.max(0, ageMs), stale: true, coalesced: false, providerError: sanitizeProviderErrorCode('budget_exhausted') };
+}
+
+function invalidProviderPayload(message) {
+  const error = new Error(message);
+  error.code = 'invalid_payload';
+  return error;
 }
 
 /** Deribit totals from the canonical cached market snapshot (public, keyless). */
@@ -193,7 +199,7 @@ export function registerDeskFeedRoutes(fastify) {
     const raw = String(request.query?.symbol || 'SPY').toUpperCase();
     const symbol = validateSymbol(raw) || 'SPY';
     try {
-      const { data, fromCache, ageMs } = await getOrFetch(
+      const result = await getOrFetch(
         `finnhub:earnings:${symbol}`,
         TTL.FINNHUB_EARNINGS_MS,
         async () => {
@@ -206,10 +212,12 @@ export function registerDeskFeedRoutes(fastify) {
               from: finnhubDate(from),
               to: finnhubDate(to),
             });
-            rows = Array.isArray(payload?.earningsCalendar) ? payload.earningsCalendar : [];
+            if (!Array.isArray(payload?.earningsCalendar)) throw invalidProviderPayload('Finnhub earnings payload invalid');
+            rows = payload.earningsCalendar;
           } catch {
             const history = await finnhubGet('/stock/earnings', { symbol, limit: 4 });
-            rows = Array.isArray(history) ? history.map((row) => ({
+            if (!Array.isArray(history)) throw invalidProviderPayload('Finnhub earnings fallback payload invalid');
+            rows = history.map((row) => ({
               symbol,
               date: row.period ?? null,
               epsActual: row.actual,
@@ -217,7 +225,7 @@ export function registerDeskFeedRoutes(fastify) {
               hour: null,
               quarter: row.quarter,
               year: row.year,
-            })) : [];
+            }));
           }
           const normalized = rows.map((row) => ({
             symbol: row.symbol || symbol,
@@ -248,7 +256,7 @@ export function registerDeskFeedRoutes(fastify) {
         },
         { allowStaleOnError: true },
       );
-      return { ...data, fromCache, ageMs };
+      return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
     } catch (err) {
       const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
       reply.code(noKey ? 503 : 502);
@@ -277,19 +285,21 @@ export function registerDeskFeedRoutes(fastify) {
     const toDate = new Date();
     toDate.setUTCDate(toDate.getUTCDate() + 14);
     const to = toRaw || finnhubDate(toDate);
-    if (!budgetAllows('finnhub', FINNHUB_SOFT_DAILY, 0.9)) {
-      reply.code(429);
-      return { from, to, events: [], error: 'budget_exhausted', source: 'Finnhub' };
-    }
     try {
-      const { data, fromCache, ageMs } = await getOrFetch(
+      const result = await getOrFetch(
         `finnhub:eco:${from}:${to}`,
         TTL.FINNHUB_ECO_MS,
         async () => {
+          if (!budgetAllows('finnhub', FINNHUB_SOFT_DAILY, 0.9)) {
+            const error = new Error('Finnhub budget exhausted');
+            error.code = 'budget_exhausted';
+            throw error;
+          }
           const payload = await finnhubGet('/calendar/economic', { from, to });
           const rows = Array.isArray(payload?.economicCalendar)
             ? payload.economicCalendar
-            : Array.isArray(payload) ? payload : [];
+            : Array.isArray(payload) ? payload : null;
+          if (!rows) throw invalidProviderPayload('Finnhub economic calendar payload invalid');
           const events = rows.slice(0, 40).map((row, index) => ({
             id: row?.event ? `${row.event}-${row.time || row.date || index}` : `eco-${index}`,
             country: row?.country || null,
@@ -313,23 +323,24 @@ export function registerDeskFeedRoutes(fastify) {
         },
         { allowStaleOnError: true },
       );
-      return { ...data, fromCache, ageMs };
+      return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
     } catch (err) {
       const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
-      reply.code(noKey ? 503 : 502);
-      return { from, to, events: [], error: noKey ? 'no_api_key' : 'unavailable', detail: noKey ? undefined : err.message, source: 'Finnhub' };
+      reply.code(noKey ? 503 : err?.code === 'budget_exhausted' ? 429 : 502);
+      return { from, to, events: [], error: noKey ? 'no_api_key' : err?.code === 'budget_exhausted' ? 'budget_exhausted' : 'unavailable', detail: noKey ? undefined : err.message, source: 'Finnhub' };
     }
   });
 
   fastify.get('/api/finnhub/recommendation', async (request, reply) => {
     const symbol = validateSymbol(String(request.query?.symbol || 'SPY')) || 'SPY';
     try {
-      const { data, fromCache, ageMs } = await getOrFetch(
+      const result = await getOrFetch(
         `finnhub:rec:${symbol}`,
         TTL.FINNHUB_META_MS,
         async () => {
           const rows = await finnhubGet('/stock/recommendation', { symbol });
-          const latest = Array.isArray(rows) ? rows[0] ?? null : null;
+          if (!Array.isArray(rows)) throw invalidProviderPayload('Finnhub recommendation payload invalid');
+          const latest = rows[0] ?? null;
           return {
             symbol,
             latest: latest ? {
@@ -340,7 +351,7 @@ export function registerDeskFeedRoutes(fastify) {
               sell: latest.sell ?? null,
               strongSell: latest.strongSell ?? null,
             } : null,
-            history_count: Array.isArray(rows) ? rows.length : 0,
+            history_count: rows.length,
             as_of: new Date().toISOString(),
             source: 'Finnhub',
             error: latest ? null : 'empty',
@@ -348,7 +359,7 @@ export function registerDeskFeedRoutes(fastify) {
         },
         { allowStaleOnError: true },
       );
-      return { ...data, fromCache, ageMs };
+      return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
     } catch (err) {
       const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
       reply.code(noKey ? 503 : 502);
@@ -359,12 +370,13 @@ export function registerDeskFeedRoutes(fastify) {
   fastify.get('/api/finnhub/peers', async (request, reply) => {
     const symbol = validateSymbol(String(request.query?.symbol || 'SPY')) || 'SPY';
     try {
-      const { data, fromCache, ageMs } = await getOrFetch(
+      const result = await getOrFetch(
         `finnhub:peers:${symbol}`,
         TTL.FINNHUB_META_MS,
         async () => {
           const rows = await finnhubGet('/stock/peers', { symbol });
-          const peers = (Array.isArray(rows) ? rows : [])
+          if (!Array.isArray(rows)) throw invalidProviderPayload('Finnhub peers payload invalid');
+          const peers = rows
             .map((peer) => String(peer || '').toUpperCase())
             .filter((peer) => peer && peer !== symbol)
             .slice(0, 12);
@@ -379,7 +391,7 @@ export function registerDeskFeedRoutes(fastify) {
         },
         { allowStaleOnError: true },
       );
-      return { ...data, fromCache, ageMs };
+      return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
     } catch (err) {
       const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
       reply.code(noKey ? 503 : 502);

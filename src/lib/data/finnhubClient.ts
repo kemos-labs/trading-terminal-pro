@@ -22,6 +22,15 @@ export interface FinnhubNewsItem {
   category?: string;
 }
 
+export interface FinnhubCacheMetadata {
+  state: 'miss' | 'fresh' | 'stale' | 'unavailable';
+  hit: boolean;
+  ageMs: number;
+  stale: boolean;
+  coalesced: boolean;
+  providerError: string | null;
+}
+
 export interface FinnhubNewsData {
   symbol: string;
   items: FinnhubNewsItem[];
@@ -53,6 +62,9 @@ export interface FinnhubEarningsData {
   source?: string;
   note?: string;
   error?: string | null;
+  fromCache?: boolean;
+  ageMs?: number;
+  cache?: FinnhubCacheMetadata;
 }
 
 export function fetchFinnhubNews(symbol: string, limit = 12): Promise<FinnhubNewsData> {
@@ -89,6 +101,8 @@ export interface FinnhubEcoCalendar {
   note?: string;
   error?: string | null;
   fromCache?: boolean;
+  ageMs?: number;
+  cache?: FinnhubCacheMetadata;
 }
 
 export interface FinnhubRecommendation {
@@ -105,6 +119,9 @@ export interface FinnhubRecommendation {
   source?: string;
   note?: string;
   error?: string | null;
+  fromCache?: boolean;
+  ageMs?: number;
+  cache?: FinnhubCacheMetadata;
 }
 
 export interface FinnhubPeers {
@@ -114,6 +131,9 @@ export interface FinnhubPeers {
   as_of?: string;
   source?: string;
   error?: string | null;
+  fromCache?: boolean;
+  ageMs?: number;
+  cache?: FinnhubCacheMetadata;
 }
 
 /** Shared 6h economic calendar — server warmer owns refresh. */

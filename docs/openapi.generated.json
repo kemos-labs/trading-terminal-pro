@@ -4362,6 +4362,860 @@
         "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
+    "/api/finnhub/earnings": {
+      "get": {
+        "operationId": "getFinnhubEarnings",
+        "tags": [
+          "equities"
+        ],
+        "summary": "Earnings calendar (Finnhub, shared cache)",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Earnings with cache metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "symbol",
+                    "next",
+                    "upcoming",
+                    "recent",
+                    "cache",
+                    "cache"
+                  ],
+                  "properties": {
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "next": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "upcoming": {
+                      "type": "array"
+                    },
+                    "recent": {
+                      "type": "array"
+                    },
+                    "as_of": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "fromCache": {
+                      "type": "boolean"
+                    },
+                    "ageMs": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "cache": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state",
+                        "hit",
+                        "ageMs",
+                        "stale",
+                        "coalesced",
+                        "providerError"
+                      ],
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "miss",
+                            "fresh",
+                            "stale",
+                            "unavailable"
+                          ]
+                        },
+                        "hit": {
+                          "type": "boolean"
+                        },
+                        "ageMs": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        },
+                        "coalesced": {
+                          "type": "boolean"
+                        },
+                        "providerError": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
+      }
+    },
+    "/api/finnhub/economic-calendar": {
+      "get": {
+        "operationId": "getFinnhubEconomicCalendar",
+        "tags": [
+          "equities"
+        ],
+        "summary": "Economic calendar (Finnhub, shared cache)",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Economic calendar with cache metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "from",
+                    "to",
+                    "events",
+                    "cache",
+                    "cache"
+                  ],
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "events": {
+                      "type": "array"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "as_of": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "fromCache": {
+                      "type": "boolean"
+                    },
+                    "ageMs": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "cache": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state",
+                        "hit",
+                        "ageMs",
+                        "stale",
+                        "coalesced",
+                        "providerError"
+                      ],
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "miss",
+                            "fresh",
+                            "stale",
+                            "unavailable"
+                          ]
+                        },
+                        "hit": {
+                          "type": "boolean"
+                        },
+                        "ageMs": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        },
+                        "coalesced": {
+                          "type": "boolean"
+                        },
+                        "providerError": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
+      }
+    },
+    "/api/finnhub/recommendation": {
+      "get": {
+        "operationId": "getFinnhubRecommendation",
+        "tags": [
+          "equities"
+        ],
+        "summary": "Analyst recommendation (Finnhub, shared cache)",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recommendation with cache metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "symbol",
+                    "latest",
+                    "cache",
+                    "cache"
+                  ],
+                  "properties": {
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "latest": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "history_count": {
+                      "type": "integer"
+                    },
+                    "as_of": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "fromCache": {
+                      "type": "boolean"
+                    },
+                    "ageMs": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "cache": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state",
+                        "hit",
+                        "ageMs",
+                        "stale",
+                        "coalesced",
+                        "providerError"
+                      ],
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "miss",
+                            "fresh",
+                            "stale",
+                            "unavailable"
+                          ]
+                        },
+                        "hit": {
+                          "type": "boolean"
+                        },
+                        "ageMs": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        },
+                        "coalesced": {
+                          "type": "boolean"
+                        },
+                        "providerError": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
+      }
+    },
+    "/api/finnhub/peers": {
+      "get": {
+        "operationId": "getFinnhubPeers",
+        "tags": [
+          "equities"
+        ],
+        "summary": "Peer symbols (Finnhub, shared cache)",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Peers with cache metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "symbol",
+                    "peers",
+                    "cache",
+                    "cache"
+                  ],
+                  "properties": {
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "peers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "as_of": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "fromCache": {
+                      "type": "boolean"
+                    },
+                    "ageMs": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "cache": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state",
+                        "hit",
+                        "ageMs",
+                        "stale",
+                        "coalesced",
+                        "providerError"
+                      ],
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "miss",
+                            "fresh",
+                            "stale",
+                            "unavailable"
+                          ]
+                        },
+                        "hit": {
+                          "type": "boolean"
+                        },
+                        "ageMs": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        },
+                        "coalesced": {
+                          "type": "boolean"
+                        },
+                        "providerError": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "description": "Deprecated compatibility route; migrate to /api/v1 where available."
+      }
+    },
     "/api/desk/pack": {
       "get": {
         "operationId": "getDeskPack",
@@ -5472,114 +6326,6 @@
           "legacy"
         ],
         "summary": "Runtime-discovered legacy adapter: GET /api/history/spy",
-        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
-        "deprecated": true,
-        "x-legacy-adapter": true,
-        "responses": {
-          "200": {
-            "description": "Legacy adapter payload; shape is provider/route specific.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Legacy route error"
-          }
-        }
-      }
-    },
-    "/api/finnhub/earnings": {
-      "get": {
-        "operationId": "legacy_get_api_finnhub_earnings",
-        "tags": [
-          "legacy"
-        ],
-        "summary": "Runtime-discovered legacy adapter: GET /api/finnhub/earnings",
-        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
-        "deprecated": true,
-        "x-legacy-adapter": true,
-        "responses": {
-          "200": {
-            "description": "Legacy adapter payload; shape is provider/route specific.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Legacy route error"
-          }
-        }
-      }
-    },
-    "/api/finnhub/economic-calendar": {
-      "get": {
-        "operationId": "legacy_get_api_finnhub_economic_calendar",
-        "tags": [
-          "legacy"
-        ],
-        "summary": "Runtime-discovered legacy adapter: GET /api/finnhub/economic-calendar",
-        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
-        "deprecated": true,
-        "x-legacy-adapter": true,
-        "responses": {
-          "200": {
-            "description": "Legacy adapter payload; shape is provider/route specific.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Legacy route error"
-          }
-        }
-      }
-    },
-    "/api/finnhub/recommendation": {
-      "get": {
-        "operationId": "legacy_get_api_finnhub_recommendation",
-        "tags": [
-          "legacy"
-        ],
-        "summary": "Runtime-discovered legacy adapter: GET /api/finnhub/recommendation",
-        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
-        "deprecated": true,
-        "x-legacy-adapter": true,
-        "responses": {
-          "200": {
-            "description": "Legacy adapter payload; shape is provider/route specific.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Legacy route error"
-          }
-        }
-      }
-    },
-    "/api/finnhub/peers": {
-      "get": {
-        "operationId": "legacy_get_api_finnhub_peers",
-        "tags": [
-          "legacy"
-        ],
-        "summary": "Runtime-discovered legacy adapter: GET /api/finnhub/peers",
         "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
         "deprecated": true,
         "x-legacy-adapter": true,

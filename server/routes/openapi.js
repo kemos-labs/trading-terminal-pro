@@ -118,6 +118,21 @@ function typedErrorResponse(code, description) {
   return { description, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['error'], properties: { error: { type: 'string', const: code }, detail: { type: 'string' } } } } } };
 }
 
+const finnhubCacheSchema = {
+  type: 'object', additionalProperties: false,
+  required: ['state', 'hit', 'ageMs', 'stale', 'coalesced', 'providerError'],
+  properties: {
+    state: { type: 'string', enum: ['miss', 'fresh', 'stale', 'unavailable'] },
+    hit: { type: 'boolean' }, ageMs: { type: 'number', minimum: 0 }, stale: { type: 'boolean' },
+    coalesced: { type: 'boolean' }, providerError: { type: ['string', 'null'] },
+  },
+};
+const finnhubLegacySchema = (properties, required = []) => ({
+  type: 'object', additionalProperties: false,
+  required: [...required, 'cache'],
+  properties: { ...properties, fromCache: { type: 'boolean' }, ageMs: { type: 'number', minimum: 0 }, cache: finnhubCacheSchema },
+});
+
 const symbolParam = (summary = 'Observed equity chain (yfinance, delayed)') => ({
   name: 'symbol',
   in: 'path',
@@ -319,6 +334,37 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
           operationId: 'getEquityNews', tags: ['equities'], summary: 'Company + general headlines (Finnhub)',
           parameters: [{ name: 'symbol', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 30 } }],
           responses: { 200: jsonOk({ type: 'object' }, 'headlines'), 502: errorResponse, 503: errorResponse },
+        },
+      },
+      '/api/finnhub/earnings': {
+        get: {
+          operationId: 'getFinnhubEarnings', tags: ['equities'], summary: 'Earnings calendar (Finnhub, shared cache)',
+          parameters: [{ name: 'symbol', in: 'query', schema: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' } }],
+          responses: {
+            200: jsonOk(finnhubLegacySchema({ symbol: { type: 'string' }, next: { type: ['object', 'null'] }, upcoming: { type: 'array' }, recent: { type: 'array' }, as_of: { type: 'string' }, source: { type: 'string' }, error: { type: ['string', 'null'] }, note: { type: 'string' } }, ['symbol', 'next', 'upcoming', 'recent', 'cache']), 'Earnings with cache metadata'),
+            502: errorResponse, 503: errorResponse,
+          },
+        },
+      },
+      '/api/finnhub/economic-calendar': {
+        get: {
+          operationId: 'getFinnhubEconomicCalendar', tags: ['equities'], summary: 'Economic calendar (Finnhub, shared cache)',
+          parameters: [{ name: 'from', in: 'query', schema: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } }, { name: 'to', in: 'query', schema: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } }],
+          responses: { 200: jsonOk(finnhubLegacySchema({ from: { type: 'string' }, to: { type: 'string' }, events: { type: 'array' }, count: { type: 'integer' }, as_of: { type: 'string' }, source: { type: 'string' }, error: { type: ['string', 'null'] }, note: { type: 'string' } }, ['from', 'to', 'events', 'cache']), 'Economic calendar with cache metadata'), 400: errorResponse, 429: errorResponse, 502: errorResponse, 503: errorResponse },
+        },
+      },
+      '/api/finnhub/recommendation': {
+        get: {
+          operationId: 'getFinnhubRecommendation', tags: ['equities'], summary: 'Analyst recommendation (Finnhub, shared cache)',
+          parameters: [{ name: 'symbol', in: 'query', schema: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' } }],
+          responses: { 200: jsonOk(finnhubLegacySchema({ symbol: { type: 'string' }, latest: { type: ['object', 'null'] }, history_count: { type: 'integer' }, as_of: { type: 'string' }, source: { type: 'string' }, error: { type: ['string', 'null'] } }, ['symbol', 'latest', 'cache']), 'Recommendation with cache metadata'), 502: errorResponse, 503: errorResponse },
+        },
+      },
+      '/api/finnhub/peers': {
+        get: {
+          operationId: 'getFinnhubPeers', tags: ['equities'], summary: 'Peer symbols (Finnhub, shared cache)',
+          parameters: [{ name: 'symbol', in: 'query', schema: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' } }],
+          responses: { 200: jsonOk(finnhubLegacySchema({ symbol: { type: 'string' }, peers: { type: 'array', items: { type: 'string' } }, count: { type: 'integer' }, as_of: { type: 'string' }, source: { type: 'string' }, error: { type: ['string', 'null'] } }, ['symbol', 'peers', 'cache']), 'Peers with cache metadata'), 502: errorResponse, 503: errorResponse },
         },
       },
       '/api/desk/pack': {

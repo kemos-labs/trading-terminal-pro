@@ -196,15 +196,57 @@ describe('restored routes (Phase 1 parity)', () => {
     const earnings = await app.inject('/api/finnhub/earnings?symbol=SPY');
     expect(earnings.statusCode).toBe(200);
     expect(earnings.json().next.date).toBe('2026-12-01');
+    expect(earnings.json().cache).toMatchObject({ state: 'miss', hit: false, stale: false, coalesced: false, providerError: null });
     const economic = await app.inject('/api/finnhub/economic-calendar');
     expect(economic.statusCode).toBe(200);
     expect(economic.json().events[0].event).toBe('CPI');
+    expect(economic.json().cache).toMatchObject({ state: 'miss', hit: false, stale: false, coalesced: false, providerError: null });
+    runtimeDesk.__testHooks.recordBudget('finnhub', 4_500);
+    const economicCached = await app.inject('/api/finnhub/economic-calendar');
+    expect(economicCached.statusCode).toBe(200);
+    expect(economicCached.json().cache).toMatchObject({ state: 'fresh', hit: true, stale: false, providerError: null });
     const recommendation = await app.inject('/api/finnhub/recommendation?symbol=SPY');
     expect(recommendation.statusCode).toBe(200);
     expect(recommendation.json().latest.buy).toBe(10);
+    expect(recommendation.json().cache).toMatchObject({ state: 'miss', hit: false, stale: false, coalesced: false, providerError: null });
     const peers = await app.inject('/api/finnhub/peers?symbol=SPY');
     expect(peers.statusCode).toBe(200);
     expect(peers.json().peers).toEqual(['IVV', 'VOO']);
+    expect(peers.json().cache).toMatchObject({ state: 'miss', hit: false, stale: false, coalesced: false, providerError: null });
+  });
+
+  it('Finnhub recommendation serves stale metadata on provider failure and rejects malformed payloads', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-02T00:00:00Z') });
+    let fail = false;
+    global.fetch = vi.fn(async (input) => {
+      if (!String(input).includes('/stock/recommendation')) return new Response('{}', { status: 404 });
+      if (fail) return new Response('{"error":"down"}', { status: 503 });
+      return new Response(JSON.stringify([{ period: '2026-08-01', buy: 10 }]), { status: 200 });
+    });
+    try {
+      const warm = await app.inject('/api/finnhub/recommendation?symbol=STALE');
+      expect(warm.statusCode).toBe(200);
+      expect(warm.json().cache.state).toBe('miss');
+      vi.advanceTimersByTime(TTL.FINNHUB_META_MS + 1);
+      fail = true;
+      const budgetBeforeFailure = runtimeDesk.__testHooks.getBudgetUsed('finnhub');
+      const stale = await app.inject('/api/finnhub/recommendation?symbol=STALE');
+      expect(stale.statusCode).toBe(200);
+      expect(stale.json().cache).toMatchObject({ state: 'stale', stale: true, providerError: 'upstream-error' });
+      expect(runtimeDesk.__testHooks.getBudgetUsed('finnhub') - budgetBeforeFailure).toBe(1);
+      vi.advanceTimersByTime(TTL.FINNHUB_META_MS * 10);
+      const expired = await app.inject('/api/finnhub/recommendation?symbol=STALE');
+      expect(expired.statusCode).toBe(502);
+      expect(expired.json().latest).toBeNull();
+      clearCacheForTests();
+      fail = false;
+      global.fetch = vi.fn(async () => new Response('{}', { status: 200 }));
+      const malformed = await app.inject('/api/finnhub/recommendation?symbol=MALFORMED');
+      expect(malformed.statusCode).toBe(502);
+      expect(malformed.json().error).toBe('unavailable');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('finnhub news fails closed 503 with typed error when key absent', async () => {

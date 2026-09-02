@@ -29,6 +29,14 @@ describe('Trade workflows — behavior (not export existence)', () => {
     expect(template).toHaveValue('long_call');
   });
 
+  it('option grid scrollable region is focusable (WCAG 2.1.1 keyboard access)', () => {
+    useTerminalStore.setState({ snapshot: snap, symbol: 'SPY' });
+    render(<StructureWorkflow />);
+    const grid = screen.getByLabelText('Option grid — scrollable table of values by strike and expiry');
+    expect(grid).toHaveAttribute('tabindex', '0');
+    expect(grid.className).toContain('overflow-auto');
+  });
+
   it('renders observed midpoint and Model price as separate provenance fields', () => {
     const noMid = buildSnapshot('SPY-NOMID', Date.now(), 500, 0.05, 0.01);
     noMid.expiries.forEach((expiry) => [...expiry.calls, ...expiry.puts].forEach((quote) => { quote.mid = null; }));

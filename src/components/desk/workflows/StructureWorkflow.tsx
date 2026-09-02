@@ -160,7 +160,7 @@ export function StructureWorkflow() {
         ]} />}
         bodyClassName="min-h-0 overflow-auto rounded border border-border bg-card"
       >
-        <div className="h-full overflow-auto bg-black/40">
+        <div className="h-full overflow-auto bg-black/40" tabIndex={0} aria-label="Option grid — scrollable table of values by strike and expiry">
           <table className="border-collapse font-mono text-type-xs">
             <thead className="sticky top-0 z-10 bg-card">
               <tr>

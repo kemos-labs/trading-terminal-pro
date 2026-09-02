@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `29eb677` (`fix(deribit): mark legacy routes deprecated`).
+- Recovery HEAD: `66853af` (`feat(vol): restore explicit-entry 3D Greeks surface`).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -36,28 +36,51 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 No dirty implementation tranche exists at this checkpoint. Session commits: boot
 briefing (`efd78b3`), MacroVol cache truth (`5f9a8d3`), MacroVol OpenAPI contract
 (`2c1a087`), legacy Deribit cache truth (`b52b401`), fastify security patch +
-full-suite race fix (`534433a`), and legacy deribit deprecation marking +
-real-server evidence report (`29eb677`).
+full-suite race fix (`534433a`), legacy deribit deprecation marking +
+real-server evidence (`29eb677`), and 3D Greeks restore + bundle analytical
+exception docs (`66853af`).
+
+3D Greeks restore (audit P0 '3D Greeks removed'): lazy explicit-entry module
+mirroring the accepted IvSurface3D pattern — observed nodes with true holes,
+ATM ridge, optional observed-cell wireframe (NOT a fitted model — canonical
+data has no model fit), diverging zero-centered ramp, exact-unit Z ticks, DOM
+overlay + hover readout, gate-testable Open 3D entry. Pure geometry helper
+(greeksSurface3dData.ts) is unit-testable (no WebGL). Bundle: shared lazy drei
+OrbitControls vendor chunk (230.4 kB gzip) documented under analytical
+exception (cap 300 kB), reachable only via explicit-entry dynamic imports.
+Full suite 156 files/864 tests pass twice; bundle gate PASS.
 
 Real-server evidence captured (docs/recovery-evidence/REAL_SERVER_2026-09-02.md):
-real Fastify process on PORT 3999 with the rates worker down proved typed 502
-fail-closed for boot briefing and macrovol, live Deribit 200 with truthful cache
-envelope (993 instruments, coverage 1, no NaN/Infinity), v1 crypto schemaVersion
-1, openapi/workflows 200, and live Deprecation/Link headers.
+typed 502 fail-closed with the rates worker down, live Deribit 200 with a
+truthful cache envelope (993 instruments, coverage 1, no NaN/Infinity), v1
+crypto schemaVersion 1, openapi/workflows 200, live Deprecation/Link headers.
 
-Remaining work: C5 explicit-entry 3D + geometry assertions + dead-space fixes;
-C6 real-server failure-state matrix + four-viewport screenshots + independent
-visual review; C4 strict-TypeScript server migration (blocked on `tsx` runtime
+Remaining work: C6 real-server failure-state matrix + four-viewport
+screenshots + independent visual review; C5 Crypto 3D (CryptoSurface3D.tsx
+also deleted in history) + measured geometry/overlap assertions + dead-space
+fixes; C4 strict-TypeScript server migration (blocked on `tsx` runtime
 tooling decision — deployment-affecting); C7 Python ownership restriction,
-naming/import cleanup, bundle/cache-hit/3D lazy-load performance proof; C8 full
+naming/import cleanup, bundle/cache-hit/3D lazy-load performance proof; C8
 gates at final HEAD + independent adversarial review.
 
-Exact next action: C5 — verify the IV/Greeks 3D tool requires explicit user
-activation (no auto-mount) and add measured geometry/overlap assertions, then
-continue the C6 failure-state matrix against the real server.
+Exact next action: C6 — build a deterministic real-server failure-state
+harness (loading/empty/stale/partial/malformed-provider/provider-down) and
+exercise the workflow roots against the real server, then continue measured
+geometry/overlap assertions for the restored 3D surfaces.
 
 ## Recent verified commits
 
+- `66853af` — 3D Greeks restored as lazy explicit-entry analytical module:
+  observed nodes with true holes (null/NaN never rendered), ATM ridge, optional
+  observed-cell wireframe (explicitly not a fitted model — no canonical model
+  fit exists), diverging zero-centered ramp, exact-unit Z ticks, DOM overlay +
+  hover readout, gate-testable Open 3D. Pure geometry helper (no WebGL) is
+  unit-tested for holes/no-NaN/diverging-midpoint/ATM/empty. Greeks10View
+  gets explicit 3D entry; obsolete '3D removed' copy and its locking test
+  replaced. Bundle: shared drei OrbitControls vendor chunk documented under
+  analytical exception (cap 300 kB). Evidence: 10 focused tests + full suite
+  156 files/864 tests pass twice, bundle gate PASS, OpenAPI/parity/type/lint/
+  secrets/diff gates pass.
 - `29eb677` — legacy deribit family now sets Deprecation headers with exact
   /api/v1/market/crypto/* successor links; real-server evidence report
   (REAL_SERVER_2026-09-02.md) recorded. 4 focused suites (53 tests) green;
@@ -136,7 +159,7 @@ continue the C6 failure-state matrix against the real server.
 
 - C3: boot briefing and selected MacroVol metadata propagation remain. The file-backed quota ledger is explicitly documented and exposed as single-process only; deployment-wide quota completion still requires a single quota owner or shared atomic counter. Circuit behavior, provider key cardinality, canonical options/Home/Finnhub/yfinance response metadata and shared Finnhub quota enforcement, AlphaVantage/TradingView bounded budget stale behavior, free-options ownership, and runtime hidden-tab cadence are implemented and tested for the current bounded owners.
 - C4: migrate Fastify/MCP incrementally to strict TypeScript and close remaining schema-authority/negative-test gaps.
-- C5: complete explicit-entry professional IV and Greeks 3D, geometry assertions, and remaining desktop/mobile dead-space defects.
+- C5: 3D Greeks restored (explicit-entry, lazy); remaining = Crypto 3D (also deleted in history), measured geometry/overlap assertions for 3D surfaces, and desktop/mobile dead-space fixes.
 - C6: real-server loading, empty, stale, partial, malformed-provider, provider-down, and entitlement matrices; inspect their pixels.
 - C7: restrict Python ownership, complete naming/import cleanup, and prove bundle/cache-hit/3D lazy-load performance budgets.
 - C8: every mandatory gate, full suite twice, dependency audits, Python lock audit, clean-state evidence, independent API/security/math/visual/a11y reviews, and final adversarial falsification.

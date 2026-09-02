@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `534433a` (`fix(deps): patch fastify schema-validation advisories`).
+- Recovery HEAD: `29eb677` (`fix(deribit): mark legacy routes deprecated`).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -35,29 +35,33 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 No dirty implementation tranche exists at this checkpoint. Session commits: boot
 briefing (`efd78b3`), MacroVol cache truth (`5f9a8d3`), MacroVol OpenAPI contract
-(`2c1a087`), legacy Deribit cache truth (`b52b401`), and fastify security patch +
-full-suite race fix (`534433a`).
+(`2c1a087`), legacy Deribit cache truth (`b52b401`), fastify security patch +
+full-suite race fix (`534433a`), and legacy deribit deprecation marking +
+real-server evidence report (`29eb677`).
 
-Dependency security: fastify 5.12.0 -> 5.12.1 via `npm audit fix` closes
-GHSA-w2qp-rph6-63g4 (schema validation bypass) and GHSA-3m5p-2c4r-xxw2
-(X-Forwarded-* spoofing); both npm audit scopes now report 0 vulnerabilities.
-Full suite 155 files/857 tests passes twice under the default threads pool after
-repairing a 1ms fake-timer race in the TradingView budget-bound test (real
-product code was correct; the test advanced a knife's-edge margin).
+Real-server evidence captured (docs/recovery-evidence/REAL_SERVER_2026-09-02.md):
+real Fastify process on PORT 3999 with the rates worker down proved typed 502
+fail-closed for boot briefing and macrovol, live Deribit 200 with truthful cache
+envelope (993 instruments, coverage 1, no NaN/Infinity), v1 crypto schemaVersion
+1, openapi/workflows 200, and live Deprecation/Link headers.
 
-Remaining C3/C4/C5/C6 items: strict-TypeScript server migration is blocked on a
-runtime tooling decision (this Node 22.22.1 build has no unflagged native TS
-stripping for ESM; enabling requires adding `tsx` and changing dev/start scripts
-— a deployment-affecting infra tranche). MCP consumes only canonical /api/v1
-operations and has comprehensive negative validation (verified this session).
-C5: explicit-entry 3D + geometry assertions + dead-space fixes. C6: real-server
-failure-state matrix + four-viewport screenshots + independent visual review.
-C7: Python ownership restriction, naming/import cleanup, bundle/cache-hit/3D
-lazy-load performance proof. C8: full gates at final HEAD + independent
-adversarial review.
+Remaining work: C5 explicit-entry 3D + geometry assertions + dead-space fixes;
+C6 real-server failure-state matrix + four-viewport screenshots + independent
+visual review; C4 strict-TypeScript server migration (blocked on `tsx` runtime
+tooling decision — deployment-affecting); C7 Python ownership restriction,
+naming/import cleanup, bundle/cache-hit/3D lazy-load performance proof; C8 full
+gates at final HEAD + independent adversarial review.
+
+Exact next action: C5 — verify the IV/Greeks 3D tool requires explicit user
+activation (no auto-mount) and add measured geometry/overlap assertions, then
+continue the C6 failure-state matrix against the real server.
 
 ## Recent verified commits
 
+- `29eb677` — legacy deribit family now sets Deprecation headers with exact
+  /api/v1/market/crypto/* successor links; real-server evidence report
+  (REAL_SERVER_2026-09-02.md) recorded. 4 focused suites (53 tests) green;
+  type-check/lint/diff/secret gates pass.
 - `534433a` — fastify 5.12.0→5.12.1 security patch (schema-validation bypass +
   X-Forwarded spoofing advisories closed; both npm audit scopes 0
   vulnerabilities) plus deterministic fake-timer fix for the TradingView

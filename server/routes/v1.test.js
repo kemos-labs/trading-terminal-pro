@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearCacheForTests } from '../../api/upstreamCache.js';
+import { TTL } from '../../api/upstreamCache.js';
 import { resetDeribitClientState } from '../providers/deribit/client.js';
 import { validateContract } from '../../packages/contracts/src/runtime.js';
 
@@ -77,18 +78,31 @@ function installDeribitBoundary() {
   });
 }
 
+let equityShouldFail = false;
+let equityWait = false;
+let releaseEquity;
 const equityDouble = vi.fn((_cmd, args, _opts, callback) => {
   const symbol = String(args?.[1] ?? 'SPY');
-  callback(null, JSON.stringify({
-    symbol,
-    spot: 500,
-    timestamp: Date.now(),
-    expirations: ['2030-12-30'],
-    quotes: [
-      { strike: 500, expiry: '2030-12-30', type: 'call', bid: 10, ask: 11, lastPrice: 10.5, impliedVolatility: 0.2, volume: 20, openInterest: 100 },
-      { strike: 500, expiry: '2030-12-30', type: 'put', bid: 9, ask: 10, lastPrice: 9.5, impliedVolatility: null, volume: null, openInterest: null },
-    ],
-  }), '');
+  const finish = () => {
+    if (equityShouldFail) {
+      callback(Object.assign(new Error('options provider unavailable'), { code: 'rate_limited' }), '', '');
+      return;
+    }
+    callback(null, JSON.stringify({
+      symbol,
+      spot: 500,
+      timestamp: Date.now(),
+      expirations: ['2030-12-30'],
+      quotes: [
+        { strike: 500, expiry: '2030-12-30', type: 'call', bid: 10, ask: 11, lastPrice: 10.5, impliedVolatility: 0.2, volume: 20, openInterest: 100 },
+        { strike: 500, expiry: '2030-12-30', type: 'put', bid: 9, ask: 10, lastPrice: 9.5, impliedVolatility: null, volume: null, openInterest: null },
+      ],
+    }), '');
+  };
+  if (equityWait) {
+    return new Promise((resolve) => { releaseEquity = () => { finish(); resolve(); }; });
+  }
+  finish();
 });
 
 async function makeApp() {
@@ -104,6 +118,10 @@ describe('canonical /api/v1 contracts', () => {
   let app;
 
   beforeEach(async () => {
+    equityDouble.mockClear();
+    equityShouldFail = false;
+    equityWait = false;
+    releaseEquity = null;
     clearCacheForTests();
     resetDeribitClientState();
     installDeribitBoundary();
@@ -111,6 +129,10 @@ describe('canonical /api/v1 contracts', () => {
   });
 
   afterEach(async () => {
+    equityShouldFail = false;
+    equityWait = false;
+    releaseEquity?.();
+    releaseEquity = null;
     global.fetch = REAL_FETCH;
     await app?.close();
   });
@@ -133,6 +155,43 @@ describe('canonical /api/v1 contracts', () => {
     expect(validateContract('optionsResponse', body)).toMatchObject({ valid: true });
     expect(body.freshness).toBe('delayed');
     expect(body.data.quotes[1]).toMatchObject({ markIv: null, volume: null, openInterest: null });
+  });
+
+  it('propagates option-chain stale metadata and fails closed after stale expiry', async () => {
+    vi.useFakeTimers();
+    try {
+      const fresh = await app.inject('/api/v1/market/options/SPY');
+      expect(fresh.statusCode).toBe(200);
+      expect(fresh.json().cache).toMatchObject({ state: 'miss', hit: false, stale: false, coalesced: false, providerError: null });
+
+      equityShouldFail = true;
+      vi.advanceTimersByTime(TTL.OPTIONS_MS + 1);
+      const stale = await app.inject('/api/v1/market/options/SPY');
+      expect(stale.statusCode).toBe(200);
+      expect(stale.json().cache).toMatchObject({ state: 'stale', hit: true, stale: true, providerError: 'rate_limited' });
+
+      vi.advanceTimersByTime(TTL.OPTIONS_MS * 10 + 1);
+      const expired = await app.inject('/api/v1/market/options/SPY');
+      expect(expired.statusCode).toBe(502);
+      expect(expired.json().error.code).toBe('PROVIDER_UNAVAILABLE');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('marks a concurrent canonical option-chain join as coalesced', async () => {
+    equityWait = true;
+    const first = app.inject('/api/v1/market/options/MSFT');
+    await Promise.resolve();
+    const second = app.inject('/api/v1/market/options/MSFT');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(equityDouble).toHaveBeenCalledTimes(1);
+    releaseEquity?.();
+    const [a, b] = await Promise.all([first, second]);
+    expect(a.statusCode).toBe(200);
+    expect(b.statusCode).toBe(200);
+    expect(a.json().cache).toMatchObject({ hit: false, coalesced: false });
+    expect(b.json().cache).toMatchObject({ hit: false, coalesced: true });
   });
 
   it('returns active Deribit instruments without coercing missing funding or OI to zero', async () => {

@@ -106,6 +106,7 @@ describe('restored routes (Phase 1 parity)', () => {
     expect(Array.isArray(body.quotes)).toBe(true);
     expect(body.quotes.length).toBeGreaterThan(0);
     expect(body.spot).toBe(500.25);
+    expect(body._cache).toMatchObject({ hit: true, stale: false, coalesced: false, providerError: null });
   }, 30_000);
 
   it('option chain fails closed 502 when the provider errors (never fabricates)', async () => {

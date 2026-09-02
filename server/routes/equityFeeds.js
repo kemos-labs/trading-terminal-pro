@@ -42,7 +42,9 @@ function runOptionsFetcher(symbol, maxArg) {
       if (parsed && !parsed.__err) return resolve(parsed);
       if (err) {
         const detail = parsed?.__err || stderr || stdout?.slice(0, 500) || err.message;
-        return reject(new Error(detail));
+        const failure = new Error(detail);
+        if (err.code) failure.code = err.code;
+        return reject(failure);
       }
       if (parsed?.__err) return reject(new Error(parsed.__err));
       reject(new Error('Invalid response from data fetcher'));
@@ -81,11 +83,25 @@ export async function getOptionChainSnapshot(symbol, { probe = false, max = null
   const stale = peek(cacheKey);
   if (stale && Date.now() - stale.timestamp < TTL.OPTIONS_MS) {
     const contracts = Array.isArray(stale.data?.quotes) ? stale.data.quotes.length : 0;
-    if (probe) return { available: contracts >= 10, contracts, fromCache: true };
-    return { ...stale.data, _cache: { hit: true, ageMs: Date.now() - stale.timestamp } };
+    const cache = {
+      hit: true,
+      ageMs: Math.max(0, Date.now() - stale.timestamp),
+      stale: false,
+      coalesced: false,
+      providerError: null,
+    };
+    if (probe) return { available: contracts >= 10, contracts, fromCache: true, _cache: cache };
+    return { ...stale.data, _cache: cache };
   }
 
-  const { data: result, fromCache, ageMs } = await getOrFetch(
+  const {
+    data: result,
+    fromCache,
+    ageMs,
+    stale: wasStale,
+    coalesced,
+    providerError,
+  } = await getOrFetch(
     cacheKey,
     probe ? TTL.OPTIONS_PROBE_MS : TTL.OPTIONS_MS,
     () => runOptionsFetcher(symbol, maxArg),
@@ -97,8 +113,15 @@ export async function getOptionChainSnapshot(symbol, { probe = false, max = null
     error.code = 'insufficient_coverage';
     throw error;
   }
-  if (probe) return { available: contracts >= 10, contracts, fromCache };
-  return { ...result, _cache: { hit: fromCache, ageMs } };
+  const cache = {
+    hit: Boolean(fromCache),
+    ageMs: Number.isFinite(ageMs) ? Math.max(0, ageMs) : null,
+    stale: Boolean(wasStale),
+    coalesced: Boolean(coalesced),
+    providerError: providerError ?? null,
+  };
+  if (probe) return { available: contracts >= 10, contracts, fromCache, _cache: cache };
+  return { ...result, _cache: cache };
 }
 
 export function registerEquityFeedsRoutes(fastify) {

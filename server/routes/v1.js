@@ -289,6 +289,15 @@ export function registerV1Routes(fastify) {
     const fetchedAt = legacy.body.timestamp ?? now;
     const missing = [];
     if (quotes.length < legacy.body.quotes.length) missing.push('invalid-or-expired-contracts');
+    const legacyCache = legacy.body._cache ?? {};
+    const optionCache = {
+      state: legacyCache.stale ? 'stale' : legacyCache.hit === true ? 'fresh' : 'miss',
+      hit: legacyCache.hit === true,
+      ageMs: Number.isFinite(legacyCache.ageMs) ? Math.max(0, legacyCache.ageMs) : null,
+      stale: legacyCache.stale === true,
+      coalesced: legacyCache.coalesced === true,
+      providerError: sanitizeProviderErrorCode(legacyCache.providerError),
+    };
     const envelope = baseEnvelope(request, {
       asOf: fetchedAt,
       fetchedAt,
@@ -308,6 +317,7 @@ export function registerV1Routes(fastify) {
       },
       assumptions: ['Equity option data may be delayed; it is not executable OPRA data.'],
       warnings: crossedMarkets > 0 ? [`${crossedMarkets} crossed quote(s) preserved and flagged.`] : [],
+      cache: optionCache,
       data: {
         symbol,
         spot: positiveOrNull(legacy.body.spot),

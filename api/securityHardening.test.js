@@ -52,6 +52,74 @@ describe('FMP endpoint allowlist (api/_shared.js)', () => {
     expect(isFmpEndpointAllowed('insider-trading')).toBe(false);
     expect(isFmpEndpointAllowed('bulk-screen')).toBe(false);
   });
+
+  it('canonicalizes query order and bounds query cardinality', async () => {
+    const { canonicalizeFmpEndpoint, proxyFmp } = await import('./_shared.js');
+    expect(canonicalizeFmpEndpoint('quote?b=2&a=1')).toBe('quote?a=1&b=2');
+    expect(canonicalizeFmpEndpoint('quote?a=1&a=2')).toBe('quote?a=1&a=2');
+    expect(canonicalizeFmpEndpoint('quote?bad%2')).toBeNull();
+    expect(canonicalizeFmpEndpoint('quote?a=1?b=2')).toBeNull();
+    expect(canonicalizeFmpEndpoint(`quote?${Array.from({ length: 17 }, (_, i) => `p${i}=x`).join('&')}`)).toBeNull();
+    expect(canonicalizeFmpEndpoint(`quote?symbol=${'x'.repeat(257)}`)).toBeNull();
+    const realFetch = global.fetch;
+    global.fetch = vi.fn(async () => new Response(JSON.stringify([{ symbol: 'SPY' }]), { status: 200, headers: { 'content-type': 'application/json' } }));
+    try {
+      const first = await proxyFmp('quote?b=2&a=1', 'test-key', 'https://fmp.test');
+      const second = await proxyFmp('quote?a=1&b=2', 'test-key', 'https://fmp.test');
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(first).toMatchObject({ upstreamFill: true, fromCache: false });
+      expect(second).toMatchObject({ upstreamFill: false, fromCache: true });
+    } finally {
+      global.fetch = realFetch;
+    }
+  });
+
+  it('coalesces concurrent canonical FMP fills and charges quota once', async () => {
+    const { proxyFmp } = await import('./_shared.js');
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const realFetch = global.fetch;
+    global.fetch = vi.fn(async () => {
+      await gate;
+      return new Response(JSON.stringify([{ symbol: 'COALESCE' }]), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    try {
+      const first = proxyFmp('quote?symbol=COALESCE&b=2&a=1', 'test-key', 'https://fmp.test');
+      const second = proxyFmp('quote?a=1&symbol=COALESCE&b=2', 'test-key', 'https://fmp.test');
+      await Promise.resolve();
+      release();
+      const [a, b] = await Promise.all([first, second]);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(a).toMatchObject({ upstreamFill: true });
+      expect(b).toMatchObject({ upstreamFill: true, coalesced: true });
+    } finally {
+      global.fetch = realFetch;
+    }
+  });
+
+  it('fails closed on the 501st distinct in-flight key while existing keys still join', async () => {
+    const { __testHooks, proxyFmp } = await import('./_shared.js');
+    const { getBudgetUsed } = await import('./upstreamCache.js');
+    const inflight = __testHooks.fmpInflight;
+    const held = new Promise(() => {});
+    const existingKey = 'quote?symbol=HELD0';
+    for (let i = 0; i < 499; i += 1) inflight.set(`held-${i}`, held);
+    inflight.set(existingKey, held);
+    const beforeBudget = getBudgetUsed('fmp');
+    const realFetch = global.fetch;
+    global.fetch = vi.fn();
+    try {
+      const overloaded = await proxyFmp(`quote?symbol=OVERLOAD${Date.now()}`, 'test-key', 'https://fmp.test');
+      expect(overloaded).toMatchObject({ status: 503, upstreamFill: false });
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(getBudgetUsed('fmp')).toBe(beforeBudget);
+      const joined = proxyFmp(existingKey, 'test-key', 'https://fmp.test');
+      expect(joined).toBeInstanceOf(Promise);
+    } finally {
+      global.fetch = realFetch;
+      inflight.clear();
+    }
+  });
 });
 
 describe('authStore sessions', () => {

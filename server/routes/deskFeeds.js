@@ -519,6 +519,10 @@ export function registerDeskFeedRoutes(fastify) {
 
   // Multi-venue options aggregation (public endpoints, no keys).
   fastify.get('/api/venues/options/:currency', async (request, reply) => {
+    if (String(request.raw?.url || request.url || '').includes('?')) {
+      reply.code(400);
+      return { error: 'UNSUPPORTED_QUERY', detail: 'options aggregation does not accept query parameters' };
+    }
     const currency = String(request.params.currency || '').trim();
     if (currency !== 'BTC' && currency !== 'ETH') {
       reply.code(400);

@@ -278,7 +278,13 @@ describe('restored routes (Phase 1 parity)', () => {
       if (url.includes('bybit.com')) return new Response(JSON.stringify({ retCode: 0, result: { list: [{ volume24h: '4', openInterest: '5' }] } }), { status: 200, headers: { 'content-type': 'application/json' } });
       return new Response(JSON.stringify({ jsonrpc: '2.0', result: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
     });
-    const responses = await Promise.all(Array.from({ length: 5 }, () => app.inject('/api/venues/options/BTC')));
+    const responses = await Promise.all([
+      app.inject('/api/venues/options/BTC'),
+      app.inject('/api/venues/options/%20BTC%20'),
+      app.inject('/api/venues/options/BTC'),
+      app.inject('/api/venues/options/%20BTC%20'),
+      app.inject('/api/venues/options/BTC'),
+    ]);
     expect(responses.every((res) => res.statusCode === 200)).toBe(true);
     expect(global.fetch.mock.calls.filter(([input]) => String(input).includes('okx.com/api/v5/market/tickers'))).toHaveLength(1);
     expect(global.fetch.mock.calls.filter(([input]) => String(input).includes('okx.com/api/v5/public/open-interest'))).toHaveLength(1);
@@ -293,6 +299,8 @@ describe('restored routes (Phase 1 parity)', () => {
     expect(responses[0].json().cache).toMatchObject({ hit: false, stale: false, coalesced: false, providerError: null });
     expect(responses[1].json().cache).toMatchObject({ hit: false, stale: false, coalesced: true });
     expect(responses[1].json().venues[0].cache).toHaveProperty('providerError');
+    const uncontrolled = await app.inject('/api/venues/options/BTC?limit=999999');
+    expect(uncontrolled.statusCode).toBe(400);
   });
 
   it('venues/options keeps a valid peer and fails 502 when every venue is unavailable', async () => {
@@ -310,6 +318,13 @@ describe('restored routes (Phase 1 parity)', () => {
     const failed = await app.inject('/api/venues/options/BTC');
     expect(failed.statusCode).toBe(502);
     expect(failed.json()).toMatchObject({ error: 'OPTIONS_VENUES_UNAVAILABLE', detail: expect.any(String) });
+  });
+
+  it('rejects uncontrolled FlashAlpha dimensions before any provider/cache work', async () => {
+    const badType = await app.inject('/api/flashalpha/exposure/arbitrary/AAPL');
+    expect(badType.statusCode).toBe(400);
+    const badSymbol = await app.inject('/api/flashalpha/exposure/gex/AAPL%2F..%2Fsecret');
+    expect(badSymbol.statusCode).toBe(400);
   });
 
   it('desk pack returns the shared-pack contract even when optional feeds fail', async () => {

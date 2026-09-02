@@ -70,6 +70,26 @@ describe('fetchFmpQuoteShared', () => {
     expect(getBudgetUsed('fmp') - before).toBe(1); // one cold fill = one call
   });
 
+  it('charges one quota unit for each failed upstream attempt, then none for mirror hits', async () => {
+    const before = getBudgetUsed('fmp');
+    const bad = `FAIL${Date.now()}`;
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 503, json: () => Promise.resolve({}) });
+    await fetchFmpQuoteShared(bad, KEY);
+    expect(getBudgetUsed('fmp') - before).toBe(1);
+
+    const network = `NET${Date.now()}`;
+    mockFetch.mockRejectedValueOnce(new Error('network down'));
+    await fetchFmpQuoteShared(network, KEY);
+    expect(getBudgetUsed('fmp') - before).toBe(2);
+
+    const good = `MIRROR${Date.now()}`;
+    mockFetch.mockResolvedValueOnce(fmpRes([{ symbol: good, price: 104 }]));
+    await fetchFmpQuoteShared(good, KEY);
+    await fetchFmpQuoteShared(good, KEY);
+    expect(getBudgetUsed('fmp') - before).toBe(3);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
   it('when the daily budget is exhausted, serves stale data — zero upstream calls', async () => {
     vi.useFakeTimers();
     const start = Date.now();

@@ -5103,7 +5103,7 @@
             }
           },
           "400": {
-            "description": "Unsupported currency",
+            "description": "Invalid currency or unsupported query parameters",
             "content": {
               "application/json": {
                 "schema": {
@@ -5115,7 +5115,10 @@
                   "properties": {
                     "error": {
                       "type": "string",
-                      "const": "UNSUPPORTED_CURRENCY"
+                      "enum": [
+                        "UNSUPPORTED_CURRENCY",
+                        "UNSUPPORTED_QUERY"
+                      ]
                     },
                     "detail": {
                       "type": "string"

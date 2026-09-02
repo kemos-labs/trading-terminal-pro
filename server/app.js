@@ -30,7 +30,7 @@ import {
   getOrFetch, peek, cacheStats, TTL, budgetAllows, recordBudget,
   getBudgetUsed, FMP_FREE_DAILY, FLASHALPHA_FREE_DAILY,
 } from '../api/upstreamCache.js';
-import { FMP_BASE, isFmpEndpointAllowed, proxyFmp } from '../api/_shared.js';
+import { FMP_BASE, canonicalizeFmpEndpoint, isFmpEndpointAllowed, proxyFmp } from '../api/_shared.js';
 import { createErrorEnvelope } from '../packages/contracts/src/runtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -90,7 +90,9 @@ function registerFmpRoutes(fastify) {
     const url = request.url.replace('/api/fmp/stable/', '');
     const endpoint = url.split(/[?#]/)[0];
     if (!isFmpEndpointAllowed(endpoint)) { reply.code(403); return { error: 'Endpoint not allowed' }; }
-    const fmpKey = `fmp:${url}`;
+    const canonicalUrl = canonicalizeFmpEndpoint(url);
+    if (!canonicalUrl) { reply.code(400); return { error: 'Invalid FMP endpoint or query' }; }
+    const fmpKey = `fmp:${canonicalUrl}`;
     const isQuote = endpoint.startsWith('quote');
     const ttl = isQuote ? TTL.FMP_QUOTE_MS : TTL.FMP_HEAVY_MS;
     try {
@@ -100,8 +102,7 @@ function registerFmpRoutes(fastify) {
       if (!FMP_API_KEY) { reply.code(503); return { error: 'FMP_API_KEY not configured' }; }
       if (!budgetAllows('fmp', FMP_FREE_DAILY)) { reply.code(429); return { error: 'FMP daily budget exhausted', used: getBudgetUsed('fmp'), cap: FMP_FREE_DAILY }; }
       const { data, fromCache } = await getOrFetch(fmpKey, ttl, async () => {
-        recordBudget('fmp', 1);
-        const { status, body } = await proxyFmp(url, FMP_API_KEY, FMP_BASE);
+        const { status, body } = await proxyFmp(canonicalUrl, FMP_API_KEY, FMP_BASE);
         if (status >= 400) { const err = new Error(body?.error || `FMP ${status}`); err.status = status; err.body = body; throw err; }
         return body;
       }, { allowStaleOnError: true });
@@ -119,7 +120,10 @@ function registerFlashalphaRoutes(fastify) {
   const FA_CACHE_TTL = 6 * 60 * 60_000;
   fastify.get('/api/flashalpha/exposure/:type/:symbol', async (request, reply) => {
     const { type, symbol: sym } = request.params;
-    const symbol = sym.toUpperCase().replace(/[^A-Z0-9.-]/g, '') || 'AAPL';
+    if (!['levels', 'gex'].includes(type) || !/^[A-Za-z][A-Za-z0-9.-]{0,11}$/.test(String(sym || ''))) {
+      reply.code(400); return { error: 'Invalid FlashAlpha exposure request' };
+    }
+    const symbol = String(sym).toUpperCase();
     const FA_KEY = process.env.FLASHALPHA_API_KEY || null;
     if (!FA_KEY) { reply.code(503); return { error: 'FLASHALPHA_API_KEY not configured' }; }
     if (!budgetAllows('flashalpha', FLASHALPHA_FREE_DAILY, 0.80)) {

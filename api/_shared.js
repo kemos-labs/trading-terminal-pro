@@ -12,6 +12,7 @@ import {
   budgetAllows,
   recordBudget,
   FMP_FREE_DAILY,
+  getBudgetUsed,
 } from './upstreamCache.js';
 
 export const FMP_BASE = 'https://financialmodelingprep.com/stable';
@@ -46,42 +47,74 @@ export function isFmpEndpointAllowed(endpoint) {
 // Server-side mirror cache for FMP responses. Protects the daily quota when
 // multiple browser tabs / clients hit the same endpoint within the window.
 const fmpCache = new Map();
+const fmpInflight = new Map();
+export const __testHooks = Object.freeze({ fmpInflight });
 const FMP_CACHE_TTL = 60_000; // 60s
+
+export function canonicalizeFmpEndpoint(endpoint) {
+  const raw = String(endpoint || '');
+  const [path, query = ''] = raw.split('?');
+  if (raw.indexOf('?') !== raw.lastIndexOf('?') || /%(?![0-9A-Fa-f]{2})/.test(query)) return null;
+  if (!isFmpEndpointAllowed(path)) return null;
+  const params = new URLSearchParams(query);
+  if ([...params].length > 16) return null;
+  for (const [key, value] of params) {
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,31}$/.test(key) || value.length > 256) return null;
+  }
+  params.sort();
+  const normalizedQuery = params.toString();
+  return normalizedQuery ? `${path}?${normalizedQuery}` : path;
+}
 
 /**
  * Forward an allowed FMP endpoint (path + query, without base) and return
  * { status, body }. Used by both the Fastify server and the Vercel function.
  */
 export async function proxyFmp(endpoint, apiKey, base = FMP_BASE) {
+  const canonicalEndpoint = canonicalizeFmpEndpoint(endpoint);
+  if (!canonicalEndpoint) return { status: 400, body: { error: 'Invalid FMP endpoint or query' } };
   if (!apiKey) {
     return { status: 503, body: { error: 'FMP API key not configured on server' } };
   }
-  const cached = fmpCache.get(endpoint);
+  const cached = fmpCache.get(canonicalEndpoint);
   if (cached && Date.now() - cached.t < FMP_CACHE_TTL) {
-    return { status: 200, body: cached.b };
+    fmpCache.delete(canonicalEndpoint);
+    fmpCache.set(canonicalEndpoint, cached);
+    return { status: 200, body: cached.b, fromCache: true, upstreamFill: false };
   }
-  const sep = endpoint.includes('?') ? '&' : '?';
-  const target = `${base}/${endpoint}${sep}apikey=${apiKey}`;
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
-    const res = await fetch(target, { signal: controller.signal });
-    clearTimeout(timer);
-    if (!res.ok) {
-      return { status: res.status, body: { error: 'FMP API error', status: res.status } };
-    }
-    const json = await res.json();
-    fmpCache.set(endpoint, { t: Date.now(), b: json });
-    // Bound memory: attacker-chosen query strings would otherwise grow this
-    // Map without limit (entries expire logically but were never deleted).
-    if (fmpCache.size > 500) {
-      const cutoff = Date.now() - FMP_CACHE_TTL;
-      for (const [k, v] of fmpCache) if (v.t < cutoff) fmpCache.delete(k);
-    }
-    return { status: 200, body: json };
-  } catch (err) {
-    return { status: 502, body: { error: 'FMP proxy error', detail: err.message } };
+  const pending = fmpInflight.get(canonicalEndpoint);
+  if (pending) return pending.then((result) => ({ ...result, coalesced: true }));
+  if (fmpInflight.size >= 500) {
+    return { status: 503, body: { error: 'FMP proxy overloaded' }, fromCache: false, upstreamFill: false };
   }
+  if (!budgetAllows('fmp', FMP_FREE_DAILY)) {
+    return { status: 429, body: { error: 'FMP daily budget exhausted', cap: FMP_FREE_DAILY, used: getBudgetUsed('fmp') }, fromCache: false, upstreamFill: false };
+  }
+  const load = (async () => {
+    const sep = canonicalEndpoint.includes('?') ? '&' : '?';
+    const target = `${base}/${canonicalEndpoint}${sep}apikey=${apiKey}`;
+    // Quota is charged at the actual upstream attempt boundary, including failures.
+    recordBudget('fmp', 1);
+    let timer;
+    try {
+      const controller = new AbortController();
+      timer = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch(target, { signal: controller.signal });
+      if (!res.ok) return { status: res.status, body: { error: 'FMP API error', status: res.status }, fromCache: false, upstreamFill: true };
+      const json = await res.json();
+      fmpCache.delete(canonicalEndpoint);
+      fmpCache.set(canonicalEndpoint, { t: Date.now(), b: json });
+      while (fmpCache.size > 500) fmpCache.delete(fmpCache.keys().next().value);
+      return { status: 200, body: json, fromCache: false, upstreamFill: true };
+    } catch (err) {
+      return { status: 502, body: { error: 'FMP proxy error', detail: err.message }, fromCache: false, upstreamFill: true };
+    } finally {
+      clearTimeout(timer);
+      fmpInflight.delete(canonicalEndpoint);
+    }
+  })();
+  fmpInflight.set(canonicalEndpoint, load);
+  return load;
 }
 
 /**
@@ -117,7 +150,6 @@ export async function fetchFmpQuoteShared(symbol, apiKey, base = FMP_BASE) {
         if (status !== 200 || !Array.isArray(body) || !body[0]) {
           throw new Error(body?.error || `FMP ${status}`);
         }
-        recordBudget('fmp', 1);
         return body[0];
       },
       { allowStaleOnError: true },

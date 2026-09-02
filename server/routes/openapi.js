@@ -410,7 +410,7 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
                 } },
               },
             }, 'venues'),
-            400: typedErrorResponse('UNSUPPORTED_CURRENCY', 'Unsupported currency'),
+            400: jsonOk({ type: 'object', additionalProperties: false, required: ['error'], properties: { error: { type: 'string', enum: ['UNSUPPORTED_CURRENCY', 'UNSUPPORTED_QUERY'] }, detail: { type: 'string' } } }, 'Invalid currency or unsupported query parameters'),
             502: typedErrorResponse('OPTIONS_VENUES_UNAVAILABLE', 'Options venues unavailable'),
           },
         },

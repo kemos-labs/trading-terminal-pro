@@ -381,6 +381,20 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
           responses: { 200: jsonOk({ type: 'object' }, 'briefing') },
         },
       },
+      '/api/macrovol/{wildcard}': {
+        get: {
+          operationId: 'getLegacyMacrovolProxy', tags: ['legacy'], deprecated: true, 'x-legacy-adapter': true,
+          summary: 'Deprecated rates-worker compatibility proxy',
+          description: 'Allowlisted GET-only forwarding to the private loopback rates worker (formerly MacroVol; a route prefix, not a vendor). Cached light and greeks/surface paths carry a `cache` envelope; canonical consumers migrate to /api/v1 domain services. POST/OPTIONS are not supported.',
+          parameters: [{ name: 'wildcard', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: {
+            200: jsonOk({ type: 'object', additionalProperties: true, properties: { cache: { ...finnhubCacheSchema, description: 'Present on cached light and greeks/surface paths only.' } } }, 'Worker payload; shape is path specific'),
+            400: typedErrorResponse('BAD_QUERY', 'Malformed, duplicate, unknown, or out-of-bounds query'),
+            404: { description: 'Path is not on the allowlist', content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['error'], properties: { error: { type: 'string', const: 'ENDPOINT_NOT_ALLOWED' }, hint: { type: 'string' } } } } } },
+            502: typedErrorResponse('UPSTREAM_ERROR', 'Rates worker unavailable or response failed validation (timeout, non-JSON, oversized, malformed) — fail closed'),
+          },
+        },
+      },
       '/api/boot/briefing': {
         get: {
           operationId: 'getLegacyBootBriefing', tags: ['legacy'], deprecated: true, 'x-legacy-adapter': true,

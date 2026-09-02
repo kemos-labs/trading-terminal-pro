@@ -111,7 +111,7 @@ describe('MacroVol proxy: cache metadata, stale bounds, and fail-closed behavior
     }));
     const expired = await app.inject('/api/macrovol/rates/summary');
     expect(expired.statusCode).toBe(503);
-    expect(expired.json()).toEqual({ error: 'Rates worker request failed', detail: 'http-503' });
+    expect(expired.json()).toEqual({ error: 'UPSTREAM_ERROR', detail: 'http-503' });
     expect(expired.body).not.toContain('WORKER-DIAGNOSTIC-TOKEN');
   });
 
@@ -177,7 +177,7 @@ describe('MacroVol proxy: cache metadata, stale bounds, and fail-closed behavior
     global.fetch = vi.fn(async () => { throw timeoutError; });
     const res = await app.inject('/api/macrovol/rates/summary');
     expect(res.statusCode).toBe(502);
-    expect(res.json()).toEqual({ error: 'Rates worker request failed', detail: 'timeout' });
+    expect(res.json()).toEqual({ error: 'UPSTREAM_ERROR', detail: 'timeout' });
   });
 
   it('uncached routes forward worker status semantics with sanitized bodies', async () => {
@@ -186,7 +186,7 @@ describe('MacroVol proxy: cache metadata, stale bounds, and fail-closed behavior
     }));
     const res = await app.inject('/api/macrovol/macro/series/UNKNOWN?limit=10');
     expect(res.statusCode).toBe(404);
-    expect(res.json()).toEqual({ error: 'Rates worker request failed', detail: 'http-404' });
+    expect(res.json()).toEqual({ error: 'UPSTREAM_ERROR', detail: 'http-404' });
     expect(res.body).not.toContain('SECRET');
     expect(res.body).not.toContain('traceback');
   });

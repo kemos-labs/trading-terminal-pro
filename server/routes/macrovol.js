@@ -279,7 +279,10 @@ export function registerMacrovolRoutes(fastify) {
   const MACROVOL_API_URL = resolveMacrovolBase();
 
   fastify.route({
-    method: ['GET', 'POST', 'OPTIONS'],
+    // GET is the only method the allowlist can ever admit; POST/OPTIONS were
+    // dead registrations that incorrectly advertised POST in OpenAPI. Preflight
+    // is owned by @fastify/cors.
+    method: 'GET',
     url: '/api/macrovol/*',
     handler: async (request, reply) => {
       // Explicit deprecation marking at the HTTP layer; per-path migration
@@ -289,11 +292,11 @@ export function registerMacrovolRoutes(fastify) {
       const rawSuffix = raw.replace(/^\/api\/macrovol/, '') || '/';
       if (isMacroDebugPath(rawSuffix)) { reply.code(404); return { error: 'Not found' }; }
       const v = validateMacroQuery(rawSuffix);
-      if (v.error) { reply.code(400); return { error: 'Bad query', detail: v.error }; }
+      if (v.error) { reply.code(400); return { error: 'BAD_QUERY', detail: v.error }; }
       const suffix = v.normalized || rawSuffix;
       if (!isMacroAllowed(suffix, request.method)) {
         reply.code(404);
-        return { error: 'Endpoint not allowed', hint: 'Allowlisted /api/macrovol paths only' };
+        return { error: 'ENDPOINT_NOT_ALLOWED', hint: 'Allowlisted /api/macrovol paths only' };
       }
       const isHealth = (suffix.split('?')[0] || '').replace(/\/$/, '') === '/health';
       const target = isHealth
@@ -342,7 +345,7 @@ export function registerMacrovolRoutes(fastify) {
           : sanitizeProviderErrorCode(err?.code);
         const statusMatch = /^http-(\d{3})$/.exec(code || '');
         reply.code(statusMatch ? Number(statusMatch[1]) : 502);
-        return { error: 'Rates worker request failed', detail: code || 'upstream-error' };
+        return { error: 'UPSTREAM_ERROR', detail: code || 'upstream-error' };
       }
     },
   });

@@ -5852,6 +5852,155 @@
         "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
+    "/api/macrovol/{wildcard}": {
+      "get": {
+        "operationId": "getLegacyMacrovolProxy",
+        "tags": [
+          "legacy"
+        ],
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "summary": "Deprecated rates-worker compatibility proxy",
+        "description": "Allowlisted GET-only forwarding to the private loopback rates worker (formerly MacroVol; a route prefix, not a vendor). Cached light and greeks/surface paths carry a `cache` envelope; canonical consumers migrate to /api/v1 domain services. POST/OPTIONS are not supported.",
+        "parameters": [
+          {
+            "name": "wildcard",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Worker payload; shape is path specific",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "cache": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state",
+                        "hit",
+                        "ageMs",
+                        "stale",
+                        "coalesced",
+                        "providerError"
+                      ],
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "miss",
+                            "fresh",
+                            "stale",
+                            "unavailable"
+                          ]
+                        },
+                        "hit": {
+                          "type": "boolean"
+                        },
+                        "ageMs": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        },
+                        "coalesced": {
+                          "type": "boolean"
+                        },
+                        "providerError": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "description": "Present on cached light and greeks/surface paths only."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed, duplicate, unknown, or out-of-bounds query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "const": "BAD_QUERY"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Path is not on the allowlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "const": "ENDPOINT_NOT_ALLOWED"
+                    },
+                    "hint": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Rates worker unavailable or response failed validation (timeout, non-JSON, oversized, malformed) — fail closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "const": "UPSTREAM_ERROR"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/boot/briefing": {
       "get": {
         "operationId": "getLegacyBootBriefing",
@@ -7167,78 +7316,6 @@
         "parameters": [
           {
             "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Legacy adapter payload; shape is provider/route specific.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Legacy route error"
-          }
-        }
-      }
-    },
-    "/api/macrovol/{wildcard}": {
-      "get": {
-        "operationId": "legacy_get_api_macrovol",
-        "tags": [
-          "legacy"
-        ],
-        "summary": "Runtime-discovered legacy adapter: GET /api/macrovol/*",
-        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
-        "deprecated": true,
-        "x-legacy-adapter": true,
-        "parameters": [
-          {
-            "name": "wildcard",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Legacy adapter payload; shape is provider/route specific.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Legacy route error"
-          }
-        }
-      },
-      "post": {
-        "operationId": "legacy_post_api_macrovol",
-        "tags": [
-          "legacy"
-        ],
-        "summary": "Runtime-discovered legacy adapter: POST /api/macrovol/*",
-        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
-        "deprecated": true,
-        "x-legacy-adapter": true,
-        "parameters": [
-          {
-            "name": "wildcard",
             "in": "path",
             "required": true,
             "schema": {

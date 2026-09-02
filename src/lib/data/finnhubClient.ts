@@ -39,6 +39,11 @@ export interface FinnhubNewsData {
   source?: string;
   note?: string;
   error?: string | null;
+  fromCache?: boolean;
+  ageMs?: number;
+  cache?: FinnhubCacheMetadata;
+  warnings?: string[];
+  coverage?: { company: 'available' | 'unavailable'; general: 'available' | 'unavailable' };
 }
 
 export interface FinnhubEarningsRow {

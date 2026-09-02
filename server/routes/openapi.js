@@ -326,14 +326,14 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
         get: {
           operationId: 'getEquityQuote', tags: ['equities'], summary: 'Quote (Finnhub, shared budget)',
           parameters: [{ name: 'symbol', in: 'query', required: true, schema: { type: 'string' } }],
-          responses: { 200: jsonOk({ type: 'object' }, 'quote'), 502: errorResponse, 503: errorResponse },
+          responses: { 200: jsonOk({ type: 'object' }, 'quote'), 429: errorResponse, 502: errorResponse, 503: errorResponse },
         },
       },
       '/api/finnhub/news': {
         get: {
           operationId: 'getEquityNews', tags: ['equities'], summary: 'Company + general headlines (Finnhub)',
           parameters: [{ name: 'symbol', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 30 } }],
-          responses: { 200: jsonOk({ type: 'object' }, 'headlines'), 502: errorResponse, 503: errorResponse },
+          responses: { 200: jsonOk(finnhubLegacySchema({ symbol: { type: 'string' }, items: { type: 'array' }, count: { type: 'integer' }, as_of: { type: 'string' }, source: { type: 'string' }, note: { type: 'string' }, error: { type: ['string', 'null'] }, warnings: { type: 'array', items: { type: 'string' } }, coverage: { type: 'object', additionalProperties: false, required: ['company', 'general'], properties: { company: { type: 'string', enum: ['available', 'unavailable'] }, general: { type: 'string', enum: ['available', 'unavailable'] } } } }, ['symbol', 'items', 'count', 'cache']), 'headlines with cache metadata'), 429: errorResponse, 502: errorResponse, 503: errorResponse },
         },
       },
       '/api/finnhub/earnings': {
@@ -342,7 +342,7 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
           parameters: [{ name: 'symbol', in: 'query', schema: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' } }],
           responses: {
             200: jsonOk(finnhubLegacySchema({ symbol: { type: 'string' }, next: { type: ['object', 'null'] }, upcoming: { type: 'array' }, recent: { type: 'array' }, as_of: { type: 'string' }, source: { type: 'string' }, error: { type: ['string', 'null'] }, note: { type: 'string' } }, ['symbol', 'next', 'upcoming', 'recent', 'cache']), 'Earnings with cache metadata'),
-            502: errorResponse, 503: errorResponse,
+            429: errorResponse, 502: errorResponse, 503: errorResponse,
           },
         },
       },
@@ -357,14 +357,14 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
         get: {
           operationId: 'getFinnhubRecommendation', tags: ['equities'], summary: 'Analyst recommendation (Finnhub, shared cache)',
           parameters: [{ name: 'symbol', in: 'query', schema: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' } }],
-          responses: { 200: jsonOk(finnhubLegacySchema({ symbol: { type: 'string' }, latest: { type: ['object', 'null'] }, history_count: { type: 'integer' }, as_of: { type: 'string' }, source: { type: 'string' }, error: { type: ['string', 'null'] } }, ['symbol', 'latest', 'cache']), 'Recommendation with cache metadata'), 502: errorResponse, 503: errorResponse },
+          responses: { 200: jsonOk(finnhubLegacySchema({ symbol: { type: 'string' }, latest: { type: ['object', 'null'] }, history_count: { type: 'integer' }, as_of: { type: 'string' }, source: { type: 'string' }, error: { type: ['string', 'null'] } }, ['symbol', 'latest', 'cache']), 'Recommendation with cache metadata'), 429: errorResponse, 502: errorResponse, 503: errorResponse },
         },
       },
       '/api/finnhub/peers': {
         get: {
           operationId: 'getFinnhubPeers', tags: ['equities'], summary: 'Peer symbols (Finnhub, shared cache)',
           parameters: [{ name: 'symbol', in: 'query', schema: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' } }],
-          responses: { 200: jsonOk(finnhubLegacySchema({ symbol: { type: 'string' }, peers: { type: 'array', items: { type: 'string' } }, count: { type: 'integer' }, as_of: { type: 'string' }, source: { type: 'string' }, error: { type: ['string', 'null'] } }, ['symbol', 'peers', 'cache']), 'Peers with cache metadata'), 502: errorResponse, 503: errorResponse },
+          responses: { 200: jsonOk(finnhubLegacySchema({ symbol: { type: 'string' }, peers: { type: 'array', items: { type: 'string' } }, count: { type: 'integer' }, as_of: { type: 'string' }, source: { type: 'string' }, error: { type: ['string', 'null'] } }, ['symbol', 'peers', 'cache']), 'Peers with cache metadata'), 429: errorResponse, 502: errorResponse, 503: errorResponse },
         },
       },
       '/api/desk/pack': {

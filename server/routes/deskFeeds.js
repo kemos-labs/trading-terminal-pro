@@ -40,6 +40,11 @@ async function finnhubGet(path, params = {}) {
     err.code = 'no_api_key';
     throw err;
   }
+  if (!budgetAllows('finnhub', FINNHUB_SOFT_DAILY, 0.9)) {
+    const err = new Error('Finnhub budget exhausted');
+    err.code = 'budget_exhausted';
+    throw err;
+  }
   const u = new URL(`${FINNHUB_BASE}${path}`);
   for (const [k, v] of Object.entries(params)) {
     if (v != null && v !== '') u.searchParams.set(k, String(v));
@@ -48,8 +53,10 @@ async function finnhubGet(path, params = {}) {
   recordBudget('finnhub', 1);
   const res = await fetch(u.toString(), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Finnhub HTTP ${res.status}: ${body.slice(0, 200)}`);
+    const error = new Error(`Finnhub HTTP ${res.status}`);
+    error.code = `http-${res.status}`;
+    error.status = res.status;
+    throw error;
   }
   return res.json();
 }
@@ -76,6 +83,12 @@ function invalidProviderPayload(message) {
   const error = new Error(message);
   error.code = 'invalid_payload';
   return error;
+}
+
+function finnhubErrorCode(error, fallback = 'unavailable') {
+  if (error?.code === 'budget_exhausted') return 'budget_exhausted';
+  if (error?.code === 'invalid_payload') return 'invalid_payload';
+  return fallback;
 }
 
 /** Deribit totals from the canonical cached market snapshot (public, keyless). */
@@ -129,8 +142,8 @@ export function registerDeskFeedRoutes(fastify) {
         reply.code(503);
         return { symbol, price: null, error: 'no_api_key', source: 'Finnhub', note: 'Set FINNHUB_API_KEY. Fail-closed.' };
       }
-      reply.code(502);
-      return { symbol, price: null, error: err.message, source: 'Finnhub', note: 'Finnhub quote failed. No synthetic price.' };
+      reply.code(err?.code === 'budget_exhausted' ? 429 : 502);
+      return { symbol, price: null, error: finnhubErrorCode(err, 'Finnhub quote failed'), source: 'Finnhub', note: 'Finnhub quote failed. No synthetic price.' };
     }
   });
 
@@ -149,15 +162,26 @@ export function registerDeskFeedRoutes(fastify) {
         const to = new Date();
         const from = new Date(to.getTime() - 14 * 24 * 3600 * 1000);
         let company = [];
+        let general = [];
+        let companyOk = false;
+        let generalOk = false;
+        const failures = [];
         try {
           const rows = await finnhubGet('/company-news', { symbol, from: finnhubDate(from), to: finnhubDate(to) });
-          company = Array.isArray(rows) ? rows : [];
-        } catch { company = []; }
-        let general = [];
+          if (!Array.isArray(rows) || rows.some((row) => !row || typeof row !== 'object' || Array.isArray(row))) throw invalidProviderPayload('Finnhub company news payload invalid');
+          company = rows;
+          companyOk = true;
+        } catch (error) { failures.push(error); }
         try {
           const rows = await finnhubGet('/news', { category: 'general' });
-          general = Array.isArray(rows) ? rows : [];
-        } catch { general = []; }
+          if (!Array.isArray(rows) || rows.some((row) => !row || typeof row !== 'object' || Array.isArray(row))) throw invalidProviderPayload('Finnhub general news payload invalid');
+          general = rows;
+          generalOk = true;
+        } catch (error) { failures.push(error); }
+        if (!companyOk && !generalOk) {
+          const error = failures.find((candidate) => candidate?.code === 'budget_exhausted') || failures[0] || new Error('Finnhub news unavailable');
+          throw error;
+        }
         const mapItem = (n, related) => ({
           id: n.id ?? `${n.datetime}-${n.headline}`,
           datetime: n.datetime ?? null,
@@ -180,8 +204,10 @@ export function registerDeskFeedRoutes(fastify) {
           count: items.length,
           as_of: new Date().toISOString(),
           source: 'Finnhub',
-          note: items.length ? 'Company + general headlines. Not trade advice.' : 'No headlines returned (rate limit or empty).',
+          note: items.length ? 'Company + general headlines. Not trade advice.' : 'No headlines returned.',
           error: items.length ? null : 'empty',
+          warnings: failures.length ? ['partial-provider-failure'] : [],
+          coverage: { company: companyOk ? 'available' : 'unavailable', general: generalOk ? 'available' : 'unavailable' },
         };
       }, { allowStaleOnError: true });
       return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
@@ -190,8 +216,8 @@ export function registerDeskFeedRoutes(fastify) {
         reply.code(503);
         return { symbol, items: [], count: 0, error: 'no_api_key', source: 'Finnhub', note: 'Headlines unavailable without FINNHUB_API_KEY. Fail-closed.' };
       }
-      reply.code(502);
-      return { symbol, items: [], count: 0, error: 'Finnhub news failed', detail: err.message, source: 'Finnhub' };
+      reply.code(err?.code === 'budget_exhausted' ? 429 : 502);
+      return { symbol, items: [], count: 0, error: err?.code === 'budget_exhausted' ? 'budget_exhausted' : 'Finnhub news failed', source: 'Finnhub' };
     }
   });
 
@@ -259,14 +285,14 @@ export function registerDeskFeedRoutes(fastify) {
       return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
     } catch (err) {
       const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
-      reply.code(noKey ? 503 : 502);
+      reply.code(noKey ? 503 : err?.code === 'budget_exhausted' ? 429 : 502);
       return {
         symbol,
         next: null,
         upcoming: [],
         recent: [],
         error: noKey ? 'no_api_key' : 'Finnhub earnings failed',
-        detail: noKey ? undefined : err.message,
+        detail: noKey ? undefined : finnhubErrorCode(err),
         source: 'Finnhub',
         note: 'No synthetic earnings date.',
       };
@@ -290,11 +316,6 @@ export function registerDeskFeedRoutes(fastify) {
         `finnhub:eco:${from}:${to}`,
         TTL.FINNHUB_ECO_MS,
         async () => {
-          if (!budgetAllows('finnhub', FINNHUB_SOFT_DAILY, 0.9)) {
-            const error = new Error('Finnhub budget exhausted');
-            error.code = 'budget_exhausted';
-            throw error;
-          }
           const payload = await finnhubGet('/calendar/economic', { from, to });
           const rows = Array.isArray(payload?.economicCalendar)
             ? payload.economicCalendar
@@ -327,7 +348,7 @@ export function registerDeskFeedRoutes(fastify) {
     } catch (err) {
       const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
       reply.code(noKey ? 503 : err?.code === 'budget_exhausted' ? 429 : 502);
-      return { from, to, events: [], error: noKey ? 'no_api_key' : err?.code === 'budget_exhausted' ? 'budget_exhausted' : 'unavailable', detail: noKey ? undefined : err.message, source: 'Finnhub' };
+      return { from, to, events: [], error: noKey ? 'no_api_key' : err?.code === 'budget_exhausted' ? 'budget_exhausted' : 'unavailable', detail: noKey ? undefined : finnhubErrorCode(err), source: 'Finnhub' };
     }
   });
 
@@ -362,8 +383,8 @@ export function registerDeskFeedRoutes(fastify) {
       return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
     } catch (err) {
       const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
-      reply.code(noKey ? 503 : 502);
-      return { symbol, latest: null, error: noKey ? 'no_api_key' : 'unavailable', detail: noKey ? undefined : err.message, source: 'Finnhub' };
+      reply.code(noKey ? 503 : err?.code === 'budget_exhausted' ? 429 : 502);
+      return { symbol, latest: null, error: noKey ? 'no_api_key' : finnhubErrorCode(err), detail: noKey ? undefined : finnhubErrorCode(err), source: 'Finnhub' };
     }
   });
 
@@ -394,8 +415,8 @@ export function registerDeskFeedRoutes(fastify) {
       return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
     } catch (err) {
       const noKey = err?.code === 'no_api_key' || String(err?.message || '').includes('not configured');
-      reply.code(noKey ? 503 : 502);
-      return { symbol, peers: [], error: noKey ? 'no_api_key' : 'unavailable', detail: noKey ? undefined : err.message, source: 'Finnhub' };
+      reply.code(noKey ? 503 : err?.code === 'budget_exhausted' ? 429 : 502);
+      return { symbol, peers: [], error: noKey ? 'no_api_key' : finnhubErrorCode(err), detail: noKey ? undefined : finnhubErrorCode(err), source: 'Finnhub' };
     }
   });
 

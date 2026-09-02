@@ -205,6 +205,7 @@ describe('restored routes (Phase 1 parity)', () => {
     const economicCached = await app.inject('/api/finnhub/economic-calendar');
     expect(economicCached.statusCode).toBe(200);
     expect(economicCached.json().cache).toMatchObject({ state: 'fresh', hit: true, stale: false, providerError: null });
+    runtimeDesk.__testHooks.clearBudgetsForTests();
     const recommendation = await app.inject('/api/finnhub/recommendation?symbol=SPY');
     expect(recommendation.statusCode).toBe(200);
     expect(recommendation.json().latest.buy).toBe(10);
@@ -232,7 +233,7 @@ describe('restored routes (Phase 1 parity)', () => {
       const budgetBeforeFailure = runtimeDesk.__testHooks.getBudgetUsed('finnhub');
       const stale = await app.inject('/api/finnhub/recommendation?symbol=STALE');
       expect(stale.statusCode).toBe(200);
-      expect(stale.json().cache).toMatchObject({ state: 'stale', stale: true, providerError: 'upstream-error' });
+      expect(stale.json().cache).toMatchObject({ state: 'stale', stale: true, providerError: 'http-503' });
       expect(runtimeDesk.__testHooks.getBudgetUsed('finnhub') - budgetBeforeFailure).toBe(1);
       vi.advanceTimersByTime(TTL.FINNHUB_META_MS * 10);
       const expired = await app.inject('/api/finnhub/recommendation?symbol=STALE');
@@ -243,10 +244,65 @@ describe('restored routes (Phase 1 parity)', () => {
       global.fetch = vi.fn(async () => new Response('{}', { status: 200 }));
       const malformed = await app.inject('/api/finnhub/recommendation?symbol=MALFORMED');
       expect(malformed.statusCode).toBe(502);
-      expect(malformed.json().error).toBe('unavailable');
+      expect(malformed.json().error).toBe('invalid_payload');
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('Finnhub news preserves partial coverage and fails closed for exhausted or totally failed providers', async () => {
+    let mode = 'success';
+    let calls = 0;
+    global.fetch = vi.fn(async (input) => {
+      calls += 1;
+      const url = String(input);
+      if (mode === 'partial' && url.includes('/news?')) return new Response('{"error":"general down"}', { status: 503 });
+      if (mode === 'down') throw new Error('provider body must not leak');
+      if (url.includes('/company-news')) return new Response(JSON.stringify([{ id: 1, datetime: 1, headline: 'Company', source: 'S' }]), { status: 200 });
+      return new Response(JSON.stringify([{ id: 2, datetime: 2, headline: 'Market', source: 'S' }]), { status: 200 });
+    });
+    const warm = await app.inject('/api/finnhub/news?symbol=NEWSHOT&limit=2');
+    expect(warm.statusCode).toBe(200);
+    const callsAfterWarm = calls;
+    runtimeDesk.__testHooks.recordBudget('finnhub', 5_000);
+    const cached = await app.inject('/api/finnhub/news?symbol=NEWSHOT&limit=2');
+    expect(cached.statusCode).toBe(200);
+    expect(cached.json().cache).toMatchObject({ state: 'fresh', hit: true });
+    const exhausted = await app.inject('/api/finnhub/news?symbol=NEWSCOLD&limit=2');
+    expect(exhausted.statusCode).toBe(429);
+    expect(calls).toBe(callsAfterWarm);
+
+    clearCacheForTests();
+    runtimeDesk.__testHooks.clearBudgetsForTests();
+    mode = 'partial';
+    const partial = await app.inject('/api/finnhub/news?symbol=PARTIAL&limit=2');
+    expect(partial.statusCode).toBe(200);
+    expect(partial.json()).toMatchObject({ count: 1, warnings: ['partial-provider-failure'], coverage: { company: 'available', general: 'unavailable' } });
+
+    clearCacheForTests();
+    runtimeDesk.__testHooks.clearBudgetsForTests();
+    mode = 'down';
+    const failed = await app.inject('/api/finnhub/news?symbol=DOWN&limit=2');
+    expect(failed.statusCode).toBe(502);
+    expect(failed.json()).toMatchObject({ error: 'Finnhub news failed', count: 0 });
+    expect(failed.json().detail).toBeUndefined();
+  });
+
+  it('Finnhub exhaustion is typed, makes no call, and redacts HTTP bodies', async () => {
+    clearCacheForTests();
+    runtimeDesk.__testHooks.clearBudgetsForTests();
+    const fetchSpy = vi.fn(async () => new Response('{"secret":"provider payload"}', { status: 503 }));
+    global.fetch = fetchSpy;
+    runtimeDesk.__testHooks.recordBudget('finnhub', 5_000);
+    const exhausted = await app.inject('/api/finnhub/quote?symbol=EXHAUST');
+    expect(exhausted.statusCode).toBe(429);
+    expect(exhausted.json()).toMatchObject({ price: null, error: 'budget_exhausted' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    runtimeDesk.__testHooks.clearBudgetsForTests();
+    const failed = await app.inject('/api/finnhub/recommendation?symbol=HTTPFAIL');
+    expect(failed.statusCode).toBe(502);
+    expect(failed.json()).toMatchObject({ error: 'unavailable', detail: 'unavailable' });
+    expect(JSON.stringify(failed.json())).not.toContain('provider payload');
   });
 
   it('finnhub news fails closed 503 with typed error when key absent', async () => {
@@ -293,7 +349,7 @@ describe('restored routes (Phase 1 parity)', () => {
       vi.advanceTimersByTime(TTL.FINNHUB_QUOTE_MS * 10 + 1);
       const expired = await app.inject('/api/finnhub/quote?symbol=JOINQ');
       expect(expired.statusCode).toBe(502);
-      expect(expired.json().error).toBe('Finnhub network unavailable');
+      expect(expired.json().error).toBe('Finnhub quote failed');
     } finally {
       vi.useRealTimers();
     }

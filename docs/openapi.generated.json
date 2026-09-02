@@ -4166,6 +4166,43 @@
               }
             }
           },
+          "429": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "502": {
             "description": "Typed error envelope",
             "content": {
@@ -4273,11 +4310,161 @@
         ],
         "responses": {
           "200": {
-            "description": "headlines",
+            "description": "headlines with cache metadata",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "symbol",
+                    "items",
+                    "count",
+                    "cache",
+                    "cache"
+                  ],
+                  "properties": {
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "array"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "as_of": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "coverage": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "company",
+                        "general"
+                      ],
+                      "properties": {
+                        "company": {
+                          "type": "string",
+                          "enum": [
+                            "available",
+                            "unavailable"
+                          ]
+                        },
+                        "general": {
+                          "type": "string",
+                          "enum": [
+                            "available",
+                            "unavailable"
+                          ]
+                        }
+                      }
+                    },
+                    "fromCache": {
+                      "type": "boolean"
+                    },
+                    "ageMs": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "cache": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state",
+                        "hit",
+                        "ageMs",
+                        "stale",
+                        "coalesced",
+                        "providerError"
+                      ],
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "miss",
+                            "fresh",
+                            "stale",
+                            "unavailable"
+                          ]
+                        },
+                        "hit": {
+                          "type": "boolean"
+                        },
+                        "ageMs": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        },
+                        "coalesced": {
+                          "type": "boolean"
+                        },
+                        "providerError": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -4474,6 +4661,43 @@
                           ]
                         }
                       }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
                     }
                   }
                 }
@@ -4946,6 +5170,43 @@
               }
             }
           },
+          "429": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "502": {
             "description": "Typed error envelope",
             "content": {
@@ -5130,6 +5391,43 @@
                           ]
                         }
                       }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
                     }
                   }
                 }

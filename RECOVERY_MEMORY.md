@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-02T04:24:01Z
+Updated: 2026-09-02T09:45:55Z
 
 This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-rebuild`. It records execution state, not proof of completion. The master specification, audited recovery plan, and `AGENTS.md` remain authoritative when a statement conflicts.
 
@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `4b23d76` (`feat(providers): own multi-venue option summaries`).
+- Recovery HEAD: `fcf849b` (`fix(cache): bound provider key cardinality`).
 - Recovery worktree was clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -33,12 +33,13 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. The next bounded C3 concern is adversarial route/cache cardinality and canonicalization.
+No dirty implementation tranche exists at this checkpoint. The next bounded C3 concern is complete provider/cache metadata propagation.
 
-Exact next action: inventory every user-controlled dimension entering `getOrFetch` keys across runtime routes and provider adapters. Confirm strict route validation/canonicalization prevents case, whitespace, query-order, unbounded symbol, and range variants from multiplying keys; add route-level adversarial tests and close only bounded defects. Luna medium implements the bounded tranche; Sol reviews cache semantics, allowed cardinality, and evidence before commit.
+Exact next action: inventory every `getOrFetch` result crossing a REST, MCP, or internal service boundary and find callers that destructure away `stale`, `coalesced`, `providerError`, or precise age/hit state. Repair a bounded coherent slice using the shared cache envelope contract, including stale-expiry fail-closed and negative tests. Also audit the existing file-backed quota ledger's deployment assumptions and evidence before deciding whether further accounting work is required. Luna medium implements the bounded tranche; Sol reviews metadata truth, quota semantics, and evidence before commit.
 
 ## Recent verified commits
 
+- `fcf849b` — canonical FMP endpoints now collapse equivalent query order, bound query dimensions, use a hard 500-entry LRU and bounded same-key in-flight coalescing, and charge quota exactly once at the actual upstream-attempt boundary including failures; FlashAlpha dimensions and the options-venue query surface now reject uncontrolled variants before cache/provider work. Independent evidence: 34 focused tests across three files, OpenAPI 65 paths/66 operations, method-aware parity, type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.
 - `4b23d76` — provider-owned OKX and Bybit public option-summary adapters now use canonical BTC/ETH keys, separate bounded circuits, timeout/content-type/schema/stream-size guards, stale-aware shared cache metadata, and partial-failure isolation; the route reuses the canonical Deribit snapshot and exposes explicit nullable unit fields under a strict OpenAPI contract. Independent evidence: 61 focused tests across six files, OpenAPI 65 paths/66 operations, method-aware parity, type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.
 - `97376cc` — one production-used visibility-aware single-flight scheduler now owns terminal, Deribit futures/funding, dual crypto books, shared strip, and KSA polling; mounted fake-timer tests prove active cadence, hidden suppression, safe resume, no overlap, and cleanup. Independent evidence: 25 tests across seven files, type-check, lint, secret scan, and diff checks passed.
 - `35bea43` — fixed-ID closed/open/half-open circuits protect Deribit, Binance Futures, and Bybit Linear; one half-open probe is enforced, an older request cannot close a newer probe, free venues remain independent, and canonical provider status exposes a strict safe three-row projection. Independent evidence: 60 focused tests, OpenAPI 65 paths/66 operations, method-aware parity, type-check, lint, all secret-scan modes, and diff checks passed.
@@ -54,7 +55,7 @@ Exact next action: inventory every user-controlled dimension entering `getOrFetc
 
 ## Remaining major blockers after the current concern
 
-- C3: route-level adversarial cache cardinality remains, along with persistent/deployment-appropriate quota accounting and complete provider metadata propagation; circuit behavior, free-options provider ownership, and runtime hidden-tab cadence are implemented and tested for the current bounded owners.
+- C3: complete provider metadata propagation remains. A file-backed single-process quota ledger exists and has restart tests, but deployment assumptions and multi-process limitations still require an explicit audit before quota completion can be claimed. Circuit behavior, provider key cardinality, free-options ownership, and runtime hidden-tab cadence are implemented and tested for the current bounded owners.
 - C4: migrate Fastify/MCP incrementally to strict TypeScript and close remaining schema-authority/negative-test gaps.
 - C5: complete explicit-entry professional IV and Greeks 3D, geometry assertions, and remaining desktop/mobile dead-space defects.
 - C6: real-server loading, empty, stale, partial, malformed-provider, provider-down, and entitlement matrices; inspect their pixels.

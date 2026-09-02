@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `66853af` (`feat(vol): restore explicit-entry 3D Greeks surface`).
+- Recovery HEAD: `66ec44b` (`fix(a11y): make option grid scrollable region focusable`).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -38,7 +38,7 @@ briefing (`efd78b3`), MacroVol cache truth (`5f9a8d3`), MacroVol OpenAPI contrac
 (`2c1a087`), legacy Deribit cache truth (`b52b401`), fastify security patch +
 full-suite race fix (`534433a`), legacy deribit deprecation marking +
 real-server evidence (`29eb677`), and 3D Greeks restore + bundle analytical
-exception docs (`66853af`).
+exception docs (`66853af`), and StructureWorkflow a11y fix (`66ec44b`).
 
 3D Greeks restore (audit P0 '3D Greeks removed'): lazy explicit-entry module
 mirroring the accepted IvSurface3D pattern — observed nodes with true holes,
@@ -49,6 +49,15 @@ overlay + hover readout, gate-testable Open 3D entry. Pure geometry helper
 OrbitControls vendor chunk (230.4 kB gzip) documented under analytical
 exception (cap 300 kB), reachable only via explicit-entry dynamic imports.
 Full suite 156 files/864 tests pass twice; bundle gate PASS.
+
+C6 real-server Playwright regression: the StructureWorkflow option grid
+scrollable region failed axe 'scrollable-region-focusable' (WCAG 2.1.1);
+fixed with tabIndex=0 + aria-label (advances the suite past the violation;
+deterministic render test added). Remaining success-path gap: rates-mode-
+funding #sec-mm-strip not visible — the Playwright webServer does not start
+the rates worker, so worker-dependent rate panels don't render in that suite.
+The success-path suite needs the worker started (scripts/start-production.sh
+style) to exercise rates/STIR/SERFF workflows against the real server.
 
 Real-server evidence captured (docs/recovery-evidence/REAL_SERVER_2026-09-02.md):
 typed 502 fail-closed with the rates worker down, live Deribit 200 with a
@@ -70,6 +79,10 @@ geometry/overlap assertions for the restored 3D surfaces.
 
 ## Recent verified commits
 
+- `66ec44b` — StructureWorkflow option grid scrollable region made focusable
+  (tabIndex=0 + aria-label) fixing axe 'scrollable-region-focusable' WCAG 2.1.1
+  violation surfaced by the real-server C6 suite; deterministic render test
+  added. 15 workflow tests green.
 - `66853af` — 3D Greeks restored as lazy explicit-entry analytical module:
   observed nodes with true holes (null/NaN never rendered), ATM ridge, optional
   observed-cell wireframe (explicitly not a fitted model — no canonical model

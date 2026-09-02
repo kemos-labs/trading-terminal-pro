@@ -35,6 +35,7 @@ export interface NormalizedTicker {
   indexPrice: number | null;
   openInterest: number | null;
   volume: number | null;
+  volumeUsd: number | null;
   funding8h: number | null;
   timestamp: number;
   hasQuote: boolean;
@@ -73,6 +74,7 @@ interface V1Instrument {
   indexPrice: number | null;
   openInterest: number | null;
   volume: number | null;
+  volumeUsd: number | null;
   funding8h: number | null;
   timestamp: number | null;
   tradable: boolean;
@@ -130,6 +132,7 @@ export async function fetchDeribitMarket(currency: string): Promise<DeribitMarke
       indexPrice: row.indexPrice,
       openInterest: row.openInterest,
       volume: row.volume,
+      volumeUsd: row.volumeUsd,
       funding8h: row.funding8h,
       timestamp: row.timestamp ?? fetchedAt,
       hasQuote: row.tradable,

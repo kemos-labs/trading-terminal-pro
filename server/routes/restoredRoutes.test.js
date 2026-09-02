@@ -14,6 +14,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import http from 'node:http';
 import { clearCacheForTests } from '../../api/upstreamCache.js';
 import { resetDeribitClientState } from '../providers/deribit/client.js';
+import { resetProviderCircuitsForTests } from '../../api/providerCircuitBreaker.js';
 
 const REAL_FETCH = global.fetch;
 
@@ -80,11 +81,13 @@ describe('restored routes (Phase 1 parity)', () => {
   beforeEach(async () => {
     clearCacheForTests();
     resetDeribitClientState();
+    resetProviderCircuitsForTests();
     app = await makeApp();
   });
 
   afterEach(async () => {
     global.fetch = REAL_FETCH;
+    resetProviderCircuitsForTests();
     if (app) await app.close();
   });
 
@@ -106,9 +109,15 @@ describe('restored routes (Phase 1 parity)', () => {
   }, 30_000);
 
   it('option chain fails closed 502 when the provider errors (never fabricates)', async () => {
-    const res = await app.inject('/api/options/ZZZZZZ');
-    expect(res.statusCode).toBe(502);
-    expect(res.json().error).toBe('Failed to fetch data');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await app.inject('/api/options/ZZZZZZ');
+      expect(res.statusCode).toBe(502);
+      expect(res.json().error).toBe('Failed to fetch data');
+      expect(errorSpy).toHaveBeenCalledWith('API endpoint error:', expect.objectContaining({ message: 'err' }));
+    } finally {
+      errorSpy.mockRestore();
+    }
   }, 30_000);
 
   it('yf history serves real-shaped bars through the shared cache', async () => {
@@ -202,6 +211,10 @@ describe('restored routes (Phase 1 parity)', () => {
   it('venues/options validates currency; success shape is a typed bundle', async () => {
     const bad = await app.inject('/api/venues/options/DOGE');
     expect(bad.statusCode).toBe(400);
+    expect(bad.json()).toMatchObject({ error: 'UNSUPPORTED_CURRENCY', detail: expect.any(String) });
+    const lowercase = await app.inject('/api/venues/options/btc');
+    expect(lowercase.statusCode).toBe(400);
+    expect(lowercase.json()).toMatchObject({ error: 'UNSUPPORTED_CURRENCY', detail: expect.any(String) });
     const res = await app.inject('/api/venues/options/BTC');
     if (res.statusCode === 200) {
       const body = res.json();
@@ -213,6 +226,7 @@ describe('restored routes (Phase 1 parity)', () => {
       }
     } else {
       expect(res.statusCode).toBe(502);
+      expect(res.json()).toMatchObject({ error: 'OPTIONS_VENUES_UNAVAILABLE', detail: expect.any(String) });
     }
   });
 
@@ -220,16 +234,19 @@ describe('restored routes (Phase 1 parity)', () => {
     global.fetch = vi.fn(async (input) => {
       const url = String(input);
       if (url.includes('deribit')) {
-        return new Response(JSON.stringify({ jsonrpc: '2.0', result: [{ instrument_name: 'BTC-X', volume: null, volume_usd: '', open_interest: undefined }] }), { status: 200 });
+        if (url.includes('get_instruments')) return new Response(JSON.stringify({ jsonrpc: '2.0', result: [{ instrument_name: 'BTC-30DEC26-50000-C', kind: 'option', is_active: true, base_currency: 'BTC', strike: 50000, option_type: 'call', expiration_timestamp: 1798243200000, contract_size: 1 }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+        if (url.includes('get_book_summary_by_currency')) return new Response(JSON.stringify({ jsonrpc: '2.0', result: [{ instrument_name: 'BTC-30DEC26-50000-C', volume: null, volume_usd: '', open_interest: null }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+        if (url.includes('get_index_price')) return new Response(JSON.stringify({ jsonrpc: '2.0', result: { index_price: null } }), { status: 200, headers: { 'content-type': 'application/json' } });
+        return new Response(JSON.stringify({ jsonrpc: '2.0', result: {} }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
       if (url.includes('/api/v5/market/tickers')) {
-        return new Response(JSON.stringify({ data: [{ volCcy24h: null, volUsd24h: '', openInt: false }] }), { status: 200 });
+        return new Response(JSON.stringify({ code: '0', data: [{ volCcy24h: null, volUsd24h: '', openInt: false }] }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
       if (url.includes('/api/v5/public/open-interest')) {
-        return new Response(JSON.stringify({ data: [{ oiCcy: null }] }), { status: 200 });
+        return new Response(JSON.stringify({ code: '0', data: [{ oiCcy: null }] }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
       if (url.includes('bybit')) {
-        return new Response(JSON.stringify({ result: { list: [{ volume24h: '', openInterest: null }] } }), { status: 200 });
+        return new Response(JSON.stringify({ retCode: 0, result: { list: [{ volume24h: '', openInterest: null }] } }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
       return new Response('{}', { status: 404 });
     });
@@ -238,10 +255,61 @@ describe('restored routes (Phase 1 parity)', () => {
     const venues = response.json().venues;
     expect(venues.length).toBeGreaterThanOrEqual(2);
     for (const venue of venues) {
-      expect(venue.volCcy24h).toBeNull();
-      expect(venue.openIntContracts).toBeNull();
-      expect(venue).not.toHaveProperty('openIntCcy');
+      expect(venue.volume24hBaseCcy === undefined ? venue.volume24hNative : venue.volume24hBaseCcy).toBeNull();
+      expect(venue.openInterestBaseCcy).toBeNull();
+      expect(venue.openInterestNative).toBeNull();
+      expect(venue).not.toHaveProperty('openIntContracts');
     }
+  });
+
+  it('venues/options shares one cold fill per provider endpoint across concurrent route clients', async () => {
+    global.fetch = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes('deribit.com')) {
+        if (url.includes('get_instruments')) return new Response(JSON.stringify({ jsonrpc: '2.0', result: [{ instrument_name: 'BTC-30DEC26-50000-C', kind: 'option', is_active: true, base_currency: 'BTC', strike: 50000, option_type: 'call', expiration_timestamp: 1798243200000, contract_size: 1 }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+        if (url.includes('get_book_summary_by_currency')) return new Response(JSON.stringify({ jsonrpc: '2.0', result: [{ instrument_name: 'BTC-30DEC26-50000-C', volume: '2', volume_usd: '100000', open_interest: '3' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+        if (url.includes('get_index_price')) return new Response(JSON.stringify({ jsonrpc: '2.0', result: { index_price: 60000 } }), { status: 200, headers: { 'content-type': 'application/json' } });
+        return new Response(JSON.stringify({ jsonrpc: '2.0', result: {} }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      if (url.includes('okx.com')) {
+        if (url.includes('/public/open-interest')) return new Response(JSON.stringify({ code: '0', data: [{ oiCcy: '2' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+        return new Response(JSON.stringify({ code: '0', data: [{ volCcy24h: '1', volUsd24h: '2', openInt: '3' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      if (url.includes('bybit.com')) return new Response(JSON.stringify({ retCode: 0, result: { list: [{ volume24h: '4', openInterest: '5' }] } }), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify({ jsonrpc: '2.0', result: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    const responses = await Promise.all(Array.from({ length: 5 }, () => app.inject('/api/venues/options/BTC')));
+    expect(responses.every((res) => res.statusCode === 200)).toBe(true);
+    expect(global.fetch.mock.calls.filter(([input]) => String(input).includes('okx.com/api/v5/market/tickers'))).toHaveLength(1);
+    expect(global.fetch.mock.calls.filter(([input]) => String(input).includes('okx.com/api/v5/public/open-interest'))).toHaveLength(1);
+    expect(global.fetch.mock.calls.filter(([input]) => String(input).includes('bybit.com/v5/market/tickers'))).toHaveLength(1);
+    expect(global.fetch.mock.calls.filter(([input]) => String(input).includes('deribit.com/api/v2/public/get_instruments'))).toHaveLength(1);
+    expect(global.fetch.mock.calls.filter(([input]) => String(input).includes('get_book_summary_by_currency?currency=BTC&kind=option'))).toHaveLength(1);
+    expect(global.fetch.mock.calls.filter(([input]) => String(input).includes('get_book_summary_by_currency?currency=BTC&kind=future'))).toHaveLength(1);
+    expect(global.fetch.mock.calls.filter(([input]) => String(input).includes('ticker?instrument_name=BTC-PERPETUAL'))).toHaveLength(1);
+    expect(global.fetch.mock.calls.filter(([input]) => String(input).includes('get_index_price?index_name=btc_usd'))).toHaveLength(1);
+    expect(responses[0].json().venues.map((venue) => venue.venue)).toContain('Deribit');
+    expect(responses[0].json().venues.find((venue) => venue.venue === 'Deribit').volume24hUsd).toBe(100000);
+    expect(responses[0].json().cache).toMatchObject({ hit: false, stale: false, coalesced: false, providerError: null });
+    expect(responses[1].json().cache).toMatchObject({ hit: false, stale: false, coalesced: true });
+    expect(responses[1].json().venues[0].cache).toHaveProperty('providerError');
+  });
+
+  it('venues/options keeps a valid peer and fails 502 when every venue is unavailable', async () => {
+    global.fetch = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes('bybit.com')) return new Response(JSON.stringify({ retCode: 0, result: { list: [{ volume24h: '4', openInterest: '5' }] } }), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response('down', { status: 502, headers: { 'content-type': 'text/plain' } });
+    });
+    const partial = await app.inject('/api/venues/options/ETH');
+    expect(partial.statusCode).toBe(200);
+    expect(partial.json().venues.map((venue) => venue.venue)).toEqual(['Bybit']);
+
+    clearCacheForTests();
+    global.fetch = vi.fn(async () => new Response('down', { status: 502, headers: { 'content-type': 'text/plain' } }));
+    const failed = await app.inject('/api/venues/options/BTC');
+    expect(failed.statusCode).toBe(502);
+    expect(failed.json()).toMatchObject({ error: 'OPTIONS_VENUES_UNAVAILABLE', detail: expect.any(String) });
   });
 
   it('desk pack returns the shared-pack contract even when optional feeds fail', async () => {

@@ -402,6 +402,10 @@
           ],
           "minimum": 0
         },
+        "volumeUsd": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
         "openInterest": {
           "type": [
             "number",
@@ -478,6 +482,7 @@
         "indexPrice",
         "openInterest",
         "volume",
+        "volumeUsd",
         "funding8h",
         "timestamp",
         "tradable"
@@ -617,6 +622,13 @@
           "minimum": 0
         },
         "volume": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "volumeUsd": {
           "type": [
             "number",
             "null"
@@ -1245,8 +1257,8 @@
         },
         "circuits": {
           "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
+          "minItems": 5,
+          "maxItems": 5,
           "uniqueItems": true,
           "allOf": [
             {
@@ -1263,6 +1275,16 @@
               "contains": { "type": "object", "properties": { "provider": { "const": "bybit-linear" } } },
               "minContains": 1,
               "maxContains": 1
+            },
+            {
+              "contains": { "type": "object", "properties": { "provider": { "const": "bybit-options" } } },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": { "type": "object", "properties": { "provider": { "const": "okx-options" } } },
+              "minContains": 1,
+              "maxContains": 1
             }
           ],
           "items": {
@@ -1270,7 +1292,7 @@
             "additionalProperties": false,
             "required": ["provider", "status", "failures", "cooldownRemainingMs", "probeInFlight"],
             "properties": {
-              "provider": { "type": "string", "enum": ["deribit", "binance-futures", "bybit-linear"] },
+              "provider": { "type": "string", "enum": ["deribit", "binance-futures", "bybit-linear", "bybit-options", "okx-options"] },
               "status": { "type": "string", "enum": ["closed", "open", "half-open"] },
               "failures": { "type": "integer", "minimum": 0 },
               "cooldownRemainingMs": { "type": "integer", "minimum": 0 },

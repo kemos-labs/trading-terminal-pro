@@ -127,8 +127,8 @@ describe('canonical /api/v1 analytical operations (C2)', () => {
     expect(body.data.providerModes.crypto?.mode).toBeTruthy();
     expect(body.data.providerModes.crypto).not.toHaveProperty('veloCredentialPresent');
     expect(body.data.providerModes.crypto).not.toHaveProperty('veloConfigured');
-    expect(body.data.circuits).toHaveLength(3);
-    expect(body.data.circuits.map((row) => row.provider)).toEqual(['deribit', 'binance-futures', 'bybit-linear']);
+    expect(body.data.circuits).toHaveLength(5);
+    expect(body.data.circuits.map((row) => row.provider)).toEqual(['deribit', 'binance-futures', 'bybit-linear', 'bybit-options', 'okx-options']);
     for (const row of body.data.circuits) {
       expect(row).toEqual({
         provider: row.provider,

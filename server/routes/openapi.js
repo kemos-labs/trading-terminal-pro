@@ -115,7 +115,7 @@ function jsonOk(schema, description) {
 }
 
 function typedErrorResponse(code, description) {
-  return { description, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['error'], properties: { error: { type: 'string', const: code } } } } } };
+  return { description, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['error'], properties: { error: { type: 'string', const: code }, detail: { type: 'string' } } } } } };
 }
 
 const symbolParam = (summary = 'Observed equity chain (yfinance, delayed)') => ({
@@ -379,7 +379,40 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
         get: {
           operationId: 'getVenueOptions', tags: ['crypto'], summary: 'Multi-venue options volume/OI (Deribit+OKX+Bybit, public)',
           parameters: [currencyParam],
-          responses: { 200: jsonOk({ type: 'object' }, 'venues'), 400: errorResponse, 502: errorResponse },
+          responses: {
+            200: jsonOk({
+              type: 'object', additionalProperties: false,
+              required: ['currency', 'source', 'venues', 'fetchedAt', 'cache'],
+              properties: {
+                currency: { type: 'string', enum: ['BTC', 'ETH'] },
+                source: { type: 'string', const: 'public-options-aggregates' },
+                fetchedAt: { type: 'integer', minimum: 0 },
+                cache: { $ref: '#/components/schemas/V1Contracts/$defs/cacheState' },
+                venues: { type: 'array', minItems: 1, uniqueItems: true, items: {
+                  type: 'object', additionalProperties: false,
+                  required: ['venue', 'source', 'instruments', 'volume24hBaseCcy', 'volume24hNative', 'volume24hUsd', 'openInterestBaseCcy', 'openInterestNative', 'units', 'fetchedAt', 'cache'],
+                  properties: {
+                    venue: { type: 'string', enum: ['Deribit', 'OKX', 'Bybit'] },
+                    source: { type: 'string', enum: ['deribit-public', 'okx-public', 'bybit-public'] },
+                    instruments: { type: 'integer', minimum: 1 },
+                    volume24hBaseCcy: { type: ['number', 'null'], minimum: 0 },
+                    volume24hNative: { type: ['number', 'null'], minimum: 0 },
+                    volume24hUsd: { type: ['number', 'null'], minimum: 0 },
+                    openInterestBaseCcy: { type: ['number', 'null'], minimum: 0 },
+                    openInterestNative: { type: ['number', 'null'], minimum: 0 },
+                    units: { type: 'object', additionalProperties: false, required: ['volume24hBaseCcy', 'volume24hNative', 'volume24hUsd', 'openInterestBaseCcy', 'openInterestNative'], properties: {
+                      volume24hBaseCcy: { type: ['string', 'null'] }, volume24hNative: { type: ['string', 'null'] }, volume24hUsd: { type: ['string', 'null'] },
+                      openInterestBaseCcy: { type: ['string', 'null'] }, openInterestNative: { type: ['string', 'null'] },
+                    } },
+                    fetchedAt: { type: 'integer', minimum: 0 },
+                    cache: { $ref: '#/components/schemas/V1Contracts/$defs/cacheState' },
+                  },
+                } },
+              },
+            }, 'venues'),
+            400: typedErrorResponse('UNSUPPORTED_CURRENCY', 'Unsupported currency'),
+            502: typedErrorResponse('OPTIONS_VENUES_UNAVAILABLE', 'Options venues unavailable'),
+          },
         },
       },
       '/api/ksa/board': {

@@ -9,12 +9,21 @@ export const PROVIDER_CIRCUITS = Object.freeze({
   DERIBIT: 'deribit',
   BINANCE_FUTURES: 'binance-futures',
   BYBIT_LINEAR: 'bybit-linear',
+  BYBIT_OPTIONS: 'bybit-options',
+  OKX_OPTIONS: 'okx-options',
 });
 
 export const CIRCUIT_FAILURE_THRESHOLD = 3;
 export const CIRCUIT_COOLDOWN_MS = 30_000;
 
 const allowedProviders = new Set(Object.values(PROVIDER_CIRCUITS));
+const statusProviders = Object.freeze([
+  PROVIDER_CIRCUITS.DERIBIT,
+  PROVIDER_CIRCUITS.BINANCE_FUTURES,
+  PROVIDER_CIRCUITS.BYBIT_LINEAR,
+  PROVIDER_CIRCUITS.BYBIT_OPTIONS,
+  PROVIDER_CIRCUITS.OKX_OPTIONS,
+]);
 const circuits = new Map();
 
 function assertProvider(provider) {
@@ -101,7 +110,7 @@ export function providerCircuitState(provider) {
 /** Return the bounded public status projection for every supported provider. */
 export function providerCircuitStatuses() {
   const now = Date.now();
-  return [...allowedProviders].map((provider) => {
+  return statusProviders.map((provider) => {
     const state = stateFor(provider);
     const cooldownRemainingMs = state.status === 'open' && state.openedAt != null
       ? Math.max(0, CIRCUIT_COOLDOWN_MS - Math.max(0, now - state.openedAt))

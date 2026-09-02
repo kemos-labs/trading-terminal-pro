@@ -62,6 +62,11 @@ export function ivPctToDecimal(v) {
  * Prices/IV/OI stay null when the venue reports nothing.
  */
 export function normalizeQuote(raw, asOfMs = Date.now()) {
+  const nonNegative = (value) => {
+    if (value == null || value === '' || typeof value === 'boolean') return null;
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? number : null;
+  };
   return {
     bidPrice: raw.bid_price ?? raw.best_bid_price ?? null,
     askPrice: raw.ask_price ?? raw.best_ask_price ?? null,
@@ -78,8 +83,9 @@ export function normalizeQuote(raw, asOfMs = Date.now()) {
     askIvDerived: null,
     modelIv: null,
     indexPrice: raw.index_price ?? null,
-    openInterest: raw.open_interest ?? null,
-    volume: raw.volume ?? null,
+    openInterest: nonNegative(raw.open_interest),
+    volume: nonNegative(raw.volume),
+    volumeUsd: nonNegative(raw.volume_usd),
     funding8h: raw.funding_8h ?? null,
     timestamp: typeof raw.timestamp === 'number' ? raw.timestamp : asOfMs,
   };
@@ -129,6 +135,7 @@ export function joinCatalogueWithQuotes(catalogue, quotes, asOfMs = Date.now()) 
       indexPrice: quote?.indexPrice ?? null,
       openInterest: quote?.openInterest ?? null,
       volume: quote?.volume ?? null,
+      volumeUsd: quote?.volumeUsd ?? null,
       funding8h: quote?.funding8h ?? null,
       timestamp: quote?.timestamp ?? asOfMs,
       hasQuote: Boolean(q),

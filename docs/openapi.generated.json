@@ -865,6 +865,13 @@
                 ],
                 "minimum": 0
               },
+              "volumeUsd": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
               "openInterest": {
                 "type": [
                   "number",
@@ -941,6 +948,7 @@
               "indexPrice",
               "openInterest",
               "volume",
+              "volumeUsd",
               "funding8h",
               "timestamp",
               "tradable"
@@ -1080,6 +1088,13 @@
                 "minimum": 0
               },
               "volume": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "volumeUsd": {
                 "type": [
                   "number",
                   "null"
@@ -2068,8 +2083,8 @@
               },
               "circuits": {
                 "type": "array",
-                "minItems": 3,
-                "maxItems": 3,
+                "minItems": 5,
+                "maxItems": 5,
                 "uniqueItems": true,
                 "allOf": [
                   {
@@ -2107,6 +2122,30 @@
                     },
                     "minContains": 1,
                     "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "properties": {
+                        "provider": {
+                          "const": "bybit-options"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "properties": {
+                        "provider": {
+                          "const": "okx-options"
+                        }
+                      }
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
                   }
                 ],
                 "items": {
@@ -2125,7 +2164,9 @@
                       "enum": [
                         "deribit",
                         "binance-futures",
-                        "bybit-linear"
+                        "bybit-linear",
+                        "bybit-options",
+                        "okx-options"
                       ]
                     },
                     "status": {
@@ -4834,6 +4875,9 @@
                     "error": {
                       "type": "string",
                       "const": "UNSUPPORTED_CURRENCY"
+                    },
+                    "detail": {
+                      "type": "string"
                     }
                   }
                 }
@@ -4854,6 +4898,9 @@
                     "error": {
                       "type": "string",
                       "const": "FREE_CRYPTO_UNAVAILABLE"
+                    },
+                    "detail": {
+                      "type": "string"
                     }
                   }
                 }
@@ -4893,13 +4940,170 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "currency",
+                    "source",
+                    "venues",
+                    "fetchedAt",
+                    "cache"
+                  ],
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "BTC",
+                        "ETH"
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "const": "public-options-aggregates"
+                    },
+                    "fetchedAt": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cache": {
+                      "$ref": "#/components/schemas/V1Contracts/$defs/cacheState"
+                    },
+                    "venues": {
+                      "type": "array",
+                      "minItems": 1,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "venue",
+                          "source",
+                          "instruments",
+                          "volume24hBaseCcy",
+                          "volume24hNative",
+                          "volume24hUsd",
+                          "openInterestBaseCcy",
+                          "openInterestNative",
+                          "units",
+                          "fetchedAt",
+                          "cache"
+                        ],
+                        "properties": {
+                          "venue": {
+                            "type": "string",
+                            "enum": [
+                              "Deribit",
+                              "OKX",
+                              "Bybit"
+                            ]
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "deribit-public",
+                              "okx-public",
+                              "bybit-public"
+                            ]
+                          },
+                          "instruments": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "volume24hBaseCcy": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0
+                          },
+                          "volume24hNative": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0
+                          },
+                          "volume24hUsd": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0
+                          },
+                          "openInterestBaseCcy": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0
+                          },
+                          "openInterestNative": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0
+                          },
+                          "units": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "volume24hBaseCcy",
+                              "volume24hNative",
+                              "volume24hUsd",
+                              "openInterestBaseCcy",
+                              "openInterestNative"
+                            ],
+                            "properties": {
+                              "volume24hBaseCcy": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "volume24hNative": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "volume24hUsd": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "openInterestBaseCcy": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "openInterestNative": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            }
+                          },
+                          "fetchedAt": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "cache": {
+                            "$ref": "#/components/schemas/V1Contracts/$defs/cacheState"
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
           },
           "400": {
-            "description": "Typed error envelope",
+            "description": "Unsupported currency",
             "content": {
               "application/json": {
                 "schema": {
@@ -4911,23 +5115,9 @@
                   "properties": {
                     "error": {
                       "type": "string",
-                      "enum": [
-                        "PROVIDER_UNAVAILABLE",
-                        "ENTITLEMENT_MISSING",
-                        "STALE_ONLY",
-                        "INSUFFICIENT_COVERAGE",
-                        "INVALID_SYMBOL",
-                        "UNSUPPORTED_CURRENCY",
-                        "FREE_CRYPTO_UNAVAILABLE",
-                        "RATE_LIMITED",
-                        "no_api_key",
-                        "budget_exhausted"
-                      ]
+                      "const": "UNSUPPORTED_CURRENCY"
                     },
                     "detail": {
-                      "type": "string"
-                    },
-                    "provider": {
                       "type": "string"
                     }
                   }
@@ -4936,7 +5126,7 @@
             }
           },
           "502": {
-            "description": "Typed error envelope",
+            "description": "Options venues unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -4948,23 +5138,9 @@
                   "properties": {
                     "error": {
                       "type": "string",
-                      "enum": [
-                        "PROVIDER_UNAVAILABLE",
-                        "ENTITLEMENT_MISSING",
-                        "STALE_ONLY",
-                        "INSUFFICIENT_COVERAGE",
-                        "INVALID_SYMBOL",
-                        "UNSUPPORTED_CURRENCY",
-                        "FREE_CRYPTO_UNAVAILABLE",
-                        "RATE_LIMITED",
-                        "no_api_key",
-                        "budget_exhausted"
-                      ]
+                      "const": "OPTIONS_VENUES_UNAVAILABLE"
                     },
                     "detail": {
-                      "type": "string"
-                    },
-                    "provider": {
                       "type": "string"
                     }
                   }

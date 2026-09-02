@@ -110,6 +110,7 @@ describe('Deribit fixtures → catalogue/quote join', () => {
     expect(call.askIv).toBeCloseTo(0.568, 8);
     expect(call.markIv).toBeCloseTo(0.56, 8);
     expect(call.openInterest).toBe(123.5); // base units, not ×100
+    expect(call.volumeUsd).toBe(736500.25); // raw Deribit volume_usd preserved
     expect(call.hasQuote).toBe(true);
 
     const put = rows.find((r) => r.instrument === 'BTC-27DEC24-80000-P');

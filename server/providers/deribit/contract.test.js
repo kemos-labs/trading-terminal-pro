@@ -24,6 +24,7 @@ describe('Deribit adapter contract', () => {
       ask_iv: 57,
       mark_iv: 56,
       open_interest: 123,
+      volume_usd: 4567.5,
       timestamp: Date.now(),
     });
     expect(quote.bidPrice).toBe(0.048);
@@ -33,11 +34,22 @@ describe('Deribit adapter contract', () => {
     expect(quote.bidIv).toBeCloseTo(0.55, 8);
     expect(quote.askIv).toBeCloseTo(0.57, 8);
     expect(quote.markIv).toBeCloseTo(0.56, 8);
+    expect(quote.volumeUsd).toBe(4567.5);
   });
 
   it('OI in underlying units without 100x', () => {
     const quote = normalizeQuote({ open_interest: 12.5 });
     expect(quote.openInterest).toBe(12.5);
+  });
+
+  it.each([
+    ['numeric string', '12.5', 12.5],
+    ['negative', -1, null],
+    ['NaN', Number.NaN, null],
+    ['Infinity', Number.POSITIVE_INFINITY, null],
+    ['null', null, null],
+  ])('normalizes volume_usd %s to finite nonnegative number or null', (_label, value, expected) => {
+    expect(normalizeQuote({ volume_usd: value }).volumeUsd).toBe(expected);
   });
 
   it('contract metadata preserved from catalogue entry', () => {

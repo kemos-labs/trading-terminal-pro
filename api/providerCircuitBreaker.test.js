@@ -76,6 +76,8 @@ describe('provider circuit breaker', () => {
       { provider: 'deribit', status: 'closed', failures: 0, cooldownRemainingMs: 0, probeInFlight: false },
       { provider: 'binance-futures', status: 'closed', failures: 0, cooldownRemainingMs: 0, probeInFlight: false },
       { provider: 'bybit-linear', status: 'closed', failures: 0, cooldownRemainingMs: 0, probeInFlight: false },
+      { provider: 'bybit-options', status: 'closed', failures: 0, cooldownRemainingMs: 0, probeInFlight: false },
+      { provider: 'okx-options', status: 'closed', failures: 0, cooldownRemainingMs: 0, probeInFlight: false },
     ]);
   });
 });

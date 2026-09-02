@@ -384,6 +384,7 @@ export function registerV1Routes(fastify) {
         indexPrice: positiveOrNull(row.indexPrice ?? legacy.body.indexPrice),
         openInterest: nonNegativeOrNull(row.openInterest),
         volume: nonNegativeOrNull(row.volume),
+        volumeUsd: nonNegativeOrNull(row.volumeUsd),
         funding8h: finiteOrNull(row.funding8h),
         timestamp: integerOrNull(row.timestamp),
         tradable: Boolean(row.hasQuote && (bid != null || ask != null || mark != null)),

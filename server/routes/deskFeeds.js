@@ -10,11 +10,11 @@
  */
 import { getOrFetch, peek, TTL, budgetAllows, monthBudgetAllows, recordBudget, ALPHA_VANTAGE_FREE_DAILY, FINNHUB_SOFT_DAILY, getBudgetUsed, getMonthBudgetUsed } from '../../api/upstreamCache.js';
 import { validateSymbol } from '../validation.js';
+import { getDeribitMarketSnapshotResult } from './deribitMarket.js';
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const AV_BASE = 'https://www.alphavantage.co/query';
-const OKX_BASE = 'https://www.okx.com';
-const BYBIT_BASE = 'https://api.bybit.com';
+import { fetchBybitOptionsSummary, fetchOkxOptionsSummary } from '../providers/freeOptions/client.js';
 
 function finnhubKey() { return process.env.FINNHUB_API_KEY || null; }
 
@@ -52,64 +52,39 @@ async function finnhubGet(path, params = {}) {
   return res.json();
 }
 
-/** Deribit totals from the book summary (public, keyless). */
+function cacheMetadata(result) {
+  const stale = Boolean(result?.stale);
+  const hit = Boolean(result?.fromCache);
+  const providerError = result?.providerError ?? null;
+  return {
+    state: providerError && stale ? 'stale' : providerError ? 'unavailable' : stale ? 'stale' : hit ? 'fresh' : 'miss',
+    hit,
+    ageMs: Number.isFinite(result?.ageMs) ? Math.max(0, result.ageMs) : 0,
+    stale,
+    coalesced: Boolean(result?.coalesced),
+    providerError,
+  };
+}
+
+/** Deribit totals from the canonical cached market snapshot (public, keyless). */
 async function deribitOptionsSummary(ccy) {
   try {
-    const { deribitFetch } = await import('../providers/deribit/client.js');
-    const result = await deribitFetch(`get_book_summary_by_currency?currency=${ccy}&kind=option`);
-    const list = Array.isArray(result) ? result : [];
+    const result = await getDeribitMarketSnapshotResult(ccy);
+    const list = Array.isArray(result?.data?.instruments)
+      ? result.data.instruments.filter((row) => row?.kind === 'option')
+      : [];
     if (!list.length) return null;
-    return {
+    return { data: {
       venue: 'Deribit',
+      source: 'deribit-public',
       instruments: list.length,
-      volCcy24h: sumObserved(list, (row) => row.volume),
-      volUsd24h: sumObserved(list, (row) => row.volume_usd),
-      openIntContracts: sumObserved(list, (row) => row.open_interest),
-      fetchedAt: Date.now(),
-    };
-  } catch { return null; }
-}
-
-/** Sum OKX option tickers (public, keyless). */
-async function okxOptionsSummary(ccy) {
-  try {
-    const res = await fetch(`${OKX_BASE}/api/v5/market/tickers?instType=OPTION&instFamily=${ccy}-USD`, { signal: AbortSignal.timeout(8_000) });
-    if (!res.ok) return null;
-    const json = await res.json();
-    const list = Array.isArray(json?.data) ? json.data : [];
-    if (!list.length) return null;
-    const volCcy = sumObserved(list, (row) => row.volCcy24h);
-    const volUsd = sumObserved(list, (row) => row.volUsd24h);
-    let openIntCcy = sumObserved(list, (row) => row.openInt);
-    // OKX OI lives on a separate public endpoint (per-instrument rows).
-    try {
-      const oiRes = await fetch(`${OKX_BASE}/api/v5/public/open-interest?instType=OPTION&instFamily=${ccy}-USD`, { signal: AbortSignal.timeout(8_000) });
-      if (oiRes.ok) {
-        const oiJson = await oiRes.json();
-        const oiRows = Array.isArray(oiJson?.data) ? oiJson.data : [];
-        const oiCcySum = sumObserved(oiRows, (row) => row.oiCcy);
-        if (oiCcySum != null) openIntCcy = oiCcySum;
-      }
-    } catch { /* tickers fallback already applied */ }
-    return { venue: 'OKX', instruments: list.length, volCcy24h: volCcy, volUsd24h: volUsd, openIntContracts: openIntCcy, fetchedAt: Date.now() };
-  } catch { return null; }
-}
-
-/** Sum Bybit option tickers (public, keyless). */
-async function bybitOptionsSummary(ccy) {
-  try {
-    const res = await fetch(`${BYBIT_BASE}/v5/market/tickers?category=option&baseCoin=${ccy}`, { signal: AbortSignal.timeout(8_000) });
-    if (!res.ok) return null;
-    const json = await res.json();
-    const list = Array.isArray(json?.result?.list) ? json.result.list : [];
-    if (!list.length) return null;
-    return {
-      venue: 'Bybit',
-      instruments: list.length,
-      volCcy24h: sumObserved(list, (row) => row.volume24h),
-      openIntContracts: sumObserved(list, (row) => row.openInterest),
-      fetchedAt: Date.now(),
-    };
+      volume24hBaseCcy: sumObserved(list, (row) => row.volume),
+      volume24hUsd: sumObserved(list, (row) => row.volumeUsd),
+      openInterestBaseCcy: sumObserved(list, (row) => row.openInterest),
+      openInterestNative: null,
+      units: { volume24hBaseCcy: 'base currency (Deribit volume)', volume24hNative: null, volume24hUsd: 'USD (Deribit volume_usd)', openInterestBaseCcy: 'base currency (Deribit open_interest)', openInterestNative: null },
+      fetchedAt: result.data.fetchedAt ?? Date.now(),
+    }, ...cacheMetadata(result) };
   } catch { return null; }
 }
 
@@ -544,21 +519,26 @@ export function registerDeskFeedRoutes(fastify) {
 
   // Multi-venue options aggregation (public endpoints, no keys).
   fastify.get('/api/venues/options/:currency', async (request, reply) => {
-    const currency = String(request.params.currency || 'BTC').toUpperCase();
+    const currency = String(request.params.currency || '').trim();
     if (currency !== 'BTC' && currency !== 'ETH') {
       reply.code(400);
-      return { error: 'currency must be BTC or ETH' };
+      return { error: 'UNSUPPORTED_CURRENCY', detail: 'currency must be BTC or ETH' };
     }
     try {
-      const { data } = await getOrFetch(`venues:options:${currency}`, 30_000, async () => {
-        const venues = (await Promise.all([deribitOptionsSummary(currency), okxOptionsSummary(currency), bybitOptionsSummary(currency)])).filter(Boolean);
-        if (!venues.length) throw new Error('All venue summaries unavailable');
-        return { currency, venues, fetchedAt: Date.now() };
+      const aggregate = await getOrFetch(`venues:options:${currency}`, 30_000, async () => {
+        const results = await Promise.allSettled([deribitOptionsSummary(currency), fetchOkxOptionsSummary(currency), fetchBybitOptionsSummary(currency)]);
+        const venues = results.filter((result) => result.status === 'fulfilled').map((result) => {
+          const value = result.value;
+          if (!value?.data) return null;
+          return { ...value.data, cache: cacheMetadata(value) };
+        }).filter(Boolean);
+        if (!venues.length) throw Object.assign(new Error('All venue summaries unavailable'), { code: 'OPTIONS_VENUES_UNAVAILABLE' });
+        return { currency, source: 'public-options-aggregates', venues, fetchedAt: Date.now() };
       }, { allowStaleOnError: true });
-      return data;
+      return { ...aggregate.data, cache: cacheMetadata(aggregate) };
     } catch (err) {
       reply.code(502);
-      return { error: 'Venue aggregation failed', detail: err.message };
+      return { error: err?.code === 'OPTIONS_VENUES_UNAVAILABLE' ? err.code : 'OPTIONS_VENUES_UNAVAILABLE', detail: err.message };
     }
   });
 }

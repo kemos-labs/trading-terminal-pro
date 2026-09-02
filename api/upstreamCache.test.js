@@ -26,6 +26,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 describe('upstreamCache', () => {
   it('accepts only the documented provider-error code vocabulary', () => {
     expect(sanitizeProviderErrorCode('upstream-error')).toBe('upstream-error');
+    expect(sanitizeProviderErrorCode('budget_exhausted')).toBe('budget_exhausted');
     expect(sanitizeProviderErrorCode('rate_limited')).toBe('rate_limited');
     expect(sanitizeProviderErrorCode('http-502')).toBe('http-502');
     expect(sanitizeProviderErrorCode('provider_internal_reference')).toBeNull();

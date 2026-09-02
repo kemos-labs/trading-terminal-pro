@@ -8,12 +8,14 @@
  * Rules: all upstream calls server-side, budgeted, cached, single-flight.
  * Keys never leave the server. Fail-closed typed errors — never synthetic prices.
  */
-import { getOrFetch, peek, TTL, budgetAllows, monthBudgetAllows, recordBudget, ALPHA_VANTAGE_FREE_DAILY, FINNHUB_SOFT_DAILY, getBudgetUsed, getMonthBudgetUsed, sanitizeProviderErrorCode } from '../../api/upstreamCache.js';
+import { getOrFetch, peek, TTL, budgetAllows, monthBudgetAllows, recordBudget, recordMonthBudget, clearBudgetsForTests, ALPHA_VANTAGE_FREE_DAILY, FINNHUB_SOFT_DAILY, getBudgetUsed, getMonthBudgetUsed, sanitizeProviderErrorCode } from '../../api/upstreamCache.js';
 import { validateSymbol } from '../validation.js';
 import { getDeribitMarketSnapshotResult } from './deribitMarket.js';
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const AV_BASE = 'https://www.alphavantage.co/query';
+const MAX_BUDGET_STALE_MULTIPLIER = 10;
+export const __testHooks = { clearBudgetsForTests, getBudgetUsed, getMonthBudgetUsed, recordBudget, recordMonthBudget };
 import { fetchBybitOptionsSummary, fetchOkxOptionsSummary } from '../providers/freeOptions/client.js';
 
 function finnhubKey() { return process.env.FINNHUB_API_KEY || null; }
@@ -64,6 +66,10 @@ function cacheMetadata(result) {
     coalesced: Boolean(result?.coalesced),
     providerError,
   };
+}
+
+function budgetStaleMetadata(ageMs) {
+  return { state: 'stale', hit: true, ageMs: Math.max(0, ageMs), stale: true, coalesced: false, providerError: sanitizeProviderErrorCode('budget_exhausted') };
 }
 
 /** Deribit totals from the canonical cached market snapshot (public, keyless). */
@@ -391,21 +397,22 @@ export function registerDeskFeedRoutes(fastify) {
     }
     if (!budgetAllows('alphavantage', ALPHA_VANTAGE_FREE_DAILY, 0.85)) {
       const stale = peek(`av:quote:${symbol}`);
-      if (stale) {
+      const ageMs = stale ? Date.now() - stale.timestamp : Infinity;
+      if (stale && ageMs <= TTL.ALPHA_VANTAGE_MS * MAX_BUDGET_STALE_MULTIPLIER) {
         reply.header('X-Cache', 'STALE-BUDGET');
-        return { ...stale.data, fromCache: true, ageMs: Date.now() - stale.timestamp };
+        return { ...stale.data, fromCache: true, ageMs, cache: budgetStaleMetadata(ageMs) };
       }
       reply.code(429);
       return { symbol, price: null, error: 'budget_exhausted', cap: ALPHA_VANTAGE_FREE_DAILY, used: getBudgetUsed('alphavantage'), source: 'Alpha Vantage' };
     }
     try {
-      const { data, fromCache, ageMs } = await getOrFetch(`av:quote:${symbol}`, TTL.ALPHA_VANTAGE_MS, async () => {
+      const result = await getOrFetch(`av:quote:${symbol}`, TTL.ALPHA_VANTAGE_MS, async () => {
         const u = new URL(AV_BASE);
         u.searchParams.set('function', 'GLOBAL_QUOTE');
         u.searchParams.set('symbol', symbol);
         u.searchParams.set('apikey', key);
-        const res = await fetch(u.toString(), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20_000) });
         recordBudget('alphavantage', 1);
+        const res = await fetch(u.toString(), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20_000) });
         if (!res.ok) throw new Error(`Alpha Vantage HTTP ${res.status}`);
         const json = await res.json();
         if (json?.Note || json?.Information) throw new Error(String(json.Note || json.Information));
@@ -421,7 +428,7 @@ export function registerDeskFeedRoutes(fastify) {
           error: price > 0 ? null : 'empty',
         };
       }, { allowStaleOnError: true });
-      return { ...data, fromCache, ageMs };
+      return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
     } catch (err) {
       reply.code(502);
       return { symbol, price: null, error: 'Alpha Vantage quote failed', detail: err.message, source: 'Alpha Vantage' };
@@ -439,21 +446,22 @@ export function registerDeskFeedRoutes(fastify) {
     const host = process.env.RAPIDAPI_TV_HOST || 'tradingview-data1.p.rapidapi.com';
     if (!monthBudgetAllows('tradingview', 150, 0.9)) {
       const stale = peek(`tv:snap:${symbol}`);
-      if (stale) {
+      const ageMs = stale ? Date.now() - stale.timestamp : Infinity;
+      if (stale && ageMs <= TTL.TRADINGVIEW_MS * MAX_BUDGET_STALE_MULTIPLIER) {
         reply.header('X-Cache', 'STALE-BUDGET');
-        return { ...stale.data, fromCache: true };
+        return { ...stale.data, fromCache: true, ageMs, cache: budgetStaleMetadata(ageMs) };
       }
       reply.code(429);
       return { symbol, price: null, error: 'budget_exhausted', cap: 150, used: getMonthBudgetUsed('tradingview'), source: 'TradingView RapidAPI' };
     }
     try {
-      const { data, fromCache } = await getOrFetch(`tv:snap:${symbol}`, TTL.TRADINGVIEW_MS, async () => {
+      const result = await getOrFetch(`tv:snap:${symbol}`, TTL.TRADINGVIEW_MS, async () => {
         const u = `https://${host}/symbols/get-tick-raw?symbol=${encodeURIComponent(symbol)}`;
+        recordMonthBudget('tradingview', 1);
         const res = await fetch(u, {
           headers: { 'x-rapidapi-host': host, 'x-rapidapi-key': key, Accept: 'application/json' },
           signal: AbortSignal.timeout(15_000),
         });
-        recordBudget('tradingview', 1);
         if (!res.ok) throw new Error(`TradingView HTTP ${res.status}`);
         const json = await res.json();
         const price = Number(json?.close ?? json?.last_price ?? json?.lp);
@@ -465,7 +473,7 @@ export function registerDeskFeedRoutes(fastify) {
           error: null,
         };
       }, { allowStaleOnError: true });
-      return { ...data, fromCache };
+      return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
     } catch (err) {
       reply.code(502);
       return { symbol, price: null, error: 'TradingView snapshot failed', detail: err.message, source: 'TradingView RapidAPI' };

@@ -33,6 +33,7 @@ const metrics = {
 };
 const SAFE_PROVIDER_ERROR_CODES = new Set([
   'upstream-error',
+  'budget_exhausted',
   'rate_limited',
   'timeout',
   'http_error',
@@ -188,6 +189,12 @@ export function recordMonthBudget(provider, n = 1) {
   monthBudget.set(k, (monthBudget.get(k) || 0) + n);
   persistQuotaLedger();
   return monthBudget.get(k);
+}
+
+/** Test-only isolation hook; production callers should never reset quota state. */
+export function clearBudgetsForTests() {
+  dayBudget.clear();
+  monthBudget.clear();
 }
 
 export function quotaLedgerStatus() {

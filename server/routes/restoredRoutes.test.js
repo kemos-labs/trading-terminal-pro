@@ -17,6 +17,7 @@ import { resetDeribitClientState } from '../providers/deribit/client.js';
 import { resetProviderCircuitsForTests } from '../../api/providerCircuitBreaker.js';
 
 const REAL_FETCH = global.fetch;
+let runtimeDesk;
 
 /** Test-only execFile double for the yfinance python boundary (SPY fixture). */
 const execFileDouble = vi.fn((_cmd, args, _opts, cb) => {
@@ -59,7 +60,9 @@ async function makeApp(envOverrides = {}) {
   __testHooks.execFile = execFileDouble;
   for (const [k, v] of Object.entries(envOverrides)) process.env[k] = v;
   const { buildServer } = await import('../app.js');
-  return buildServer();
+  const server = buildServer();
+  runtimeDesk = await import('./deskFeeds.js');
+  return server;
 }
 
 /** Raw-socket GET with a verbatim (non-normalized) request path. */
@@ -86,6 +89,11 @@ describe('restored routes (Phase 1 parity)', () => {
   });
 
   afterEach(async () => {
+    runtimeDesk?.__testHooks.clearBudgetsForTests();
+    delete process.env.ALPHA_VANTAGE_API_KEY;
+    delete process.env.ALPHAVANTAGE_API_KEY;
+    delete process.env.RAPIDAPI_KEY;
+    delete process.env.X_RAPIDAPI_KEY;
     global.fetch = REAL_FETCH;
     resetProviderCircuitsForTests();
     if (app) await app.close();
@@ -247,6 +255,72 @@ describe('restored routes (Phase 1 parity)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('AlphaVantage budget fallback is bounded, metered, and typed', async () => {
+    process.env.ALPHA_VANTAGE_API_KEY = 'test-av-key';
+    global.fetch = vi.fn(async () => new Response(JSON.stringify({ 'Global Quote': { '05. price': '123.45' } }), { status: 200 }));
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-02T00:05:00.000Z'));
+      const warm = await app.inject('/api/alphavantage/quote?symbol=AVTEST');
+      expect(warm.statusCode).toBe(200);
+      expect(warm.json().cache).toMatchObject({ state: 'miss', hit: false, stale: false });
+      expect(runtimeDesk.__testHooks.getBudgetUsed('alphavantage')).toBe(1);
+      runtimeDesk.__testHooks.recordBudget('alphavantage', 25);
+      vi.advanceTimersByTime(TTL.ALPHA_VANTAGE_MS * 10 - 1);
+      const stale = await app.inject('/api/alphavantage/quote?symbol=AVTEST');
+      expect(stale.statusCode).toBe(200);
+      expect(stale.json()).toMatchObject({ price: 123.45, cache: { state: 'stale', hit: true, stale: true, providerError: 'budget_exhausted' } });
+      vi.advanceTimersByTime(2);
+      const expired = await app.inject('/api/alphavantage/quote?symbol=AVTEST');
+      expect(expired.statusCode).toBe(429);
+      expect(expired.json().price).toBeNull();
+      expect(expired.json().cache).toBeUndefined();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('AlphaVantage charges failed upstream attempts before fetch completion', async () => {
+    process.env.ALPHA_VANTAGE_API_KEY = 'test-av-key';
+    global.fetch = vi.fn(async () => new Response('down', { status: 503 }));
+    const before = runtimeDesk.__testHooks.getBudgetUsed('alphavantage');
+    const response = await app.inject('/api/alphavantage/quote?symbol=AVFAIL');
+    expect(response.statusCode).toBe(502);
+    expect(runtimeDesk.__testHooks.getBudgetUsed('alphavantage')).toBe(before + 1);
+  });
+
+  it('TradingView budget fallback is bounded, monthly-metered, and typed', async () => {
+    process.env.RAPIDAPI_KEY = 'test-tv-key';
+    global.fetch = vi.fn(async () => new Response(JSON.stringify({ close: 321.5 }), { status: 200 }));
+    const warm = await app.inject('/api/tradingview/snapshot?symbol=TVTEST');
+    expect(warm.statusCode).toBe(200);
+    expect(warm.json().cache).toMatchObject({ state: 'miss', hit: false, stale: false });
+    expect(runtimeDesk.__testHooks.getMonthBudgetUsed('tradingview')).toBe(1);
+    expect(runtimeDesk.__testHooks.getBudgetUsed('tradingview')).toBe(0);
+    runtimeDesk.__testHooks.recordMonthBudget('tradingview', 150);
+    vi.useFakeTimers();
+    try {
+      vi.advanceTimersByTime(TTL.TRADINGVIEW_MS * 10 - 1);
+      const stale = await app.inject('/api/tradingview/snapshot?symbol=TVTEST');
+      expect(stale.statusCode).toBe(200);
+      expect(stale.json()).toMatchObject({ price: 321.5, cache: { state: 'stale', hit: true, stale: true, providerError: 'budget_exhausted' } });
+      vi.advanceTimersByTime(2);
+      const expired = await app.inject('/api/tradingview/snapshot?symbol=TVTEST');
+      expect(expired.statusCode).toBe(429);
+      expect(expired.json().price).toBeNull();
+      expect(expired.json().cache).toBeUndefined();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('TradingView charges failed upstream attempts in the monthly ledger', async () => {
+    process.env.RAPIDAPI_KEY = 'test-tv-key';
+    global.fetch = vi.fn(async () => new Response('down', { status: 503 }));
+    const beforeMonth = runtimeDesk.__testHooks.getMonthBudgetUsed('tradingview');
+    const beforeDay = runtimeDesk.__testHooks.getBudgetUsed('tradingview');
+    const response = await app.inject('/api/tradingview/snapshot?symbol=TVFAIL');
+    expect(response.statusCode).toBe(502);
+    expect(runtimeDesk.__testHooks.getMonthBudgetUsed('tradingview')).toBe(beforeMonth + 1);
+    expect(runtimeDesk.__testHooks.getBudgetUsed('tradingview')).toBe(beforeDay);
   });
 
   it('home briefing exposes truthful cache state and explicit provider-down desks', async () => {

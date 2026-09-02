@@ -5,7 +5,7 @@
  * Fixtures are recorded raw Deribit response bodies (jsonrpc + result wrapper),
  * matching actual public API shapes.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,6 +41,9 @@ vi.mock('./client.js', () => ({
     throw new Error(`fixture route missing for: ${method}`);
   }),
 }));
+
+import { deribitFetch } from './client.js';
+import { clearCacheForTests } from '../../../api/upstreamCache.js';
 
 import { registerDeribitMarketRoutes } from '../../routes/deribitMarket.js';
 
@@ -212,5 +215,67 @@ describe('Workflow consumption of the contract', () => {
     // 0.052 BTC price × 2.5 contracts × 1 = 0.13 BTC — NOT 0.13 × 60150 USD
     expect(t.premiumNative).toBeCloseTo(0.13, 8);
     expect(t.nativeCurrency).toBe('BTC');
+  });
+});
+
+describe('Deribit legacy routes: full cache envelope and error redaction', () => {
+  let app;
+  beforeEach(async () => {
+    vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') });
+    clearCacheForTests();
+    app = Fastify({ logger: false });
+    await registerDeribitMarketRoutes(app);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    return app.close();
+  });
+
+  it('exposes full sanitized cache envelope on cold miss and fresh hit', async () => {
+    const cold = await app.inject('/api/deribit/market/BTC');
+    expect(cold.statusCode).toBe(200);
+    expect(cold.json().cache).toEqual({
+      state: 'miss', hit: false, ageMs: expect.any(Number),
+      stale: false, coalesced: false, providerError: null,
+    });
+    const fresh = await app.inject('/api/deribit/market/BTC');
+    expect(fresh.statusCode).toBe(200);
+    expect(fresh.json().cache).toMatchObject({ state: 'fresh', hit: true });
+    expect(fresh.json().indexPrice).toBe(60150.0); // data fields unchanged
+  });
+
+  it('serves labelled stale last-good data when all quote fetches fail, and redacts internals', async () => {
+    await app.inject('/api/deribit/market/BTC'); // primes catalogue + market snapshot
+    vi.advanceTimersByTime(20_001); // market TTL expired; catalogue still fresh
+    const baseImpl = deribitFetch.getMockImplementation();
+    deribitFetch.mockImplementation(() => Promise.reject(new Error('SECRET-BOOK-TRACE')));
+    try {
+      // Zero-coverage fill throws insufficient_coverage → last-good stale serve.
+      const stale = await app.inject('/api/deribit/market/BTC');
+      expect(stale.statusCode).toBe(200);
+      expect(stale.json().cache).toMatchObject({ state: 'stale', stale: true, providerError: 'insufficient_coverage' });
+      expect(stale.json().indexPrice).toBe(60150.0); // last-good data, labelled stale
+      expect(stale.body).not.toContain('SECRET-BOOK-TRACE');
+    } finally {
+      deribitFetch.mockImplementation(baseImpl);
+    }
+  });
+
+  it('fails closed on cold failure with a sanitized typed error', async () => {
+    deribitFetch.mockImplementationOnce(() => Promise.reject(new Error('SECRET-INTERNAL-TRACEBACK')));
+    const res = await app.inject('/api/deribit/market/ETH');
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toEqual({ error: 'Deribit market bundle failed', detail: 'upstream-error' });
+    expect(res.body).not.toContain('SECRET-INTERNAL-TRACEBACK');
+  });
+
+  it('labels stale index price and redacts internal errors', async () => {
+    await app.inject('/api/deribit/index/btc_usd');
+    vi.advanceTimersByTime(20_001);
+    deribitFetch.mockImplementationOnce(() => Promise.reject(new Error('SECRET-INTERNAL')));
+    const stale = await app.inject('/api/deribit/index/btc_usd');
+    expect(stale.statusCode).toBe(200);
+    expect(stale.json().cache).toMatchObject({ state: 'stale', stale: true, providerError: 'upstream-error' });
+    expect(stale.body).not.toContain('SECRET-INTERNAL');
   });
 });

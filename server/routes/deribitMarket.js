@@ -19,7 +19,7 @@ import {
   joinCatalogueWithQuotes,
   normalizeTrade,
 } from '../providers/deribit/normalize.js';
-import { getOrFetch } from '../../api/upstreamCache.js';
+import { getOrFetch, sanitizeProviderErrorCode } from '../../api/upstreamCache.js';
 
 const CATALOGUE_TTL_MS = 5 * 60_000; // listings change ~daily
 const QUOTES_TTL_MS = 20_000;
@@ -32,8 +32,36 @@ function parseCurrency(currency) {
   return c === 'BTC' || c === 'ETH' ? c : null;
 }
 
+/** Full sanitized cache envelope; identical shape to the other repaired adapters
+ *  (top-level fromCache/ageMs/stale plus a nested `cache` object). */
+function cacheFields(result) {
+  const stale = Boolean(result?.stale);
+  const hit = Boolean(result?.fromCache);
+  const providerError = sanitizeProviderErrorCode(result?.providerError);
+  const ageMs = Number.isFinite(result?.ageMs) ? Math.max(0, result.ageMs) : 0;
+  return {
+    fromCache: hit,
+    ageMs,
+    stale,
+    cache: {
+      state: providerError && stale ? 'stale' : stale ? 'stale' : hit ? 'fresh' : 'miss',
+      hit,
+      ageMs,
+      stale,
+      coalesced: Boolean(result?.coalesced),
+      providerError,
+    },
+  };
+}
+
+/** Fail-closed sanitized error code; internal messages never cross the boundary. */
+function safeErrorCode(err) {
+  if (err?.name === 'TimeoutError' || err?.name === 'AbortError') return 'timeout';
+  return sanitizeProviderErrorCode(err?.code) || 'upstream-error';
+}
+
 /** Active catalogue: options + dated futures + perpetual (authoritative metadata). */
-async function loadCatalogue(currency) {
+async function loadCatalogueResult(currency) {
   return getOrFetch(`deribit:catalogue:${currency}`, CATALOGUE_TTL_MS, async () => {
     const raw = await deribitFetch(`get_instruments?currency=${currency}&expired=false`);
     if (!Array.isArray(raw)) throw new Error('Deribit get_instruments: unexpected shape');
@@ -41,7 +69,11 @@ async function loadCatalogue(currency) {
       .filter((r) => r && r.instrument_name && r.is_active)
       .map(normalizeCatalogueEntry)
       .filter(Boolean);
-  }, { allowStaleOnError: true, maxStaleMs: 24 * 60 * 60_000 }).then((result) => result.data);
+  }, { allowStaleOnError: true, maxStaleMs: 24 * 60 * 60_000 });
+}
+
+async function loadCatalogue(currency) {
+  return (await loadCatalogueResult(currency)).data;
 }
 
 /** Quotes for options and futures from book summaries; perp from ticker. */
@@ -74,6 +106,12 @@ async function loadDeribitMarketSnapshot(currency) {
   const catalogue = await loadCatalogue(currency);
   const quotes = await loadQuotes(currency);
   const { rows, coverage } = joinCatalogueWithQuotes(catalogue, quotes, Date.now());
+  // A zero-coverage snapshot is not a valid snapshot: it must never be served
+  // as success or cached. Throw so last-good stale / fail-closed semantics apply
+  // and the current upstream failure state stays separate from last-good data.
+  if (!(coverage > 0)) {
+    throw Object.assign(new Error('no priced instruments'), { code: 'insufficient_coverage' });
+  }
   const indexName = currency === 'BTC' ? 'btc_usd' : 'eth_usd';
   const index = await deribitFetch(`get_index_price?index_name=${indexName}`).catch(() => null);
   const perp = rows.find((row) => row.kind === 'perp');
@@ -194,10 +232,11 @@ export async function registerDeribitMarketRoutes(fastify) {
       return { error: 'currency must be BTC or ETH' };
     }
     try {
-      return await getDeribitMarketSnapshot(currency);
+      const result = await getDeribitMarketSnapshotResult(currency);
+      return { ...result.data, ...cacheFields(result) };
     } catch (err) {
       reply.code(502);
-      return { error: 'Deribit market bundle failed', detail: String(err.message || err) };
+      return { error: 'Deribit market bundle failed', detail: safeErrorCode(err) };
     }
   });
 
@@ -208,11 +247,11 @@ export async function registerDeribitMarketRoutes(fastify) {
       return { error: 'currency must be BTC or ETH' };
     }
     try {
-      const catalogue = await loadCatalogue(currency);
-      return { currency, instruments: catalogue, fetchedAt: Date.now(), source: 'deribit' };
+      const result = await loadCatalogueResult(currency);
+      return { currency, instruments: result.data, fetchedAt: Date.now(), source: 'deribit', ...cacheFields(result) };
     } catch (err) {
       reply.code(502);
-      return { error: 'Deribit instruments failed', detail: String(err.message || err) };
+      return { error: 'Deribit instruments failed', detail: safeErrorCode(err) };
     }
   });
 
@@ -227,10 +266,11 @@ export async function registerDeribitMarketRoutes(fastify) {
     const requestedCount = Number(request.query.count ?? 500);
     const count = Math.min(1000, Math.max(50, Number.isFinite(requestedCount) ? Math.floor(requestedCount) : 500));
     try {
-      return await getDeribitTradesSnapshot(currency, hours, count);
+      const result = await getDeribitTradesSnapshotResult(currency, hours, count);
+      return { ...result.data, ...cacheFields(result) };
     } catch (err) {
       reply.code(502);
-      return { error: 'Deribit trades failed', detail: String(err.message || err) };
+      return { error: 'Deribit trades failed', detail: safeErrorCode(err) };
     }
   });
 
@@ -241,16 +281,21 @@ export async function registerDeribitMarketRoutes(fastify) {
       return { error: 'Invalid index (use btc_usd or eth_usd)' };
     }
     try {
-      const { data: result } = await getOrFetch(
+      const result = await getOrFetch(
         `deribit:index:${name}`,
         QUOTES_TTL_MS,
         () => deribitFetch(`get_index_price?index_name=${name}`),
         { allowStaleOnError: true, maxStaleMs: MAX_DERIBIT_STALE_MS },
       );
-      return { index_price: result.index_price, estimated_delivery_price: result.estimated_delivery_price, timestamp: Date.now() };
+      return {
+        index_price: result.data.index_price,
+        estimated_delivery_price: result.data.estimated_delivery_price,
+        timestamp: Date.now(),
+        ...cacheFields(result),
+      };
     } catch (err) {
       reply.code(502);
-      return { error: 'Deribit index failed', detail: String(err.message || err) };
+      return { error: 'Deribit index failed', detail: safeErrorCode(err) };
     }
   });
 
@@ -274,10 +319,11 @@ export async function registerDeribitMarketRoutes(fastify) {
     const requestedDays = Number(q.days ?? 7);
     const days = [1, 7, 30, 90].includes(requestedDays) ? requestedDays : requestedDays > 90 ? 90 : 7;
     try {
-      return await getDeribitFundingSnapshot(currency, instrumentName, days);
+      const result = await getDeribitFundingSnapshotResult(currency, instrumentName, days);
+      return { ...result.data, ...cacheFields(result) };
     } catch (err) {
       reply.code(502);
-      return { error: 'Deribit funding history failed', detail: String(err.message || err) };
+      return { error: 'Deribit funding history failed', detail: safeErrorCode(err) };
     }
   });
 }

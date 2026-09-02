@@ -554,7 +554,9 @@ export function registerDeskFeedRoutes(fastify) {
       };
     } catch (err) {
       reply.code(502);
-      return { error: err.message, note: 'Desk pack failed.' };
+      // Sanitized: internal error messages (self-call failures, worker text)
+      // never cross the public boundary.
+      return { error: 'Desk pack failed', detail: sanitizeProviderErrorCode(err?.code) || 'upstream-error' };
     }
   });
 
@@ -583,7 +585,7 @@ export function registerDeskFeedRoutes(fastify) {
       return { ...aggregate.data, cache: cacheMetadata(aggregate) };
     } catch (err) {
       reply.code(502);
-      return { error: err?.code === 'OPTIONS_VENUES_UNAVAILABLE' ? err.code : 'OPTIONS_VENUES_UNAVAILABLE', detail: err.message };
+      return { error: 'OPTIONS_VENUES_UNAVAILABLE', detail: sanitizeProviderErrorCode(err?.code) || 'upstream-error' };
     }
   });
 }

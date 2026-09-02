@@ -12,7 +12,7 @@
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import http from 'node:http';
-import { clearCacheForTests } from '../../api/upstreamCache.js';
+import { clearCacheForTests, TTL } from '../../api/upstreamCache.js';
 import { resetDeribitClientState } from '../providers/deribit/client.js';
 import { resetProviderCircuitsForTests } from '../../api/providerCircuitBreaker.js';
 
@@ -178,9 +178,13 @@ describe('restored routes (Phase 1 parity)', () => {
     const q = await app.inject('/api/finnhub/quote?symbol=SPY');
     expect(q.statusCode).toBe(200);
     expect(q.json().price).toBe(500.25);
+    expect(q.json().cache).toMatchObject({ state: 'miss', hit: false, stale: false, coalesced: false, providerError: null });
+    const qCached = await app.inject('/api/finnhub/quote?symbol=SPY');
+    expect(qCached.json().cache).toMatchObject({ state: 'fresh', hit: true, stale: false, coalesced: false });
     const n = await app.inject('/api/finnhub/news?symbol=SPY&limit=2');
     expect(n.statusCode).toBe(200);
     expect(n.json().count).toBeGreaterThan(0);
+    expect(n.json().cache).toMatchObject({ state: 'miss', hit: false, stale: false, coalesced: false, providerError: null });
     const earnings = await app.inject('/api/finnhub/earnings?symbol=SPY');
     expect(earnings.statusCode).toBe(200);
     expect(earnings.json().next.date).toBe('2026-12-01');
@@ -206,6 +210,42 @@ describe('restored routes (Phase 1 parity)', () => {
       expect(res.json().error).toBe('no_api_key');
     } finally {
       process.env.FINNHUB_API_KEY = saved;
+    }
+  });
+
+  it('finnhub quote joins concurrent clients and serves bounded stale data before expiry', async () => {
+    let release;
+    let gate = new Promise((resolve) => { release = resolve; });
+    let fail = false;
+    global.fetch = vi.fn(async () => {
+      await gate;
+      if (fail) throw new Error('Finnhub network unavailable');
+      return new Response(JSON.stringify({ c: 500.25, d: 1.2, dp: 0.24, h: 501, l: 499, o: 500, pc: 499.05 }), { status: 200 });
+    });
+    const first = app.inject('/api/finnhub/quote?symbol=JOINQ');
+    await Promise.resolve();
+    const second = app.inject('/api/finnhub/quote?symbol=JOINQ');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    release();
+    const [a, b] = await Promise.all([first, second]);
+    expect(a.statusCode).toBe(200);
+    expect(b.json().cache).toMatchObject({ hit: false, stale: false, coalesced: true });
+
+    fail = true;
+    gate = Promise.resolve();
+    vi.useFakeTimers();
+    try {
+      vi.advanceTimersByTime(TTL.FINNHUB_QUOTE_MS + 1);
+      const stale = await app.inject('/api/finnhub/quote?symbol=JOINQ');
+      expect(stale.statusCode).toBe(200);
+      expect(stale.json().cache).toMatchObject({ state: 'stale', hit: true, stale: true, providerError: 'upstream-error' });
+      vi.advanceTimersByTime(TTL.FINNHUB_QUOTE_MS * 10 + 1);
+      const expired = await app.inject('/api/finnhub/quote?symbol=JOINQ');
+      expect(expired.statusCode).toBe(502);
+      expect(expired.json().error).toBe('Finnhub network unavailable');
+    } finally {
+      vi.useRealTimers();
     }
   });
 

@@ -8,7 +8,7 @@
  * Rules: all upstream calls server-side, budgeted, cached, single-flight.
  * Keys never leave the server. Fail-closed typed errors — never synthetic prices.
  */
-import { getOrFetch, peek, TTL, budgetAllows, monthBudgetAllows, recordBudget, ALPHA_VANTAGE_FREE_DAILY, FINNHUB_SOFT_DAILY, getBudgetUsed, getMonthBudgetUsed } from '../../api/upstreamCache.js';
+import { getOrFetch, peek, TTL, budgetAllows, monthBudgetAllows, recordBudget, ALPHA_VANTAGE_FREE_DAILY, FINNHUB_SOFT_DAILY, getBudgetUsed, getMonthBudgetUsed, sanitizeProviderErrorCode } from '../../api/upstreamCache.js';
 import { validateSymbol } from '../validation.js';
 import { getDeribitMarketSnapshotResult } from './deribitMarket.js';
 
@@ -55,7 +55,7 @@ async function finnhubGet(path, params = {}) {
 function cacheMetadata(result) {
   const stale = Boolean(result?.stale);
   const hit = Boolean(result?.fromCache);
-  const providerError = result?.providerError ?? null;
+  const providerError = sanitizeProviderErrorCode(result?.providerError);
   return {
     state: providerError && stale ? 'stale' : providerError ? 'unavailable' : stale ? 'stale' : hit ? 'fresh' : 'miss',
     hit,
@@ -93,7 +93,7 @@ export function registerDeskFeedRoutes(fastify) {
     const raw = String(request.query?.symbol || 'SPY').toUpperCase();
     const symbol = validateSymbol(raw) || 'SPY';
     try {
-      const { data, fromCache, ageMs } = await getOrFetch(`finnhub:quote:${symbol}`, TTL.FINNHUB_QUOTE_MS, async () => {
+      const result = await getOrFetch(`finnhub:quote:${symbol}`, TTL.FINNHUB_QUOTE_MS, async () => {
         const q = await finnhubGet('/quote', { symbol });
         const price = Number(q?.c);
         return {
@@ -111,7 +111,7 @@ export function registerDeskFeedRoutes(fastify) {
           note: 'Shared desk quote · server budget · not per-visitor.',
         };
       }, { allowStaleOnError: true });
-      return { ...data, fromCache, ageMs };
+      return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
     } catch (err) {
       if (err?.code === 'no_api_key' || String(err?.message || '').includes('not configured')) {
         reply.code(503);
@@ -133,7 +133,7 @@ export function registerDeskFeedRoutes(fastify) {
     }
     const cacheKey = `finnhub:news:${symbol}:${limit}`;
     try {
-      const { data, fromCache, ageMs } = await getOrFetch(cacheKey, TTL.FINNHUB_NEWS_MS, async () => {
+      const result = await getOrFetch(cacheKey, TTL.FINNHUB_NEWS_MS, async () => {
         const to = new Date();
         const from = new Date(to.getTime() - 14 * 24 * 3600 * 1000);
         let company = [];
@@ -172,7 +172,7 @@ export function registerDeskFeedRoutes(fastify) {
           error: items.length ? null : 'empty',
         };
       }, { allowStaleOnError: true });
-      return { ...data, fromCache, ageMs };
+      return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
     } catch (err) {
       if (err?.code === 'no_api_key') {
         reply.code(503);

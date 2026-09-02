@@ -32,6 +32,7 @@ const metrics = {
   rejectedPayloads: 0,
 };
 const SAFE_PROVIDER_ERROR_CODES = new Set([
+  'upstream-error',
   'rate_limited',
   'timeout',
   'http_error',

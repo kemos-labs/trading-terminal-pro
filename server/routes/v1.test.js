@@ -85,7 +85,7 @@ const equityDouble = vi.fn((_cmd, args, _opts, callback) => {
   const symbol = String(args?.[1] ?? 'SPY');
   const finish = () => {
     if (equityShouldFail) {
-      callback(Object.assign(new Error('options provider unavailable'), { code: 'rate_limited' }), '', '');
+      callback(new Error('options provider unavailable'), '', '');
       return;
     }
     callback(null, JSON.stringify({
@@ -168,7 +168,7 @@ describe('canonical /api/v1 contracts', () => {
       vi.advanceTimersByTime(TTL.OPTIONS_MS + 1);
       const stale = await app.inject('/api/v1/market/options/SPY');
       expect(stale.statusCode).toBe(200);
-      expect(stale.json().cache).toMatchObject({ state: 'stale', hit: true, stale: true, providerError: 'rate_limited' });
+      expect(stale.json().cache).toMatchObject({ state: 'stale', hit: true, stale: true, providerError: 'upstream-error' });
 
       vi.advanceTimersByTime(TTL.OPTIONS_MS * 10 + 1);
       const expired = await app.inject('/api/v1/market/options/SPY');

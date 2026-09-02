@@ -234,6 +234,8 @@ describe('Deribit legacy routes: full cache envelope and error redaction', () =>
   it('exposes full sanitized cache envelope on cold miss and fresh hit', async () => {
     const cold = await app.inject('/api/deribit/market/BTC');
     expect(cold.statusCode).toBe(200);
+    expect(cold.headers.deprecation).toBe('true');
+    expect(String(cold.headers.link)).toContain('successor-version');
     expect(cold.json().cache).toEqual({
       state: 'miss', hit: false, ageMs: expect.any(Number),
       stale: false, coalesced: false, providerError: null,

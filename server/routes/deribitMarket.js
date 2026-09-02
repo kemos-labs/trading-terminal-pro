@@ -224,8 +224,13 @@ export async function getDeribitFundingSnapshot(currency, instrumentName, days) 
 }
 
 export async function registerDeribitMarketRoutes(fastify) {
+  const markDeprecated = (reply, successor) => {
+    reply.header('Deprecation', 'true');
+    if (successor) reply.header('Link', `<${successor}>; rel="successor-version"`);
+  };
   // Full normalized bundle — the single contract browser and server share.
   fastify.get('/api/deribit/market/:currency', async (request, reply) => {
+    markDeprecated(reply, '/api/v1/market/crypto/{currency}');
     const currency = parseCurrency(request.params.currency);
     if (!currency) {
       reply.code(400);
@@ -241,6 +246,7 @@ export async function registerDeribitMarketRoutes(fastify) {
   });
 
   fastify.get('/api/deribit/instruments', async (request, reply) => {
+    markDeprecated(reply, '/api/v1/market/crypto/{currency}');
     const currency = parseCurrency(request.query.currency);
     if (!currency) {
       reply.code(400);
@@ -256,6 +262,7 @@ export async function registerDeribitMarketRoutes(fastify) {
   });
 
   fastify.get('/api/deribit/trades/:currency', async (request, reply) => {
+    markDeprecated(reply, '/api/v1/market/crypto/{currency}/trades');
     const currency = parseCurrency(request.params.currency);
     if (!currency) {
       reply.code(400);
@@ -275,6 +282,7 @@ export async function registerDeribitMarketRoutes(fastify) {
   });
 
   fastify.get('/api/deribit/index/:name', async (request, reply) => {
+    markDeprecated(reply);
     const name = String(request.params.name || '').toLowerCase();
     if (!/^(btc|eth)_usd$/.test(name)) {
       reply.code(400);
@@ -300,6 +308,7 @@ export async function registerDeribitMarketRoutes(fastify) {
   });
 
   fastify.get('/api/deribit/funding-history', async (request, reply) => {
+    markDeprecated(reply, '/api/v1/market/crypto/{currency}/funding');
     const q = request.query;
     let instrumentName = String(q.instrument_name || '').toUpperCase();
     let currency = parseCurrency(q.currency);

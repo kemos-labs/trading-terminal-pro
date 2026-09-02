@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `5f9a8d3` (`fix(macrovol): preserve worker cache truth`).
+- Recovery HEAD: `2c1a087` (`docs(openapi): type legacy macrovol contract`).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -33,38 +33,36 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. Boot briefing (`efd78b3`)
-and the MacroVol adapter metadata/leakage concern (`5f9a8d3`) are committed.
+No dirty implementation tranche exists at this checkpoint. Boot briefing (`efd78b3`),
+MacroVol cache truth (`5f9a8d3`), and the MacroVol OpenAPI contract (`2c1a087`)
+are committed. The generated OpenAPI no longer advertises the false POST operation
+(runtime registration narrowed to GET, the only method the allowlist admits), and
+runtime error bodies now use the published typed codes (BAD_QUERY /
+ENDPOINT_NOT_ALLOWED / UPSTREAM_ERROR) validated against the schemas with Ajv.
 
-MacroVol adapter inventory (T3, complete): 16 cached-light prefixes (5 min shared
-cache), greeks/surface cached-heavy (3 min), intentionally uncached (health,
-sec/context, crypto/spot, crypto/perp-basis, feed/*, macro/series, jgb-curve,
-global-yields/:c), POST/OPTIONS never allowlisted. Defects fixed in `5f9a8d3`:
-buffer-then-check size enforcement (now bounded streaming with Content-Length
-precheck + reader cancel), 2xx malformed JSON served and cached as 200 error body
-(now typed 502, never cached), verbatim worker error bodies crossing the public
-boundary (now sanitized typed errors with status preserved), `coalesced`/
-`providerError` discarded (now full cache envelope in body + headers), implicit
-stale ceiling (now explicit 50/30 min, fail-closed), missing deprecation marking
-(now HTTP `Deprecation` header).
+Remaining MacroVol adapter concerns (next tranche): several light rate-panel paths
+still have no canonical /api/v1 operation, so frontend consumers remain on the
+legacy adapter; canonical REST/MCP ownership migration continues under C2/C4. MCP
+does not consume `/api/macrovol/*` (verified).
 
-Remaining MacroVol adapter concerns (next tranche): the generic wildcard OpenAPI
-contract — the generated document advertises POST for `/api/macrovol/{wildcard}`
-though runtime never allows POST, and cached responses lack the `cache` envelope
-schema; per-path deprecation/migration descriptions. Also canonical REST/MCP
-ownership: MCP does not consume `/api/macrovol/*` (verified), but several light
-rate-panel paths still have no canonical /api/v1 operation, so frontend consumers
-remain on the legacy adapter.
-
-Exact next action: replace the generic `/api/macrovol/{wildcard}` OpenAPI entry
-with an explicitly deprecated, correctly-typed contract (GET-only, safe error
-envelope, optional `cache` envelope on cached paths, migration note to /api/v1),
-regenerate `docs/openapi.generated.json`, then continue to the remaining C3
-provider/cache/quota items (persistent quota scope is documented single-process;
-deployment-wide accounting still requires a single owner or shared atomic counter).
+Exact next action: continue the remaining C3 provider/cache/quota items. First
+verify which direct provider calls still bypass the shared broker/cache (previous
+audit named `server/routes/deskFeeds.js` and the Deribit index route — re-verify at
+current HEAD since several were repaired in recent commits), then address the
+documented single-process quota-ledger scope (deployment-wide accounting still
+requires a single owner or shared atomic counter), then move to C4 strict-
+TypeScript/contract gaps and C5/C6 visual/real-server evidence.
 
 ## Recent verified commits
 
+- `2c1a087` — explicit deprecated GET-only OpenAPI contract for the macrovol
+  wildcard: typed 400/404/502 envelopes with Ajv-validated runtime responses,
+  optional `cache` envelope documented on cached paths, migration description to
+  /api/v1; runtime registration narrowed to GET (false POST operation removed,
+  65 operations now) and runtime error bodies aligned to published typed codes.
+  Independent evidence: 16 macrovol tests across three files (openapi contract,
+  cache behavior, validation), OpenAPI/parity gates, type-check, lint, all three
+  secret-scan modes, owner-clean, diff checks clean.
 - `5f9a8d3` — MacroVol legacy adapter: bounded streamed reads (Content-Length
   precheck, reader cancel, 500 kB byte cap), status/content-type/JSON/plain-object
   validation before caching (malformed 2xx payloads now typed 502 and never

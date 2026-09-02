@@ -18,6 +18,7 @@ import { resetProviderCircuitsForTests } from '../../api/providerCircuitBreaker.
 
 const REAL_FETCH = global.fetch;
 let runtimeDesk;
+let runtimeEquity;
 
 /** Test-only execFile double for the yfinance python boundary (SPY fixture). */
 const execFileDouble = vi.fn((_cmd, args, _opts, cb) => {
@@ -58,6 +59,7 @@ async function makeApp(envOverrides = {}) {
   vi.resetModules();
   const { __testHooks } = await import('./equityFeeds.js');
   __testHooks.execFile = execFileDouble;
+  runtimeEquity = { __testHooks };
   for (const [k, v] of Object.entries(envOverrides)) process.env[k] = v;
   const { buildServer } = await import('../app.js');
   const server = buildServer();
@@ -137,6 +139,50 @@ describe('restored routes (Phase 1 parity)', () => {
     expect(body.bars.length).toBe(30);
     expect(typeof body.bars[0].close).toBe('number');
   }, 30_000);
+
+  it('yfinance history exposes cache state, coalesces joins, and fails closed on stale expiry/malformed data', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-02T00:00:00Z') });
+    let calls = 0;
+    let mode = 'ok';
+    runtimeEquity.__testHooks.execFile = (_cmd, _args, _opts, cb) => {
+      calls += 1;
+      if (mode === 'fail') return cb(new Error('provider secret body'), '', 'sensitive');
+      if (mode === 'malformed') return cb(null, JSON.stringify({ symbol: 'BAD', bars: [{ date: '2026-01-01', open: null, high: '', low: false, close: 'NaN', volume: 0 }] }), '');
+      return cb(null, JSON.stringify({ symbol: 'JOIN', bars: [{ date: '2026-01-01', open: 1, high: 2, low: 0.5, close: 1.5, volume: 0 }] }), '');
+    };
+    try {
+      const [first, joined] = await Promise.all([
+        app.inject('/api/yf/history/JOIN'),
+        app.inject('/api/yf/history/JOIN'),
+      ]);
+      expect(first.statusCode).toBe(200);
+      expect(joined.statusCode).toBe(200);
+      expect(calls).toBe(1);
+      expect(joined.json().cache.coalesced).toBe(true);
+      vi.advanceTimersByTime(TTL.YF_ENRICH_MS + 1);
+      mode = 'fail';
+      const stale = await app.inject('/api/yf/history/JOIN');
+      expect(stale.statusCode).toBe(200);
+      expect(stale.json().cache).toMatchObject({ state: 'stale', stale: true, providerError: 'upstream-error' });
+      vi.advanceTimersByTime(TTL.YF_ENRICH_MS * 10);
+      const expired = await app.inject('/api/yf/history/JOIN');
+      expect(expired.statusCode).toBe(502);
+      expect(expired.json().bars).toBeUndefined();
+      mode = 'malformed';
+      const malformed = await app.inject('/api/yf/history/BAD');
+      expect(malformed.statusCode).toBe(502);
+      expect(JSON.stringify(malformed.json())).not.toContain('sensitive');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('yfinance info preserves cache metadata and nulls non-finite numeric fields', async () => {
+    runtimeEquity.__testHooks.execFile = (_cmd, _args, _opts, cb) => cb(null, JSON.stringify({ symbol: 'INFO', marketCap: null, beta: false, lastPrice: '', volume: 0 }), '');
+    const res = await app.inject('/api/yf/info/INFO');
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ symbol: 'INFO', marketCap: null, beta: null, lastPrice: null, volume: 0, cache: { state: 'miss', stale: false, providerError: null } });
+  });
 
   it('serves /docs/index.json as JSON (not SPA HTML)', async () => {
     const res = await app.inject('/docs/index.json');

@@ -28,6 +28,12 @@ function getCached(key: string): CacheEntry | null {
   return e;
 }
 
+function finiteOrNull(value: unknown, min = -Infinity): number | null {
+  if (value == null || value === '' || typeof value === 'boolean') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= min ? n : null;
+}
+
 async function yfGet<T>(path: string, ttl: number): Promise<T | null> {
   const cached = getCached(path);
   if (cached) return cached.value as T;
@@ -53,13 +59,13 @@ export async function fetchYfHistory(symbol: string, ttl = 3_600_000): Promise<F
   const bars = data.bars
     .map((b) => ({
       date: String(b.date ?? ''),
-      open: Number(b.open) || 0,
-      high: Number(b.high) || 0,
-      low: Number(b.low) || 0,
-      close: Number(b.close) || 0,
-      volume: Number(b.volume) || 0,
+      open: finiteOrNull(b.open, 0),
+      high: finiteOrNull(b.high, 0),
+      low: finiteOrNull(b.low, 0),
+      close: finiteOrNull(b.close, 0),
+      volume: finiteOrNull(b.volume, 0),
     }))
-    .filter((b) => b.date && isFinite(b.close) && b.close > 0);
+    .filter((b): b is { date: string; open: number; high: number; low: number; close: number; volume: number } => Boolean(b.date && b.open != null && b.high != null && b.low != null && b.close != null && b.volume != null && b.open > 0 && b.high > 0 && b.low > 0 && b.close > 0));
   return bars.length > 0 ? bars : null;
 }
 
@@ -75,14 +81,14 @@ export async function fetchYfInfo(symbol: string, ttl = 86_400_000): Promise<Fmp
   return {
     symbol: String(data.symbol ?? symbol),
     companyName: data.companyName != null ? String(data.companyName) : symbol,
-    marketCap: data.marketCap != null ? Number(data.marketCap) : undefined,
+    marketCap: finiteOrNull(data.marketCap, 0) ?? undefined,
     sector: data.sector != null ? String(data.sector) : undefined,
     industry: data.industry != null ? String(data.industry) : undefined,
     website: data.website != null ? String(data.website) : undefined,
     description: data.description != null ? String(data.description) : undefined,
     ceo: data.ceo != null ? String(data.ceo) : undefined,
     exchange: data.exchange != null ? String(data.exchange) : undefined,
-    beta: data.beta != null ? Number(data.beta) : undefined,
+    beta: finiteOrNull(data.beta) ?? undefined,
     range: data.range != null ? String(data.range) : undefined,
   };
 }

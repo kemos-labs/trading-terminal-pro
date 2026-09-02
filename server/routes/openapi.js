@@ -313,13 +313,13 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
       '/api/yf/history/{symbol}': {
         get: {
           operationId: 'getEquityHistory', tags: ['equities'], summary: 'Daily OHLCV (yfinance, delayed)',
-          parameters: [symbolParam()], responses: { 200: jsonOk({ type: 'object' }, 'bars'), 502: errorResponse },
+          parameters: [symbolParam()], responses: { 200: jsonOk({ type: 'object', additionalProperties: false, required: ['symbol', 'bars', 'coverage', 'warnings', 'cache'], properties: { symbol: { type: 'string' }, bars: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'open', 'high', 'low', 'close', 'volume'], properties: { date: { type: 'string' }, open: { type: 'number', minimum: 0 }, high: { type: 'number', minimum: 0 }, low: { type: 'number', minimum: 0 }, close: { type: 'number', minimum: 0 }, volume: { type: 'number', minimum: 0 } } } }, coverage: { type: 'object', additionalProperties: false, required: ['observed', 'dropped'], properties: { observed: { type: 'integer', minimum: 0 }, dropped: { type: 'integer', minimum: 0 } } }, warnings: { type: 'array', items: { type: 'string' } }, fromCache: { type: 'boolean' }, ageMs: { type: 'number', minimum: 0 }, cache: finnhubCacheSchema } }, 'Validated yfinance bars with cache metadata'), 400: errorResponse, 502: errorResponse },
         },
       },
       '/api/yf/info/{symbol}': {
         get: {
           operationId: 'getEquityInfo', tags: ['equities'], summary: 'Profile + observed last print (yfinance)',
-          parameters: [symbolParam()], responses: { 200: jsonOk({ type: 'object' }, 'info'), 502: errorResponse },
+          parameters: [symbolParam()], responses: { 200: jsonOk({ type: 'object', additionalProperties: true, required: ['symbol', 'cache'], properties: { symbol: { type: 'string' }, marketCap: { type: ['number', 'null'], minimum: 0 }, beta: { type: ['number', 'null'] }, fromCache: { type: 'boolean' }, ageMs: { type: 'number', minimum: 0 }, cache: finnhubCacheSchema } }, 'Validated yfinance info with cache metadata'), 400: errorResponse, 502: errorResponse },
         },
       },
       '/api/finnhub/quote': {

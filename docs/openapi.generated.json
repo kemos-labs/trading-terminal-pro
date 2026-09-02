@@ -4013,11 +4013,174 @@
         ],
         "responses": {
           "200": {
-            "description": "bars",
+            "description": "Validated yfinance bars with cache metadata",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "symbol",
+                    "bars",
+                    "coverage",
+                    "warnings",
+                    "cache"
+                  ],
+                  "properties": {
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "bars": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "date",
+                          "open",
+                          "high",
+                          "low",
+                          "close",
+                          "volume"
+                        ],
+                        "properties": {
+                          "date": {
+                            "type": "string"
+                          },
+                          "open": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "high": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "low": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "close": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "volume": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        }
+                      }
+                    },
+                    "coverage": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "observed",
+                        "dropped"
+                      ],
+                      "properties": {
+                        "observed": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "dropped": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "fromCache": {
+                      "type": "boolean"
+                    },
+                    "ageMs": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "cache": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state",
+                        "hit",
+                        "ageMs",
+                        "stale",
+                        "coalesced",
+                        "providerError"
+                      ],
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "miss",
+                            "fresh",
+                            "stale",
+                            "unavailable"
+                          ]
+                        },
+                        "hit": {
+                          "type": "boolean"
+                        },
+                        "ageMs": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        },
+                        "coalesced": {
+                          "type": "boolean"
+                        },
+                        "providerError": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -4086,11 +4249,120 @@
         ],
         "responses": {
           "200": {
-            "description": "info",
+            "description": "Validated yfinance info with cache metadata",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": [
+                    "symbol",
+                    "cache"
+                  ],
+                  "properties": {
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "marketCap": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "beta": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "fromCache": {
+                      "type": "boolean"
+                    },
+                    "ageMs": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "cache": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state",
+                        "hit",
+                        "ageMs",
+                        "stale",
+                        "coalesced",
+                        "providerError"
+                      ],
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "miss",
+                            "fresh",
+                            "stale",
+                            "unavailable"
+                          ]
+                        },
+                        "hit": {
+                          "type": "boolean"
+                        },
+                        "ageMs": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        },
+                        "coalesced": {
+                          "type": "boolean"
+                        },
+                        "providerError": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }

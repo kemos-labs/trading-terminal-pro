@@ -74,6 +74,62 @@ function runYf(symbol, mode) {
   });
 }
 
+function finiteNumber(value, { min = -Infinity } = {}) {
+  if (value == null || value === '' || typeof value === 'boolean') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= min ? n : null;
+}
+
+function cacheMetadata(result) {
+  const stale = Boolean(result?.stale);
+  const hit = Boolean(result?.fromCache);
+  return {
+    state: result?.providerError && stale ? 'stale' : result?.providerError ? 'unavailable' : stale ? 'stale' : hit ? 'fresh' : 'miss',
+    hit,
+    ageMs: Number.isFinite(result?.ageMs) ? Math.max(0, result.ageMs) : 0,
+    stale,
+    coalesced: Boolean(result?.coalesced),
+    providerError: result?.providerError ?? null,
+  };
+}
+
+function normalizeYfHistory(payload, symbol) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !Array.isArray(payload.bars)) {
+    const error = new Error('Invalid yfinance history payload');
+    error.code = 'invalid_payload';
+    throw error;
+  }
+  const bars = payload.bars.filter((bar) => bar && typeof bar === 'object' && !Array.isArray(bar)).map((bar) => ({
+    date: String(bar.date ?? ''),
+    open: finiteNumber(bar.open, { min: 0 }),
+    high: finiteNumber(bar.high, { min: 0 }),
+    low: finiteNumber(bar.low, { min: 0 }),
+    close: finiteNumber(bar.close, { min: 0 }),
+    volume: finiteNumber(bar.volume, { min: 0 }),
+  }));
+  const usable = bars.filter((bar) => bar.date && bar.open != null && bar.high != null && bar.low != null && bar.close != null && bar.volume != null && bar.open > 0 && bar.high > 0 && bar.low > 0 && bar.close > 0);
+  if (!usable.length && payload.bars.length) {
+    const error = new Error('No usable yfinance history bars');
+    error.code = 'invalid_payload';
+    throw error;
+  }
+  return { symbol, bars: usable, coverage: { observed: usable.length, dropped: payload.bars.length - usable.length }, warnings: usable.length < payload.bars.length ? ['invalid-bars-dropped'] : [] };
+}
+
+function normalizeYfInfo(payload, symbol) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    const error = new Error('Invalid yfinance info payload');
+    error.code = 'invalid_payload';
+    throw error;
+  }
+  const numericFields = new Set(['marketCap', 'beta', 'lastPrice', 'price', 'previousClose', 'volume']);
+  const normalized = Object.fromEntries(Object.entries(payload).map(([key, value]) => [
+    key,
+    numericFields.has(key) ? finiteNumber(value, { min: key === 'marketCap' || key === 'volume' ? 0 : -Infinity }) : typeof value === 'number' ? (Number.isFinite(value) ? value : null) : value,
+  ]));
+  return { ...normalized, symbol: String(normalized.symbol ?? symbol) };
+}
+
 export async function getOptionChainSnapshot(symbol, { probe = false, max = null } = {}) {
   const maxArg = Number.isFinite(Number(max)) && Number(max) > 0
     ? Math.min(Math.trunc(Number(max)), 12)
@@ -155,11 +211,11 @@ export function registerEquityFeedsRoutes(fastify) {
       return { error: 'Invalid symbol' };
     }
     try {
-      const { data } = await getOrFetch(`yf:history:${symbol}`, TTL.YF_ENRICH_MS, () => runYf(symbol, 'history'), { allowStaleOnError: true });
-      return data;
-    } catch (err) {
+      const result = await getOrFetch(`yf:history:${symbol}`, TTL.YF_ENRICH_MS, async () => normalizeYfHistory(await runYf(symbol, 'history'), symbol), { allowStaleOnError: true });
+      return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
+    } catch {
       reply.code(502);
-      return { error: 'Failed to fetch yfinance history', detail: err.message };
+      return { error: 'Failed to fetch yfinance history' };
     }
   });
 
@@ -171,11 +227,11 @@ export function registerEquityFeedsRoutes(fastify) {
       return { error: 'Invalid symbol' };
     }
     try {
-      const { data } = await getOrFetch(`yf:info:${symbol}`, TTL.YF_ENRICH_MS, () => runYf(symbol, 'info'), { allowStaleOnError: true });
-      return data;
-    } catch (err) {
+      const result = await getOrFetch(`yf:info:${symbol}`, TTL.YF_ENRICH_MS, async () => normalizeYfInfo(await runYf(symbol, 'info'), symbol), { allowStaleOnError: true });
+      return { ...result.data, fromCache: result.fromCache, ageMs: result.ageMs, cache: cacheMetadata(result) };
+    } catch {
       reply.code(502);
-      return { error: 'Failed to fetch yfinance info', detail: err.message };
+      return { error: 'Failed to fetch yfinance info' };
     }
   });
 

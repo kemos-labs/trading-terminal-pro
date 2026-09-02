@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `b52b401` (`fix(deribit): preserve legacy snapshot cache truth`).
+- Recovery HEAD: `534433a` (`fix(deps): patch fastify schema-validation advisories`).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -33,29 +33,38 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. Committed this session:
-boot briefing (`efd78b3`), MacroVol cache truth (`5f9a8d3`), MacroVol OpenAPI
-contract (`2c1a087`), and legacy Deribit cache truth (`b52b401`).
+No dirty implementation tranche exists at this checkpoint. Session commits: boot
+briefing (`efd78b3`), MacroVol cache truth (`5f9a8d3`), MacroVol OpenAPI contract
+(`2c1a087`), legacy Deribit cache truth (`b52b401`), and fastify security patch +
+full-suite race fix (`534433a`).
 
-Deribit concern highlights: all five legacy `/api/deribit/*` routes now expose the
-full sanitized cache envelope; zero-coverage fills throw `insufficient_coverage`
-so labelled-stale/fail-closed replaces serving unusable snapshots; all 502 paths
-redact `err.message`; desk pack/venues catch paths sanitized. Frontend verified
-migrated to canonical `/api/v1/market/crypto/*` (legacy routes are compatibility
-surface only; MCP does not call them).
+Dependency security: fastify 5.12.0 -> 5.12.1 via `npm audit fix` closes
+GHSA-w2qp-rph6-63g4 (schema validation bypass) and GHSA-3m5p-2c4r-xxw2
+(X-Forwarded-* spoofing); both npm audit scopes now report 0 vulnerabilities.
+Full suite 155 files/857 tests passes twice under the default threads pool after
+repairing a 1ms fake-timer race in the TradingView budget-bound test (real
+product code was correct; the test advanced a knife's-edge margin).
 
-Remaining C3 items: the file-backed quota ledger remains explicitly single-process
-documented; deployment-wide quota still requires a single owner or shared atomic
-counter. No remaining known direct provider-bypass routes at current HEAD (deskFeeds
-aggregate now composes provider-owned adapters; Deribit index is cached).
-
-Exact next action: C4 strict TypeScript/contract gaps — continue incremental
-Fastify/MCP migration and close remaining schema-authority gaps; then C5/C6
-visual/real-server evidence (3D explicit entry, failure-state matrix), C7 Python
-ownership/perf proof, C8 full gates and independent falsification.
+Remaining C3/C4/C5/C6 items: strict-TypeScript server migration is blocked on a
+runtime tooling decision (this Node 22.22.1 build has no unflagged native TS
+stripping for ESM; enabling requires adding `tsx` and changing dev/start scripts
+— a deployment-affecting infra tranche). MCP consumes only canonical /api/v1
+operations and has comprehensive negative validation (verified this session).
+C5: explicit-entry 3D + geometry assertions + dead-space fixes. C6: real-server
+failure-state matrix + four-viewport screenshots + independent visual review.
+C7: Python ownership restriction, naming/import cleanup, bundle/cache-hit/3D
+lazy-load performance proof. C8: full gates at final HEAD + independent
+adversarial review.
 
 ## Recent verified commits
 
+- `534433a` — fastify 5.12.0→5.12.1 security patch (schema-validation bypass +
+  X-Forwarded spoofing advisories closed; both npm audit scopes 0
+  vulnerabilities) plus deterministic fake-timer fix for the TradingView
+  budget-bound test (1ms race under full-suite thread load). Independent
+  evidence: full suite 155 files/857 tests passed twice on the default threads
+  pool, OpenAPI/parity/type-check/lint/secret gates, owner-clean, diff checks
+  clean.
 - `b52b401` — legacy Deribit routes expose full sanitized cache envelopes
   (cold/fresh/stale with reason), zero-coverage fills throw
   `insufficient_coverage` so labelled-stale/fail-closed engages, all five 502

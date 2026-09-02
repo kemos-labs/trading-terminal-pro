@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-01T17:58:33Z
+Updated: 2026-09-02T04:24:01Z
 
 This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-rebuild`. It records execution state, not proof of completion. The master specification, audited recovery plan, and `AGENTS.md` remain authoritative when a statement conflicts.
 
@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `97376cc` (`fix(polling): pause hidden-tab provider refreshes`).
+- Recovery HEAD: `4b23d76` (`feat(providers): own multi-venue option summaries`).
 - Recovery worktree was clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -33,12 +33,13 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. The next bounded C3 concern is direct-provider ownership cleanup for legacy aggregate routes.
+No dirty implementation tranche exists at this checkpoint. The next bounded C3 concern is adversarial route/cache cardinality and canonicalization.
 
-Exact next action: inspect `server/routes/deskFeeds.js`, especially the direct OKX and Bybit option-summary calls behind `/api/venues/options/:currency`, and re-check the Deribit index path. Move remaining direct upstream ownership into bounded provider adapters with canonical BTC/ETH keys, timeout/size/schema guards, independent partial-failure behavior, and end-to-end cache metadata. Add real route/provider tests proving N clients share one upstream fill and malformed/failed venues cannot poison valid independent results. Luna medium implements the bounded tranche; Sol reviews provider semantics, cache ownership, and evidence before commit.
+Exact next action: inventory every user-controlled dimension entering `getOrFetch` keys across runtime routes and provider adapters. Confirm strict route validation/canonicalization prevents case, whitespace, query-order, unbounded symbol, and range variants from multiplying keys; add route-level adversarial tests and close only bounded defects. Luna medium implements the bounded tranche; Sol reviews cache semantics, allowed cardinality, and evidence before commit.
 
 ## Recent verified commits
 
+- `4b23d76` — provider-owned OKX and Bybit public option-summary adapters now use canonical BTC/ETH keys, separate bounded circuits, timeout/content-type/schema/stream-size guards, stale-aware shared cache metadata, and partial-failure isolation; the route reuses the canonical Deribit snapshot and exposes explicit nullable unit fields under a strict OpenAPI contract. Independent evidence: 61 focused tests across six files, OpenAPI 65 paths/66 operations, method-aware parity, type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.
 - `97376cc` — one production-used visibility-aware single-flight scheduler now owns terminal, Deribit futures/funding, dual crypto books, shared strip, and KSA polling; mounted fake-timer tests prove active cadence, hidden suppression, safe resume, no overlap, and cleanup. Independent evidence: 25 tests across seven files, type-check, lint, secret scan, and diff checks passed.
 - `35bea43` — fixed-ID closed/open/half-open circuits protect Deribit, Binance Futures, and Bybit Linear; one half-open probe is enforced, an older request cannot close a newer probe, free venues remain independent, and canonical provider status exposes a strict safe three-row projection. Independent evidence: 60 focused tests, OpenAPI 65 paths/66 operations, method-aware parity, type-check, lint, all secret-scan modes, and diff checks passed.
 - `ad27efc` — checkpointed provider-error completion and circuit-breaker next action.
@@ -53,7 +54,7 @@ Exact next action: inspect `server/routes/deskFeeds.js`, especially the direct O
 
 ## Remaining major blockers after the current concern
 
-- C3: direct-provider ownership cleanup and route-level adversarial cache cardinality remain; circuit behavior and runtime hidden-tab cadence are now implemented and tested for the current bounded owners.
+- C3: route-level adversarial cache cardinality remains, along with persistent/deployment-appropriate quota accounting and complete provider metadata propagation; circuit behavior, free-options provider ownership, and runtime hidden-tab cadence are implemented and tested for the current bounded owners.
 - C4: migrate Fastify/MCP incrementally to strict TypeScript and close remaining schema-authority/negative-test gaps.
 - C5: complete explicit-entry professional IV and Greeks 3D, geometry assertions, and remaining desktop/mobile dead-space defects.
 - C6: real-server loading, empty, stale, partial, malformed-provider, provider-down, and entitlement matrices; inspect their pixels.

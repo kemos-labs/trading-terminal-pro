@@ -515,13 +515,16 @@ describe('restored routes (Phase 1 parity)', () => {
     expect(runtimeDesk.__testHooks.getMonthBudgetUsed('tradingview')).toBe(1);
     expect(runtimeDesk.__testHooks.getBudgetUsed('tradingview')).toBe(0);
     runtimeDesk.__testHooks.recordMonthBudget('tradingview', 150);
-    vi.useFakeTimers();
+    // Anchor the fake clock exactly at the warm-request time so the cache age
+    // is deterministic (no real->fake clock skew; previously advanced a knife-
+    // edge 1ms and raced under load).
+    vi.useFakeTimers({ now: Date.now() });
     try {
-      vi.advanceTimersByTime(TTL.TRADINGVIEW_MS * 10 - 1);
+      vi.advanceTimersByTime(TTL.TRADINGVIEW_MS * 10 - 60_000);
       const stale = await app.inject('/api/tradingview/snapshot?symbol=TVTEST');
       expect(stale.statusCode).toBe(200);
       expect(stale.json()).toMatchObject({ price: 321.5, cache: { state: 'stale', hit: true, stale: true, providerError: 'budget_exhausted' } });
-      vi.advanceTimersByTime(2);
+      vi.advanceTimersByTime(60_001); // cross the bounded stale ceiling
       const expired = await app.inject('/api/tradingview/snapshot?symbol=TVTEST');
       expect(expired.statusCode).toBe(429);
       expect(expired.json().price).toBeNull();

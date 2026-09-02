@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-02T10:56:00Z
+Updated: 2026-09-02T12:10:00Z
 
 This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-rebuild`. It records execution state, not proof of completion. The master specification, audited recovery plan, and `AGENTS.md` remain authoritative when a statement conflicts.
 
@@ -22,8 +22,8 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `9874cb1` (`fix(feeds): preserve yfinance data truth`).
-- Recovery worktree was clean at this checkpoint.
+- Recovery HEAD: `efd78b3` (`fix(boot): preserve legacy briefing freshness`).
+- Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
 - C0 and C1 are substantially repaired.
@@ -33,11 +33,36 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. The next bounded C3 concern is the legacy boot briefing cache/provenance contract.
+No dirty implementation tranche exists at this checkpoint. The legacy boot-briefing
+concern is committed (`efd78b3`). Independent review of the tranche found and fixed
+three defects before commit: HTTP status/content-type are now validated from headers
+before any body bytes are read; HTTP-layer `Deprecation` + `Link </api/home/briefing>;
+rel="successor-version"` headers were added; and the partial-failure test now asserts
+the worker error body never leaks.
 
-Exact next action: inspect `/api/boot/briefing` in `server/app.js` against its actual consumers and the canonical `/api/home/briefing`. If it remains necessary, preserve complete sanitized cache metadata, validate/label per-source partial failures, enforce bounded stale/fail-closed behavior, and publish an explicit OpenAPI contract with real tests. If it is unused duplication, document and safely deprecate rather than inventing a second Home contract. Then inspect selected MacroVol cached adapters.
+Exact next action: inventory every allowlisted path in `server/routes/macrovol.js`
+(classify cached light/heavy/uncached, canonical-service owners, frontend/MCP
+consumers, response-size behavior, stale behavior, metadata behavior, OpenAPI
+status, tests present/missing), then implement one coherent concern at a time —
+first full sanitized cache metadata propagation (`coalesced`/`providerError` are
+reportedly discarded in cached light routes) with real Fastify tests covering
+cold miss, fresh hit, N-client single flight, stale success with reason, stale
+expiry, malformed JSON, wrong content type, oversized stream, worker timeout,
+canonicalized equivalent queries, forbidden query/path, and no secret/body leakage.
 
 ## Recent verified commits
+
+- `efd78b3` — deprecated `GET /api/boot/briefing` compatibility adapter now settles
+  rates/macro/stress worker calls independently with per-source coverage/warnings,
+  bounded streamed reads (500 kB cap, Content-Length precheck, reader cancel),
+  status/content-type validated before any read, JSON + object-shape validation,
+  full sanitized cache envelope (state/hit/ageMs/stale/coalesced/providerError),
+  bounded stale fallback with fail-closed expiry, redacted error bodies, HTTP
+  deprecation headers pointing to canonical `/api/home/briefing`, strict OpenAPI
+  contract, and inventory deprecation. Independent evidence: 47 focused tests
+  (`server/routes/restoredRoutes.test.js` + `api/upstreamCache.test.js`), OpenAPI
+  65 paths/66 operations/16 strict v1, method-aware parity 38/65, type-check, lint,
+  all three secret-scan modes, owner-clean, `git diff --check` clean.
 
 - `9874cb1` — yfinance history/info routes now validate snapshots before caching, propagate full cache state, serve bounded labeled stale results, fail closed after expiry, and redact provider diagnostics. Missing/null/blank/boolean or non-finite OHLC values are dropped rather than coerced to zero; OHLC must be positive while observed zero volume remains valid; non-finite info numerics become null server-side and do not propagate through frontend profiles. Explicit OpenAPI contracts and client tests cover the behavior. Independent evidence: 51 focused tests across three files followed by 31 post-cleanup tests, warning-free lint, OpenAPI 65 paths/66 operations, method-aware parity, project-reference type-check, all three secret-scan modes, owner-clean, and diff checks passed.
 - `9215224` — Finnhub daily headroom is now enforced at the common provider-call boundary: cached hits cost zero, exhausted calls fail before fetch, and every attempted network/HTTP call is counted exactly once. News preserves labeled one-source partial results but total failure and exhaustion fail closed; upstream bodies are never included in public diagnostics; all six Finnhub routes consistently expose typed 429 responses in runtime and OpenAPI. Independent evidence: 44 focused tests across two files, OpenAPI 65 paths/66 operations, method-aware parity, project-reference type-check, lint, all three secret-scan modes, owner-clean, and diff checks passed.

@@ -5852,6 +5852,190 @@
         "description": "Deprecated compatibility route; migrate to /api/v1 where available."
       }
     },
+    "/api/boot/briefing": {
+      "get": {
+        "operationId": "getLegacyBootBriefing",
+        "tags": [
+          "legacy"
+        ],
+        "deprecated": true,
+        "x-legacy-adapter": true,
+        "summary": "Deprecated boot briefing compatibility adapter",
+        "description": "Legacy landing-page compatibility route. Migrate consumers to GET /api/home/briefing; no new workflow should depend on this operation.",
+        "responses": {
+          "200": {
+            "description": "Deprecated boot compatibility payload with cache metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "rates",
+                    "macro",
+                    "stress",
+                    "as_of",
+                    "coverage",
+                    "warnings",
+                    "cache"
+                  ],
+                  "properties": {
+                    "rates": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "macro": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "stress": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "as_of": {
+                      "type": "string"
+                    },
+                    "coverage": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "rates",
+                        "macro",
+                        "stress"
+                      ],
+                      "properties": {
+                        "rates": {
+                          "type": "string",
+                          "enum": [
+                            "available",
+                            "unavailable"
+                          ]
+                        },
+                        "macro": {
+                          "type": "string",
+                          "enum": [
+                            "available",
+                            "unavailable"
+                          ]
+                        },
+                        "stress": {
+                          "type": "string",
+                          "enum": [
+                            "available",
+                            "unavailable"
+                          ]
+                        }
+                      }
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "fromCache": {
+                      "type": "boolean"
+                    },
+                    "ageMs": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "stale": {
+                      "type": "boolean"
+                    },
+                    "cache": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "state",
+                        "hit",
+                        "ageMs",
+                        "stale",
+                        "coalesced",
+                        "providerError"
+                      ],
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "miss",
+                            "fresh",
+                            "stale",
+                            "unavailable"
+                          ]
+                        },
+                        "hit": {
+                          "type": "boolean"
+                        },
+                        "ageMs": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        },
+                        "coalesced": {
+                          "type": "boolean"
+                        },
+                        "providerError": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Typed error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "PROVIDER_UNAVAILABLE",
+                        "ENTITLEMENT_MISSING",
+                        "STALE_ONLY",
+                        "INSUFFICIENT_COVERAGE",
+                        "INVALID_SYMBOL",
+                        "UNSUPPORTED_CURRENCY",
+                        "FREE_CRYPTO_UNAVAILABLE",
+                        "RATE_LIMITED",
+                        "no_api_key",
+                        "budget_exhausted"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/deribit/market/{currency}": {
       "get": {
         "operationId": "getDeribitMarket",
@@ -6786,33 +6970,6 @@
         "deprecated": true,
         "x-legacy-adapter": true,
         "description": "Deprecated compatibility route; migrate to /api/v1 where available."
-      }
-    },
-    "/api/boot/briefing": {
-      "get": {
-        "operationId": "legacy_get_api_boot_briefing",
-        "tags": [
-          "legacy"
-        ],
-        "summary": "Runtime-discovered legacy adapter: GET /api/boot/briefing",
-        "description": "Deprecated provider-native or compatibility route. New consumers must use a validated /api/v1 operation where available.",
-        "deprecated": true,
-        "x-legacy-adapter": true,
-        "responses": {
-          "200": {
-            "description": "Legacy adapter payload; shape is provider/route specific.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Legacy route error"
-          }
-        }
       }
     },
     "/api/fmp/stable/{wildcard}": {

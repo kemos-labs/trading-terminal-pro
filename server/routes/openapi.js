@@ -381,6 +381,17 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
           responses: { 200: jsonOk({ type: 'object' }, 'briefing') },
         },
       },
+      '/api/boot/briefing': {
+        get: {
+          operationId: 'getLegacyBootBriefing', tags: ['legacy'], deprecated: true, 'x-legacy-adapter': true,
+          summary: 'Deprecated boot briefing compatibility adapter',
+          description: 'Legacy landing-page compatibility route. Migrate consumers to GET /api/home/briefing; no new workflow should depend on this operation.',
+          responses: {
+            200: jsonOk({ type: 'object', additionalProperties: false, required: ['rates', 'macro', 'stress', 'as_of', 'coverage', 'warnings', 'cache'], properties: { rates: { type: ['object', 'null'] }, macro: { type: ['object', 'null'] }, stress: { type: ['object', 'null'] }, as_of: { type: 'string' }, coverage: { type: 'object', additionalProperties: false, required: ['rates', 'macro', 'stress'], properties: { rates: { type: 'string', enum: ['available', 'unavailable'] }, macro: { type: 'string', enum: ['available', 'unavailable'] }, stress: { type: 'string', enum: ['available', 'unavailable'] } } }, warnings: { type: 'array', items: { type: 'string' } }, fromCache: { type: 'boolean' }, ageMs: { type: 'number', minimum: 0 }, stale: { type: 'boolean' }, cache: finnhubCacheSchema } }, 'Deprecated boot compatibility payload with cache metadata'),
+            502: errorResponse,
+          },
+        },
+      },
       '/api/deribit/market/{currency}': {
         get: {
           operationId: 'getDeribitMarket', tags: ['crypto'], summary: 'Deribit catalogue/quote join',

@@ -193,6 +193,79 @@ describe('restored routes (Phase 1 parity)', () => {
     expect(Array.isArray(body.categories)).toBe(true);
   });
 
+  it('legacy boot briefing validates independent sources, preserves cache metadata, and fails closed', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-02T00:00:00Z') });
+    let mode = 'ok';
+    let release;
+    let gate = Promise.resolve();
+    global.fetch = vi.fn(async (input) => {
+      const url = String(input);
+      if (mode === 'join') await gate;
+      if (mode === 'down') return new Response('{"secret":"worker body"}', { status: 503, headers: { 'content-type': 'application/json' } });
+      if (mode === 'partial' && url.includes('/api/macro/summary')) return new Response('{"secret":"worker body"}', { status: 503, headers: { 'content-type': 'application/json' } });
+      if (mode === 'invalid') return new Response('<html>not json</html>', { status: 200, headers: { 'content-type': 'text/html' } });
+      if (mode === 'oversize') return new Response('x'.repeat(500_001), { status: 200, headers: { 'content-type': 'application/json', 'content-length': '500001' } });
+      const body = url.includes('/rates/summary') ? { sofr: 5 } : url.includes('/macro/summary') ? { vix: 18 } : { stress: 'low' };
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    try {
+      const complete = await app.inject('/api/boot/briefing');
+      expect(complete.statusCode).toBe(200);
+      expect(complete.json().cache).toMatchObject({ state: 'miss', hit: false, stale: false, providerError: null });
+      expect(complete.json().coverage).toEqual({ rates: 'available', macro: 'available', stress: 'available' });
+
+      await app.close();
+      app = await makeApp();
+      mode = 'join';
+      gate = new Promise((resolve) => { release = resolve; });
+      const joinedA = app.inject('/api/boot/briefing');
+      const joinedB = app.inject('/api/boot/briefing');
+      await Promise.resolve();
+      release();
+      const [joinA, joinB] = await Promise.all([joinedA, joinedB]);
+      expect(joinA.statusCode).toBe(200);
+      expect(joinA.json().cache.coalesced || joinB.json().cache.coalesced).toBe(true);
+
+      await app.close();
+      app = await makeApp();
+      mode = 'partial';
+      const partial = await app.inject('/api/boot/briefing');
+      expect(partial.statusCode).toBe(200);
+      expect(partial.json()).toMatchObject({ coverage: { rates: 'available', macro: 'unavailable', stress: 'available' }, warnings: ['source-unavailable:macro'] });
+      expect(partial.body).not.toContain('worker body');
+
+      await app.close();
+      app = await makeApp();
+      mode = 'invalid';
+      const malformed = await app.inject('/api/boot/briefing');
+      expect(malformed.statusCode).toBe(502);
+      expect(JSON.stringify(malformed.json())).not.toContain('not json');
+
+      await app.close();
+      app = await makeApp();
+      mode = 'oversize';
+      const oversize = await app.inject('/api/boot/briefing');
+      expect(oversize.statusCode).toBe(502);
+      expect(JSON.stringify(oversize.json())).not.toContain('x'.repeat(20));
+
+      await app.close();
+      app = await makeApp();
+      mode = 'ok';
+      await app.inject('/api/boot/briefing');
+      vi.advanceTimersByTime(TTL.BRIEFING_MS + 1);
+      mode = 'down';
+      const stale = await app.inject('/api/boot/briefing');
+      expect(stale.statusCode).toBe(200);
+      expect(stale.json().cache).toMatchObject({ state: 'stale', stale: true, providerError: 'http-503' });
+      vi.advanceTimersByTime(TTL.BRIEFING_MS * 10 + 1);
+      const expired = await app.inject('/api/boot/briefing');
+      expect(expired.statusCode).toBe(502);
+      expect(JSON.stringify(expired.json())).not.toContain('worker body');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('serves allowlisted academy markdown and blocks non-academy scope', async () => {
     const ok = await app.inject('/docs/academy/00-curriculum-overview.md');
     expect(ok.statusCode).toBe(200);

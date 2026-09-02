@@ -21,7 +21,7 @@ Generated deterministically by `node scripts/route-parity.mjs --write` from Fast
 | GET | `/api/billing/gate` | authenticated / entitlement |
 | POST | `/api/billing/portal-session` | authenticated / entitlement |
 | GET | `/api/billing/status` | authenticated / entitlement |
-| GET | `/api/boot/briefing` | public server-proxied |
+| GET | `/api/boot/briefing` | deprecated compatibility adapter; migrate to `/api/home/briefing` |
 | GET | `/api/cache/status` | health / operations |
 | GET | `/api/deribit/funding-history` | public server-proxied |
 | GET | `/api/deribit/index/:name` | public server-proxied |

@@ -27,7 +27,7 @@ import { registerStripeAuth } from '../api/authRoutes.js';
 import { resolveProxyTrust } from '../api/proxyTrust.js';
 import { normalizeIP } from '@fastify/rate-limit';
 import {
-  getOrFetch, peek, cacheStats, TTL, budgetAllows, recordBudget,
+  getOrFetch, peek, cacheStats, TTL, budgetAllows, recordBudget, sanitizeProviderErrorCode,
   getBudgetUsed, FMP_FREE_DAILY, FLASHALPHA_FREE_DAILY,
 } from '../api/upstreamCache.js';
 import { FMP_BASE, canonicalizeFmpEndpoint, isFmpEndpointAllowed, proxyFmp } from '../api/_shared.js';
@@ -188,21 +188,101 @@ function registerBootRoutes(fastify) {
   // Canonical RATES_WORKER_URL with loopback validation; MACROVOL_API_URL is a
   // deprecated compatibility alias (see server/ratesWorkerUrl.js).
   const MACROVOL_BASE = resolveRatesWorkerUrl();
-  fastify.get('/api/boot/briefing', async (request, reply) => {
+  const readBoundedBody = async (response) => {
+    const maxBytes = 500_000;
+    const contentLength = Number(response.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      const error = new Error('boot source too large'); error.code = 'invalid_payload'; throw error;
+    }
+    const reader = response.body?.getReader?.();
+    if (!reader) {
+      if (!Number.isFinite(contentLength)) { const error = new Error('boot source body unavailable'); error.code = 'invalid_payload'; throw error; }
+      return response.text();
+    }
+    const chunks = [];
+    let total = 0;
     try {
-      const { data } = await getOrFetch('boot:briefing', TTL.BRIEFING_MS, async () => {
-        const [ratesRes, macroRes, stressRes] = await Promise.all([
-          fetch(`${MACROVOL_BASE}/api/rates/summary`, { signal: AbortSignal.timeout(20_000) }),
-          fetch(`${MACROVOL_BASE}/api/macro/summary`, { signal: AbortSignal.timeout(25_000) }),
-          fetch(`${MACROVOL_BASE}/api/macro/stress`, { signal: AbortSignal.timeout(25_000) }),
-        ]);
-        const rates = ratesRes.ok ? await ratesRes.json() : null;
-        const macro = macroRes.ok ? await macroRes.json() : null;
-        const stress = stressRes.ok ? await stressRes.json() : null;
-        return { rates, macro, stress, as_of: new Date().toISOString() };
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > maxBytes) {
+          await reader.cancel();
+          const error = new Error('boot source too large'); error.code = 'invalid_payload'; throw error;
+        }
+        chunks.push(value);
+      }
+    } catch (error) {
+      try { await reader.cancel(); } catch { /* already closed */ }
+      throw error;
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return new TextDecoder().decode(bytes);
+  };
+  const readBootSource = async (path, timeoutMs) => {
+    const res = await fetch(`${MACROVOL_BASE}${path}`, { signal: AbortSignal.timeout(timeoutMs) });
+    // Validate status and content type from headers before reading any bytes,
+    // so error pages are never buffered even inside the bounded reader.
+    if (!res.ok) { const error = new Error(`boot source HTTP ${res.status}`); error.code = `http-${res.status}`; throw error; }
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) { const error = new Error('boot source must be JSON'); error.code = 'invalid_payload'; throw error; }
+    const text = await readBoundedBody(res);
+    let data;
+    try { data = JSON.parse(text); } catch { const error = new Error('boot source JSON invalid'); error.code = 'invalid_payload'; throw error; }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) { const error = new Error('boot source shape invalid'); error.code = 'invalid_payload'; throw error; }
+    return data;
+  };
+  fastify.get('/api/boot/briefing', async (request, reply) => {
+    // Explicit deprecation + migration pointer at the HTTP layer; canonical
+    // Home contract is GET /api/home/briefing.
+    reply.header('Deprecation', 'true');
+    reply.header('Link', '</api/home/briefing>; rel="successor-version"');
+    try {
+      const result = await getOrFetch('boot:briefing', TTL.BRIEFING_MS, async () => {
+        const sources = [
+          ['rates', '/api/rates/summary', 20_000],
+          ['macro', '/api/macro/summary', 25_000],
+          ['stress', '/api/macro/stress', 25_000],
+        ];
+        const settled = await Promise.all(sources.map(async ([name, path, timeout]) => {
+          try { return { name, data: await readBootSource(path, timeout), error: null }; }
+          catch (error) { return { name, data: null, error }; }
+        }));
+        const available = settled.filter((entry) => entry.data);
+        if (!available.length) {
+          const error = settled.find((entry) => entry.error)?.error || new Error('boot sources unavailable');
+          throw error;
+        }
+        const data = Object.fromEntries(settled.map((entry) => [entry.name, entry.data]));
+        return {
+          ...data,
+          as_of: new Date().toISOString(),
+          coverage: Object.fromEntries(settled.map((entry) => [entry.name, entry.data ? 'available' : 'unavailable'])),
+          warnings: settled.filter((entry) => entry.error).map((entry) => `source-unavailable:${entry.name}`),
+        };
       }, { allowStaleOnError: true });
-      return data;
-    } catch (err) { reply.code(502); return { error: 'Boot briefing failed', detail: err.message }; }
+      const stale = Boolean(result.stale);
+      const providerError = sanitizeProviderErrorCode(result.providerError);
+      return {
+        ...result.data,
+        fromCache: result.fromCache,
+        ageMs: result.ageMs,
+        stale,
+        cache: {
+          state: stale ? 'stale' : result.fromCache ? 'fresh' : 'miss',
+          hit: Boolean(result.fromCache),
+          ageMs: Number.isFinite(result.ageMs) ? Math.max(0, result.ageMs) : 0,
+          stale,
+          coalesced: Boolean(result.coalesced),
+          providerError,
+        },
+      };
+    } catch (err) {
+      reply.code(502);
+      return { error: 'Boot briefing failed', detail: sanitizeProviderErrorCode(err?.code) || 'upstream-error' };
+    }
   });
 }
 

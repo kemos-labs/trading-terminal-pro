@@ -1,8 +1,13 @@
 /**
- * MacroVol proxy routes — forwards /api/macrovol/* → local FastAPI on :8766.
+ * MacroVol proxy routes — forwards /api/macrovol/* → local rates worker on loopback.
  * Loopback-only, SSRF-safe. Lightweight paths are shared-cached.
+ *
+ * DEPRECATED compatibility prefix: canonical consumers migrate to /api/v1
+ * domain services. Cached responses carry a full sanitized cache envelope
+ * (state/hit/ageMs/stale/coalesced/providerError) in the `cache` body field
+ * plus X-Cache* headers. Worker error bodies never cross this boundary.
  */
-import { getOrFetch, TTL } from '../../api/upstreamCache.js';
+import { getOrFetch, TTL, sanitizeProviderErrorCode } from '../../api/upstreamCache.js';
 import { resolveRatesWorkerUrl } from '../ratesWorkerUrl.js';
 
 const MACRO_LIGHT_TTL_MS = TTL.BRIEFING_MS;
@@ -201,13 +206,85 @@ function resolveMacrovolBase() {
   return resolveRatesWorkerUrl();
 }
 
-export async function registerMacrovolRoutes(fastify) {
+/** Hard response-size ceiling for worker payloads (bytes). */
+const MACRO_MAX_BYTES = 500_000;
+const MACRO_LIGHT_MAX_STALE_MS = 10 * MACRO_LIGHT_TTL_MS; // explicit bounded stale ceiling (50 min)
+const MACRO_HEAVY_MAX_STALE_MS = 10 * TTL.OPTIONS_MS;     // explicit bounded stale ceiling (30 min)
+
+/**
+ * Bounded streaming read with Content-Length precheck and reader cancel.
+ * Never buffers an unbounded body: bytes past MACRO_MAX_BYTES abort the read.
+ */
+const readBoundedBody = async (response) => {
+  const contentLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > MACRO_MAX_BYTES) {
+    const error = new Error('worker response too large'); error.code = 'invalid_payload'; throw error;
+  }
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    if (!Number.isFinite(contentLength)) {
+      const error = new Error('worker body unavailable'); error.code = 'invalid_payload'; throw error;
+    }
+    return response.text();
+  }
+  const chunks = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MACRO_MAX_BYTES) {
+        await reader.cancel();
+        const error = new Error('worker response too large'); error.code = 'invalid_payload'; throw error;
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    try { await reader.cancel(); } catch { /* already closed */ }
+    throw error;
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(bytes);
+};
+
+/**
+ * Validate worker response before it can be served or cached: HTTP status,
+ * JSON content type, bounded size, parseable JSON, plain-object shape.
+ * Throws typed safe-code errors; never attaches worker bodies.
+ */
+const readWorkerSource = async (res) => {
+  if (!res.ok) { const error = new Error(`worker HTTP ${res.status}`); error.code = `http-${res.status}`; throw error; }
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) { const error = new Error('worker response must be JSON'); error.code = 'invalid_payload'; throw error; }
+  const text = await readBoundedBody(res);
+  let body;
+  try { body = JSON.parse(text); } catch { const error = new Error('worker JSON invalid'); error.code = 'invalid_payload'; throw error; }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) { const error = new Error('worker shape invalid'); error.code = 'invalid_payload'; throw error; }
+  return body;
+};
+
+const cacheEnvelope = (r) => ({
+  state: r.stale ? 'stale' : r.fromCache ? 'fresh' : 'miss',
+  hit: Boolean(r.fromCache),
+  ageMs: Number.isFinite(r.ageMs) ? Math.max(0, r.ageMs) : 0,
+  stale: Boolean(r.stale),
+  coalesced: Boolean(r.coalesced),
+  providerError: sanitizeProviderErrorCode(r.providerError),
+});
+
+export function registerMacrovolRoutes(fastify) {
   const MACROVOL_API_URL = resolveMacrovolBase();
 
   fastify.route({
     method: ['GET', 'POST', 'OPTIONS'],
     url: '/api/macrovol/*',
     handler: async (request, reply) => {
+      // Explicit deprecation marking at the HTTP layer; per-path migration
+      // pointers live in the OpenAPI legacy adapter descriptions.
+      reply.header('Deprecation', 'true');
       const raw = request.url || '';
       const rawSuffix = raw.replace(/^\/api\/macrovol/, '') || '/';
       if (isMacroDebugPath(rawSuffix)) { reply.code(404); return { error: 'Not found' }; }
@@ -226,8 +303,9 @@ export async function registerMacrovolRoutes(fastify) {
       const greeksPath = (suffix.split('?')[0] || '').replace(/\/$/, '');
       const greeksHeavy = request.method === 'GET' && (greeksPath.startsWith('/greeks/') || greeksPath.startsWith('/surface/'));
       try {
-        const cacheIf2xx = (d) => d && d.status >= 200 && d.status < 300;
-        // P0 Fix: bounded timeouts (20s light, 30s heavy), response contracts, abort.
+        // P0 Fix: bounded timeouts (20s light, 30s heavy) and abort. The loader
+        // validates status/content-type/size/JSON/shape and only returns for
+        // valid 2xx plain-object payloads, so nothing invalid is ever cached.
         const timeoutMs = greeksHeavy ? 30_000 : light ? 20_000 : 25_000;
         const loader = async () => {
           const res = await fetch(target, {
@@ -235,49 +313,36 @@ export async function registerMacrovolRoutes(fastify) {
             headers: { Accept: 'application/json' },
             signal: AbortSignal.timeout(timeoutMs),
           });
-          const ct = res.headers.get('content-type') || '';
-          if (!ct.includes('application/json') && res.ok) {
-            // Enforce JSON contract
-            const t = await res.text();
-            const err = new Error('Upstream non-JSON');
-            err.status = 502;
-            err.body = { error: 'Invalid JSON from rates pipe', raw: t.slice(0, 200) };
-            throw err;
-          }
-          const text = await res.text();
-          if (text.length > 500_000) {
-            const err = new Error('Upstream response too large');
-            err.status = 502;
-            err.body = { error: 'Upstream response exceeds size cap' };
-            throw err;
-          }
-          let body;
-          try { body = JSON.parse(text); } catch { body = { error: 'Invalid JSON from rates pipe', raw: text.slice(0, 300) }; }
-          if (res.status < 200 || res.status >= 300) {
-            const err = new Error(`MacroVol upstream ${res.status}`);
-            err.status = res.status;
-            err.body = body;
-            throw err;
-          }
+          const body = await readWorkerSource(res);
           return { status: res.status, body };
         };
         const result = light
-          ? await getOrFetch(`macrovol:${suffix}`, MACRO_LIGHT_TTL_MS, loader, { allowStaleOnError: true, cacheIf: cacheIf2xx })
+          ? await getOrFetch(`macrovol:${suffix}`, MACRO_LIGHT_TTL_MS, loader, { allowStaleOnError: true, maxStaleMs: MACRO_LIGHT_MAX_STALE_MS })
           : greeksHeavy
-            ? await getOrFetch(`macrovol:${suffix}`, TTL.OPTIONS_MS, loader, { allowStaleOnError: true, cacheIf: cacheIf2xx })
-            : { data: await loader(), fromCache: false, ageMs: 0, stale: false };
+            ? await getOrFetch(`macrovol:${suffix}`, TTL.OPTIONS_MS, loader, { allowStaleOnError: true, maxStaleMs: MACRO_HEAVY_MAX_STALE_MS })
+            : { data: await loader(), fromCache: false, ageMs: 0, stale: false, coalesced: false, providerError: null };
         const { status, body } = result.data;
         reply.code(status);
         if (light || greeksHeavy) {
-          reply.header('X-Cache', result.fromCache ? 'HIT' : 'MISS');
-          reply.header('X-Cache-Age-Ms', String(result.ageMs ?? 0));
-          if (result.stale) reply.header('X-Cache-Stale', '1');
+          const cache = cacheEnvelope(result);
+          reply.header('X-Cache', cache.hit ? 'HIT' : 'MISS');
+          reply.header('X-Cache-Age-Ms', String(cache.ageMs));
+          if (cache.stale) reply.header('X-Cache-Stale', '1');
+          if (cache.coalesced) reply.header('X-Cache-Coalesced', '1');
+          if (cache.providerError) reply.header('X-Provider-Error', cache.providerError);
+          return { ...body, cache };
         }
         return body;
       } catch (err) {
-        if (err?.body != null && err?.status) { reply.code(err.status); return err.body; }
-        reply.code(502);
-        return { error: 'Rates/greeks pipe unavailable', detail: err.message || String(err), hint: `Start local rates pipe on ${MACROVOL_API_URL}` };
+        // Fail closed with sanitized codes only; worker bodies, stack traces,
+        // and internal diagnostics never cross the public boundary. Original
+        // worker HTTP status is preserved for uncached 4xx/5xx semantics.
+        const code = err?.name === 'TimeoutError' || err?.name === 'AbortError'
+          ? 'timeout'
+          : sanitizeProviderErrorCode(err?.code);
+        const statusMatch = /^http-(\d{3})$/.exec(code || '');
+        reply.code(statusMatch ? Number(statusMatch[1]) : 502);
+        return { error: 'Rates worker request failed', detail: code || 'upstream-error' };
       }
     },
   });

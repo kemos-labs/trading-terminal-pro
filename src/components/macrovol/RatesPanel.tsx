@@ -79,15 +79,13 @@ export function RatesPanel({
   const funding = (
     <>
       <PlumbingBarometer plumbing={plumbing} basis={basis} summary={summary} />
-      <div id="sec-mm-strip">
-        <MoneyMarketStrip
-          summary={summary}
-          basis={basis}
-          plumbing={plumbing}
-          basisHist={basisHist}
-          stir={stir}
-        />
-      </div>
+      <MoneyMarketStrip
+        summary={summary}
+        basis={basis}
+        plumbing={plumbing}
+        basisHist={basisHist}
+        stir={stir}
+      />
       {basis && (
         <div id="sec-basis">
           <BasisSection

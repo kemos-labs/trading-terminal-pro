@@ -22,7 +22,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `2c1a087` (`docs(openapi): type legacy macrovol contract`).
+- Recovery HEAD: `b52b401` (`fix(deribit): preserve legacy snapshot cache truth`).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
@@ -33,28 +33,37 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. Boot briefing (`efd78b3`),
-MacroVol cache truth (`5f9a8d3`), and the MacroVol OpenAPI contract (`2c1a087`)
-are committed. The generated OpenAPI no longer advertises the false POST operation
-(runtime registration narrowed to GET, the only method the allowlist admits), and
-runtime error bodies now use the published typed codes (BAD_QUERY /
-ENDPOINT_NOT_ALLOWED / UPSTREAM_ERROR) validated against the schemas with Ajv.
+No dirty implementation tranche exists at this checkpoint. Committed this session:
+boot briefing (`efd78b3`), MacroVol cache truth (`5f9a8d3`), MacroVol OpenAPI
+contract (`2c1a087`), and legacy Deribit cache truth (`b52b401`).
 
-Remaining MacroVol adapter concerns (next tranche): several light rate-panel paths
-still have no canonical /api/v1 operation, so frontend consumers remain on the
-legacy adapter; canonical REST/MCP ownership migration continues under C2/C4. MCP
-does not consume `/api/macrovol/*` (verified).
+Deribit concern highlights: all five legacy `/api/deribit/*` routes now expose the
+full sanitized cache envelope; zero-coverage fills throw `insufficient_coverage`
+so labelled-stale/fail-closed replaces serving unusable snapshots; all 502 paths
+redact `err.message`; desk pack/venues catch paths sanitized. Frontend verified
+migrated to canonical `/api/v1/market/crypto/*` (legacy routes are compatibility
+surface only; MCP does not call them).
 
-Exact next action: continue the remaining C3 provider/cache/quota items. First
-verify which direct provider calls still bypass the shared broker/cache (previous
-audit named `server/routes/deskFeeds.js` and the Deribit index route — re-verify at
-current HEAD since several were repaired in recent commits), then address the
-documented single-process quota-ledger scope (deployment-wide accounting still
-requires a single owner or shared atomic counter), then move to C4 strict-
-TypeScript/contract gaps and C5/C6 visual/real-server evidence.
+Remaining C3 items: the file-backed quota ledger remains explicitly single-process
+documented; deployment-wide quota still requires a single owner or shared atomic
+counter. No remaining known direct provider-bypass routes at current HEAD (deskFeeds
+aggregate now composes provider-owned adapters; Deribit index is cached).
+
+Exact next action: C4 strict TypeScript/contract gaps — continue incremental
+Fastify/MCP migration and close remaining schema-authority gaps; then C5/C6
+visual/real-server evidence (3D explicit entry, failure-state matrix), C7 Python
+ownership/perf proof, C8 full gates and independent falsification.
 
 ## Recent verified commits
 
+- `b52b401` — legacy Deribit routes expose full sanitized cache envelopes
+  (cold/fresh/stale with reason), zero-coverage fills throw
+  `insufficient_coverage` so labelled-stale/fail-closed engages, all five 502
+  paths redact internal messages to sanitized typed codes, desk pack/venues
+  catch paths sanitized. Independent evidence: 13 integration tests (4 new
+  injection tests incl. zero-coverage stale), 26 tests across v1/v1Analytics/
+  rateLimitBuckets/deskFeeds, OpenAPI/parity/type-check/lint/secret gates,
+  owner-clean, diff checks clean.
 - `2c1a087` — explicit deprecated GET-only OpenAPI contract for the macrovol
   wildcard: typed 400/404/502 envelopes with Ajv-validated runtime responses,
   optional `cache` envelope documented on cached paths, migration description to

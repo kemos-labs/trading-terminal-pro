@@ -688,7 +688,7 @@ export interface GreeksPoint {
   bid?: number | null;
   ask?: number | null;
   last?: number | null;
-  /** Missing OI is null/unavailable; observed zero stays 0. */
+  /** Missing OI is null/unavailable; provider-reported zero stays 0. */
   oi: number | null;
   type: 'call' | 'put';
   delta: number;

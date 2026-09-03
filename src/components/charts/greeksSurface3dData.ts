@@ -1,10 +1,10 @@
 /**
  * Pure 3D Greeks geometry data — no three/r3f imports, unit-testable in jsdom.
- * Encodes the observed-truth rules:
+ * Encodes the model-grid truth rules (only bid/ask/last quotes are observed):
  * - null/NaN cells are true holes (never rendered, never interpolated);
  * - signed (diverging) Greeks use a zero-centered t in [0,1] so v=0 maps to the
- *   ramp midpoint; sequential Greeks map over observed [lo, hi];
- * - ATM ridge takes the nearest-strike observed node per expiry;
+ *   ramp midpoint; sequential Greeks map over model-grid [lo, hi];
+ * - ATM ridge takes the nearest-strike model-grid node per expiry;
  * - outputs contain no NaN/Infinity.
  */
 import type { SurfaceGrid } from '../../lib/macrovol/api';
@@ -31,9 +31,9 @@ export interface GreekSurface3DData {
   kMax: number;
   tMin: number;
   tMax: number;
-  /** finite observed nodes; holes omitted */
+  /** finite model-grid nodes; holes omitted */
   points: GreeK3DNode[];
-  /** [tIdx][kIdx] layout of observed values (null holes preserved) */
+  /** [tIdx][kIdx] layout of model-grid values (null holes preserved) */
   values: (number | null)[][];
   atmRidge: { x: number; y: number; z: number }[];
   atmX: number;
@@ -42,7 +42,7 @@ export interface GreekSurface3DData {
   maxAbs: number;
   zTicks: number[];
   rampMidpoint: number;
-  hasObserved: boolean;
+  hasModelValues: boolean;
 }
 
 export function rampTDiverging(v: number, maxAbs: number): number {
@@ -75,7 +75,7 @@ export function greekValueToHeight(
 /**
  * Wireframe triangle indices for a sparse values layout.
  * A quad contributes two triangles ONLY when all four corners are present
- * (finite observed values). Any hole suppresses both triangles, so real
+ * (finite model-grid values). Any hole suppresses both triangles, so real
  * holes remain holes instead of being bridged with z=0 fabrications.
  */
 export function buildGreekWireframeIndices(values: (number | null)[][]): number[] {
@@ -129,14 +129,14 @@ export function buildGreekSurface3DData(
     }
   }
   const maxAbs = Number.isFinite(lo) ? Math.max(Math.abs(lo), Math.abs(hi)) || 1 : 1;
-  const hasObserved = Number.isFinite(lo);
+  const hasModelValues = Number.isFinite(lo);
 
   const values: (number | null)[][] = grid.grid.map((row) =>
     (row ?? []).slice(0, strikes.length).map((v) => (v != null && Number.isFinite(v) ? v : null)),
   );
 
   const points: GreeK3DNode[] = [];
-  if (hasObserved) {
+  if (hasModelValues) {
     for (let ti = 0; ti < grid.T_vals.length; ti++) {
       const row = values[ti];
       if (!row) continue;
@@ -158,7 +158,7 @@ export function buildGreekSurface3DData(
   }
 
   const atmRidge: { x: number; y: number; z: number }[] = [];
-  if (hasObserved) {
+  if (hasModelValues) {
     for (let ti = 0; ti < grid.T_vals.length; ti++) {
       const row = values[ti];
       if (!row) continue;
@@ -180,7 +180,7 @@ export function buildGreekSurface3DData(
   }
 
   const zTicks: number[] = [];
-  if (hasObserved) {
+  if (hasModelValues) {
     for (const t of [-1, -0.5, 0, 0.5, 1]) {
       if (!diverging && t < 0) continue;
       const v = diverging ? t * maxAbs : lo + ((t + 1) / 2) * (hi - lo || 1);
@@ -199,11 +199,11 @@ export function buildGreekSurface3DData(
     values,
     atmRidge,
     atmX: normX(spot),
-    lo: hasObserved ? lo : 0,
-    hi: hasObserved ? hi : 0,
+    lo: hasModelValues ? lo : 0,
+    hi: hasModelValues ? hi : 0,
     maxAbs,
     zTicks,
     rampMidpoint: 0.5,
-    hasObserved,
+    hasModelValues,
   };
 }

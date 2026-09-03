@@ -5,13 +5,14 @@
  *
  * Provenance truth (P0):
  * - `grid` is the INTERPOLATED MODEL layer (linear interior + nearest
- *   hole-fill of BSM-derived Greeks). It is never observed provider data.
- * - `observedNodes` are DERIVED per-contract BSM values built without
+ *   hole-fill of BSM-derived Greeks). It is never provider-quote data.
+ * - `derivedNodes` are DERIVED per-contract BSM values built without
  *   interpolation (one node per option contract, price_source midpoint/last).
- *   They render as larger distinct markers; missing contracts stay holes.
+ *   Only bid/ask/last provider quotes may be called observed.
+ *   Derived nodes render as larger distinct markers; missing contracts stay holes.
  * - Unavailable cells stay null everywhere; no NaN/Infinity crosses the boundary.
  * - Diverging Greeks use a zero-centered ramp (v=0 at midpoint); sequential
- *   Greeks map over observed [lo, hi].
+ *   Greeks map over model-grid [lo, hi].
  * - ATM ridge (nearest-strike model nodes), camera presets, model level
  *   guides (contours of the model mesh), crosshair + exact hover readout,
  *   keyboard navigation, and DOM axis overlays with exact units.
@@ -35,7 +36,7 @@ import {
 } from './greeksSurface3dData';
 import { greekRamp01 } from '../views/greekRamp';
 
-export interface ObservedGreekNode {
+export interface DerivedContractGreekNode {
   strike: number;
   dte: number;
   value: number;
@@ -44,8 +45,8 @@ export interface ObservedGreekNode {
 
 export interface GreeksSurface3DProps {
   grid: SurfaceGrid;
-  /** Derived per-contract nodes without interpolation (observed layer). */
-  observedNodes?: ObservedGreekNode[];
+  /** Derived per-contract BSM nodes without interpolation (derived layer). */
+  derivedNodes?: DerivedContractGreekNode[];
   spot: number;
   greek: GreekKey;
   label: string;
@@ -57,7 +58,7 @@ interface Readout {
   strike: number;
   dte: number;
   value: number;
-  source: 'observed' | 'model';
+  source: 'derived' | 'model';
   price_source?: string;
 }
 
@@ -88,7 +89,7 @@ function GreekPoint({
   );
 }
 
-function GreekSurface3D({ grid, observedNodes, spot, label, unit, diverging }: GreeksSurface3DProps) {
+function GreekSurface3D({ grid, derivedNodes, spot, label, unit, diverging }: GreeksSurface3DProps) {
   const [hover, setHover] = useState<Readout | null>(null);
   const [showWire, setShowWire] = useState(false);
   const [showContours, setShowContours] = useState(false);
@@ -104,12 +105,12 @@ function GreekSurface3D({ grid, observedNodes, spot, label, unit, diverging }: G
 
   const d = useMemo(() => buildGreekSurface3DData(grid, spot, diverging), [grid, spot, diverging]);
 
-  // Project derived observed nodes into the same 3D normalization as the model
+  // Project derived contract nodes into the same 3D normalization as the model
   // layer (no interpolation — one marker per contract).
-  const observedProjected = useMemo(() => {
-    if (!observedNodes?.length) return [];
+  const derivedProjected = useMemo(() => {
+    if (!derivedNodes?.length) return [];
     const out: { x: number; y: number; z: number; strike: number; dte: number; value: number; price_source?: string; color: string }[] = [];
-    for (const n of observedNodes) {
+    for (const n of derivedNodes) {
       if (!Number.isFinite(n.strike) || !Number.isFinite(n.dte) || !Number.isFinite(n.value)) continue;
       const x = d.kMax > d.kMin ? ((n.strike - d.kMin) / (d.kMax - d.kMin)) * GREEK3D_W - GREEK3D_W / 2 : 0;
       const y = d.tMax > d.tMin ? ((n.dte - d.tMin) / (d.tMax - d.tMin)) * GREEK3D_D - GREEK3D_D / 2 : 0;
@@ -127,7 +128,7 @@ function GreekSurface3D({ grid, observedNodes, spot, label, unit, diverging }: G
       });
     }
     return out;
-  }, [observedNodes, d, diverging]);
+  }, [derivedNodes, d, diverging]);
 
   // Optional interpolated-model wireframe — holes stay holes: indices are
   // emitted only when all four quad corners are present, and heights reuse
@@ -157,8 +158,8 @@ function GreekSurface3D({ grid, observedNodes, spot, label, unit, diverging }: G
     return geo;
   }, [showWire, d, diverging]);
 
-  // Keyboard navigation through observed nodes (fallback to model nodes).
-  const kbPool = observedProjected.length ? observedProjected : d.points.map((p) => ({ ...p, price_source: undefined as string | undefined }));
+  // Keyboard navigation through derived nodes (fallback to model nodes).
+  const kbPool = derivedProjected.length ? derivedProjected : d.points.map((p) => ({ ...p, price_source: undefined as string | undefined }));
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (!kbPool.length) return;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
@@ -170,7 +171,7 @@ function GreekSurface3D({ grid, observedNodes, spot, label, unit, diverging }: G
         strike: n.strike,
         dte: n.dte,
         value: n.value,
-        source: observedProjected.length ? 'observed' : 'model',
+        source: derivedProjected.length ? 'derived' : 'model',
         price_source: (n as { price_source?: string }).price_source,
       });
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
@@ -182,16 +183,16 @@ function GreekSurface3D({ grid, observedNodes, spot, label, unit, diverging }: G
         strike: n.strike,
         dte: n.dte,
         value: n.value,
-        source: observedProjected.length ? 'observed' : 'model',
+        source: derivedProjected.length ? 'derived' : 'model',
         price_source: (n as { price_source?: string }).price_source,
       });
     } else if (e.key === 'Escape') {
       setHover(null);
       setKbIndex(-1);
     }
-  }, [kbPool, kbIndex, observedProjected.length]);
+  }, [kbPool, kbIndex, derivedProjected.length]);
 
-  if (!d.hasObserved) {
+  if (!d.hasModelValues) {
     return (
       <div className="relative h-full min-h-[320px] w-full" data-testid="greeks-surface-3d">
         <div className="absolute inset-0 flex items-center justify-center font-mono text-type-2xs text-muted-foreground">
@@ -210,7 +211,7 @@ function GreekSurface3D({ grid, observedNodes, spot, label, unit, diverging }: G
       data-testid="greeks-surface-3d"
       tabIndex={0}
       role="application"
-      aria-label={`${label} 3D surface. Arrow keys move through ${observedProjected.length ? 'observed contract' : 'model'} nodes, Escape clears the readout.`}
+      aria-label={`${label} 3D surface. Arrow keys move through ${derivedProjected.length ? 'derived contract' : 'model'} nodes, Escape clears the readout.`}
       onKeyDown={onKeyDown}
     >
       <Canvas
@@ -238,8 +239,8 @@ function GreekSurface3D({ grid, observedNodes, spot, label, unit, diverging }: G
           />
         ))}
 
-        {/* Observed layer — larger distinct markers, one per derived contract (no interpolation) */}
-        {observedProjected.map((p) => (
+        {/* Derived layer — larger distinct markers, one per derived contract (no interpolation) */}
+        {derivedProjected.map((p) => (
           <GreekPoint
             key={`o-${p.dte}-${p.strike}`}
             x={p.x}
@@ -248,7 +249,7 @@ function GreekSurface3D({ grid, observedNodes, spot, label, unit, diverging }: G
             color={p.color}
             size={0.06}
             onHover={setHover}
-            readout={{ strike: p.strike, dte: p.dte, value: p.value, source: 'observed', price_source: p.price_source }}
+            readout={{ strike: p.strike, dte: p.dte, value: p.value, source: 'derived', price_source: p.price_source }}
           />
         ))}
 
@@ -309,13 +310,13 @@ function GreekSurface3D({ grid, observedNodes, spot, label, unit, diverging }: G
         <div className="absolute left-1 top-1/2 flex flex-col gap-0.5">
           {hover && (
             <span className="rounded bg-card/80 px-1.5 py-0.5 text-foreground" data-testid="greeks-3d-readout">
-              {hover.source === 'observed' ? 'OBS' : 'MODEL'} K {hover.strike.toFixed(0)} · {hover.dte}d · {hover.value.toFixed(4)} {unit}{hover.price_source ? ` · ${hover.price_source}` : ''}
+              {hover.source === 'derived' ? 'DERIVED' : 'MODEL'} K {hover.strike.toFixed(0)} · {hover.dte}d · {hover.value.toFixed(4)} {unit}{hover.price_source ? ` · ${hover.price_source}` : ''}
             </span>
           )}
         </div>
         <span className="absolute bottom-1 left-1 flex items-center gap-2">
           <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: colors.brand }} aria-hidden />
-          observed contracts ({observedProjected.length})
+          derived contract nodes ({derivedProjected.length})
           <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: colors.foreground }} aria-hidden />
           model grid ({d.points.length})
           <span className="inline-block h-1.5 w-1.5" style={{ background: colors.brand }} aria-hidden />

@@ -41,7 +41,7 @@ describe('greeks provenance contract', () => {
     expect(data.points_provenance).toMatch(/not observed provider cells/);
   });
 
-  it('keeps missing OI null (never observed zero) in aggregation', () => {
+  it('keeps missing OI null (never coerced to zero) in aggregation', () => {
     const points = [
       { K: 100, oi: null, type: 'call' },
       { K: 100, oi: 0, type: 'call' },
@@ -52,7 +52,7 @@ describe('greeks provenance contract', () => {
     // null contributes nothing; 0 contributes 0; 50+0=50 at K=100.
     expect(agg[100]).toBe(50);
     expect(agg[105]).toBe(30);
-    // Missing is distinguishable from observed zero at the point level.
+    // Missing is distinguishable from a provider-reported zero at the point level.
     expect(points[0]!.oi).toBeNull();
     expect(points[1]!.oi).toBe(0);
   });

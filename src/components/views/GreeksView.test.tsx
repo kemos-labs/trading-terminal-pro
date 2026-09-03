@@ -60,7 +60,7 @@ vi.mock('../../lib/macrovol/api', () => ({
         model_method: 'linear+nearest',
         surface_side: 'otm',
         holes: 'model grid holes are filled via nearest; observed-layer holes stay unavailable (null)',
-        oi: 'missing OI is null, observed zero stays 0.0',
+        oi: 'missing OI is null (unavailable), provider-reported zero stays 0.0',
         price_provenance: 'price_source midpoint when two-sided, else last',
       },
       points_provenance: 'derived per-contract BSM (price_source/iv_source per point); not observed provider cells',
@@ -156,8 +156,8 @@ describe('GreeksView (Greeks 1.0 host)', () => {
     const surface = screen.getByTestId('greeks-surface-3d');
     // Canvas actually mounted (explicit-entry lazy chunk rendered).
     expect(surface.querySelector('canvas')).not.toBeNull();
-    // Observed/model separation is visible with exact units and controls.
-    expect(surface.textContent).toMatch(/observed contracts/);
+    // Derived/model separation is visible with exact units and controls.
+    expect(surface.textContent).toMatch(/derived contract nodes/);
     expect(surface.textContent).toMatch(/model grid/);
     expect(surface.textContent).toMatch(/Strike \(\$\)/);
     expect(surface.textContent).toMatch(/DTE \(days\)/);

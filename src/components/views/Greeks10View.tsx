@@ -34,7 +34,7 @@ import type { GreekKey } from './greeksTypes';
 import { cn } from '../../lib/utils';
 import { ChartZoom, useChartZoom } from '../common/ChartZoom';
 
-// 3D Greeks restored as an explicit-entry lazy chunk (observed nodes, true
+// 3D Greeks restored as an explicit-entry lazy chunk (derived nodes, true
 // holes, ATM ridge, exact units); 2D profiles + exact tables remain the default.
 
 const GREEKS: { key: GreekKey; label: string; desc: string; formula: string; color: string; unit: string; diverging: boolean }[] = [
@@ -136,9 +136,9 @@ export function Greeks10View() {
   const greek = GREEKS.find((g) => g.key === selectedGreek)!;
   const [show3d, setShow3d] = useState(false);
   const surfaceData = data?.surfaces?.[selectedGreek];
-  // Observed-layer nodes built directly from derived per-contract points
+  // Derived-layer nodes built directly from derived per-contract points
   // (no interpolation): each contract contributes one node at (K, T).
-  const observedNodes = useMemo(() => {
+  const derivedNodes = useMemo(() => {
     if (!data?.points) return [];
     const out: { strike: number; dte: number; value: number; price_source?: string }[] = [];
     for (const p of data.points) {
@@ -332,7 +332,7 @@ export function Greeks10View() {
                           </div>
                         </div>
                         <p className="text-type-2xs text-muted-foreground">
-                          Interpolated MODEL grid (linear interior + nearest hole-fill) of BSM-derived Greeks — not observed provider cells. Observed-layer nodes ({observedNodes.length}) are per-contract derived values built without interpolation and render separately in 3D; unavailable cells stay null.{' '}
+                          Interpolated MODEL grid (linear interior + nearest hole-fill) of BSM-derived Greeks — not provider quotes. Derived-layer nodes ({derivedNodes.length}) are per-contract derived values built without interpolation and render separately in 3D; unavailable cells stay null.{' '}
                           {data?.units?.[selectedGreek as keyof typeof data.units]
                             ? `Units: ${data.units[selectedGreek as keyof typeof data.units]}.` : ''}
                           {data?.surface_provenance?.model_method ? ` Method: ${data.surface_provenance.model_method}.` : ''}
@@ -342,7 +342,7 @@ export function Greeks10View() {
                             <Suspense fallback={<div className="flex h-full items-center justify-center font-mono text-type-2xs text-muted-foreground">3D engine loads on open…</div>}>
                               <GreeksSurface3D
                                 grid={surfaceData}
-                                observedNodes={observedNodes}
+                                derivedNodes={derivedNodes}
                                 spot={data?.spot ?? surfaceData.K_vals[Math.floor(surfaceData.K_vals.length / 2)] ?? 0}
                                 greek={greek.key}
                                 label={greek.label}
@@ -702,7 +702,7 @@ function GexCalendar({ data, ticker }: { data: GreeksData; ticker: string }) {
   const allStrikes = new Set<number>();
 
   data.points.forEach((p) => {
-    // Missing OI is unavailable — never treated as observed zero.
+    // Missing OI is unavailable — never treated as zero.
     if (p.oi == null) return;
     const sign = p.type === 'call' ? 1 : -1;
     const gex = sign * p.gamma * p.oi * 100 * data.spot * data.spot * 0.01;

@@ -1,6 +1,6 @@
 /**
  * 3D Greeks geometry truth tests (pure data helper — no WebGL needed).
- * Proves: holes stay holes, observed nodes finite, diverging zero-centered
+ * Proves: holes stay holes, model-grid nodes finite, diverging zero-centered
  * ramp, ATM nearest-strike ridge, no NaN/Infinity anywhere.
  */
 import { describe, expect, it } from 'vitest';
@@ -20,7 +20,7 @@ const grid: SurfaceGrid = {
 describe('buildGreekSurface3DData', () => {
   it('preserves holes: null cells never become nodes', () => {
     const d = buildGreekSurface3DData(grid, 100, true);
-    // 3x4 grid has 12 cells; two nulls → 10 observed nodes.
+    // 3x4 grid has 12 cells; two nulls → 10 model-grid nodes.
     expect(d.points).toHaveLength(10);
     expect(d.points.every((p) => Number.isFinite(p.value))).toBe(true);
     // Nulls remain null in the values layout.
@@ -47,7 +47,7 @@ describe('buildGreekSurface3DData', () => {
     expect(zero!.color[1]).toBeGreaterThan(0.9);
   });
 
-  it('sequential Greeks map over observed [lo, hi]', () => {
+  it('sequential Greeks map over model-grid [lo, hi]', () => {
     const d = buildGreekSurface3DData(grid, 100, false);
     expect(d.zTicks.every((t) => t >= d.lo - 1e-9 && t <= d.hi + 1e-9)).toBe(true);
     const minNode = d.points.reduce((a, b) => (a.value < b.value ? a : b));
@@ -55,21 +55,21 @@ describe('buildGreekSurface3DData', () => {
     expect(minNode.z).toBeCloseTo(0, 6);
   });
 
-  it('ATM ridge takes the nearest-strike observed node per expiry', () => {
+  it('ATM ridge takes the nearest-strike model-grid node per expiry', () => {
     const d = buildGreekSurface3DData(grid, 100, true);
     expect(d.atmRidge).toHaveLength(d.dtes.length);
-    // Every expiry has strike 100 observed and spot is 100 → ridge strike is 100.
+    // Every expiry has strike 100 present and spot is 100 → ridge strike is 100.
     expect(d.atmRidge.every((p) => p.x === d.atmX)).toBe(true);
   });
 
-  it('returns hasObserved false only when every cell is missing', () => {
+  it('returns hasModelValues false only when every cell is missing', () => {
     const empty: SurfaceGrid = {
       T_vals: [0.08, 0.16],
       K_vals: [95, 100],
       grid: [[null, null], [null, null]],
     };
     const d = buildGreekSurface3DData(empty, 100, true);
-    expect(d.hasObserved).toBe(false);
+    expect(d.hasModelValues).toBe(false);
     expect(d.points).toHaveLength(0);
     expect(d.atmRidge).toHaveLength(0);
   });
@@ -111,7 +111,7 @@ describe('rampTDiverging signed normalization (P0 golden)', () => {
       grid: [[0, 0], [0, 0]],
     };
     const d = buildGreekSurface3DData(allZero, 100, true);
-    expect(d.hasObserved).toBe(true);
+    expect(d.hasModelValues).toBe(true);
     expect(d.maxAbs).toBe(1);
     for (const p of d.points) {
       expect(p.z).toBeCloseTo(0.5 * GREEK3D_H, 9);
@@ -147,7 +147,7 @@ describe('greek wireframe holes (P0 geometry)', () => {
     expect(buildGreekWireframeIndices([[1, 2], [null, 4]])).toEqual([]);
   });
 
-  it('emits both triangles only for a fully observed quad', () => {
+  it('emits both triangles only for a fully present quad', () => {
     const idx = buildGreekWireframeIndices([[1, 2], [3, 4]]);
     expect(idx).toHaveLength(6);
     // Indices reference the four quad vertices exactly once per triangle.
@@ -172,7 +172,7 @@ describe('greek wireframe holes (P0 geometry)', () => {
       [7, 8, 9],
     ];
     const idx = buildGreekWireframeIndices(values);
-    // Two quads remain fully observed: top-left (0,1,3,4) and bottom-left
+    // Two quads remain fully present: top-left (0,1,3,4) and bottom-left
     // (3,4,6,7). The two quads touching the (1,2) hole are suppressed.
     expect(idx).toHaveLength(12);
     expect(idx).toEqual([0, 1, 3, 1, 4, 3, 3, 4, 6, 4, 7, 6]);

@@ -281,3 +281,58 @@ describe('Deribit legacy routes: full cache envelope and error redaction', () =>
     expect(stale.body).not.toContain('SECRET-INTERNAL');
   });
 });
+
+describe('Deribit index payload validation (P1: never cache malformed)', () => {
+  it('accepts only finite positive index_price with optional finite-positive EDP', async () => {
+    const { isValidDeribitIndexPayload } = await import('../../routes/deribitMarket.js');
+    expect(isValidDeribitIndexPayload({ index_price: 60150 })).toBe(true);
+    expect(isValidDeribitIndexPayload({ index_price: 60150, estimated_delivery_price: 60150.25 })).toBe(true);
+    expect(isValidDeribitIndexPayload(null)).toBe(false);
+    expect(isValidDeribitIndexPayload([])).toBe(false);
+    expect(isValidDeribitIndexPayload({})).toBe(false);
+    expect(isValidDeribitIndexPayload({ index_price: 0 })).toBe(false);
+    expect(isValidDeribitIndexPayload({ index_price: -10 })).toBe(false);
+    expect(isValidDeribitIndexPayload({ index_price: NaN })).toBe(false);
+    expect(isValidDeribitIndexPayload({ index_price: Infinity })).toBe(false);
+    expect(isValidDeribitIndexPayload({ index_price: 'abc' })).toBe(false);
+    expect(isValidDeribitIndexPayload({ index_price: 60150, estimated_delivery_price: -1 })).toBe(false);
+    expect(isValidDeribitIndexPayload({ index_price: 60150, estimated_delivery_price: NaN })).toBe(false);
+  });
+
+  it('fails closed on malformed index payloads and never caches them', async () => {
+    const app = Fastify({ logger: false });
+    const { registerDeribitMarketRoutes } = await import('../../routes/deribitMarket.js');
+    await registerDeribitMarketRoutes(app);
+    const { clearCacheForTests } = await import('../../../api/upstreamCache.js');
+    clearCacheForTests();
+    const baseImpl = deribitFetch.getMockImplementation();
+    try {
+      for (const malformed of [
+        { index_price: 0 },
+        { index_price: -5 },
+        { index_price: NaN },
+        { index_price: Infinity },
+        {},
+        null,
+      ]) {
+        deribitFetch.mockImplementation(async (m) => {
+          if (m.startsWith('get_index_price')) return malformed;
+          return baseImpl(m);
+        });
+        clearCacheForTests();
+        const res = await app.inject('/api/deribit/index/btc_usd');
+        expect(res.statusCode).toBe(502);
+        expect(res.json().detail).toBe('invalid_payload');
+      }
+      // Valid payload after malformed fills succeeds (malformed never cached).
+      deribitFetch.mockImplementation(baseImpl);
+      clearCacheForTests();
+      const good = await app.inject('/api/deribit/index/btc_usd');
+      expect(good.statusCode).toBe(200);
+      expect(good.json().index_price).toBe(60150);
+    } finally {
+      deribitFetch.mockImplementation(baseImpl);
+    }
+    await app.close();
+  });
+});

@@ -171,6 +171,27 @@ describe('MacroVol proxy: cache metadata, stale bounds, and fail-closed behavior
     expect(cancelled).toBe(true);
   });
 
+  it('enforces byte limits even when the body lacks getReader() (no unbounded text fallback)', async () => {
+    // Lying Content-Length (small) but actual text oversized: post-read byte
+    // check must reject; the unbounded text() path is never returned unchecked.
+    const oversizedText = 'x'.repeat(600_000);
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: (name) => (String(name).toLowerCase() === 'content-length' ? '100' : 'application/json') },
+      body: {}, // no getReader()
+      text: async () => oversizedText,
+    }));
+    clearCacheForTests();
+    const res = await app.inject('/api/macrovol/rates/summary');
+    expect(res.statusCode).toBe(502);
+    expect(res.json().detail).toBe('invalid_payload');
+    // Malformed/oversized success payloads are never cached: a valid retry fills.
+    global.fetch = vi.fn(async () => jsonRes({ sofr: 4.3 }));
+    const retry = await app.inject('/api/macrovol/rates/summary');
+    expect(retry.statusCode).toBe(200);
+  });
+
   it('maps worker timeout to a bounded typed 502', async () => {
     const timeoutError = new Error('The operation was aborted due to timeout');
     timeoutError.name = 'TimeoutError';

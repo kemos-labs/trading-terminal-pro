@@ -60,6 +60,31 @@ function safeErrorCode(err) {
   return sanitizeProviderErrorCode(err?.code) || 'upstream-error';
 }
 
+/** Validate Deribit index payload before caching or returning.
+ *  Requires a plain object with finite positive index_price; optional
+ *  estimated_delivery_price must be finite positive when present.
+ *  Malformed payloads throw invalid_payload so they are never cached. */
+export function isValidDeribitIndexPayload(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  const px = Number(body.index_price);
+  if (!Number.isFinite(px) || px <= 0) return false;
+  if (body.estimated_delivery_price != null) {
+    const edp = Number(body.estimated_delivery_price);
+    if (!Number.isFinite(edp) || edp <= 0) return false;
+  }
+  return true;
+}
+
+function loadValidatedDeribitIndex(name) {
+  return (async () => {
+    const body = await deribitFetch(`get_index_price?index_name=${name}`);
+    if (!isValidDeribitIndexPayload(body)) {
+      throw Object.assign(new Error('Deribit index payload invalid'), { code: 'invalid_payload' });
+    }
+    return body;
+  })();
+}
+
 /** Active catalogue: options + dated futures + perpetual (authoritative metadata). */
 async function loadCatalogueResult(currency) {
   return getOrFetch(`deribit:catalogue:${currency}`, CATALOGUE_TTL_MS, async () => {
@@ -292,8 +317,12 @@ export async function registerDeribitMarketRoutes(fastify) {
       const result = await getOrFetch(
         `deribit:index:${name}`,
         QUOTES_TTL_MS,
-        () => deribitFetch(`get_index_price?index_name=${name}`),
-        { allowStaleOnError: true, maxStaleMs: MAX_DERIBIT_STALE_MS },
+        () => loadValidatedDeribitIndex(name),
+        {
+          allowStaleOnError: true,
+          maxStaleMs: MAX_DERIBIT_STALE_MS,
+          cacheIf: (body) => isValidDeribitIndexPayload(body),
+        },
       );
       return {
         index_price: result.data.index_price,

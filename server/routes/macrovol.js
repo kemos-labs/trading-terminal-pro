@@ -225,7 +225,16 @@ const readBoundedBody = async (response) => {
     if (!Number.isFinite(contentLength)) {
       const error = new Error('worker body unavailable'); error.code = 'invalid_payload'; throw error;
     }
-    return response.text();
+    // No streaming reader (e.g. test Response without body stream): the
+    // Content-Length precheck above already rejected declared-oversize bodies.
+    // Still enforce the byte ceiling on the decoded body in case the header
+    // lies — never return an unbounded text() result unchecked.
+    const text = await response.text();
+    const byteLen = new TextEncoder().encode(text).length;
+    if (byteLen > MACRO_MAX_BYTES) {
+      const error = new Error('worker response too large'); error.code = 'invalid_payload'; throw error;
+    }
+    return text;
   }
   const chunks = [];
   let total = 0;

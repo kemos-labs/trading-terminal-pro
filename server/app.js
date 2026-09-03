@@ -197,7 +197,12 @@ function registerBootRoutes(fastify) {
     const reader = response.body?.getReader?.();
     if (!reader) {
       if (!Number.isFinite(contentLength)) { const error = new Error('boot source body unavailable'); error.code = 'invalid_payload'; throw error; }
-      return response.text();
+      const text = await response.text();
+      const byteLen = new TextEncoder().encode(text).length;
+      if (byteLen > maxBytes) {
+        const error = new Error('boot source too large'); error.code = 'invalid_payload'; throw error;
+      }
+      return text;
     }
     const chunks = [];
     let total = 0;

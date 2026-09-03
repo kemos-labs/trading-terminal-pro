@@ -9,10 +9,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from datetime import datetime, timezone
 
 from services.greeks_calculator import (
+    build_gex_grid,
+    build_gex_strikes,
     compute_greeks,
     compute_gex_flip,
     otm_points,
     year_fraction_to_expiry,
+    _parse_oi_nullable,
+    _point_from_row,
+    _positive_price_or_none,
     _POST_CLOSE_T,
 )
 
@@ -99,3 +104,87 @@ def test_year_fraction_to_expiry_expired_is_residual():
     now = datetime(2026, 6, 1, 20, 0, 0, tzinfo=timezone.utc)
     T = year_fraction_to_expiry("2020-01-01", now=now)
     assert T <= _POST_CLOSE_T * 2
+
+
+# ── P0: missing OI nullability (never coerced to observed zero) ─────────────
+
+def test_parse_oi_nullable_missing_stays_none():
+    assert _parse_oi_nullable(None) is None
+    assert _parse_oi_nullable("") is None
+    assert _parse_oi_nullable("   ") is None
+    assert _parse_oi_nullable(float("nan")) is None
+    assert _parse_oi_nullable(float("inf")) is None
+    assert _parse_oi_nullable(True) is None
+    assert _parse_oi_nullable(-5) is None
+    assert _parse_oi_nullable("abc") is None
+
+
+def test_parse_oi_nullable_observed_zero_stays_zero():
+    assert _parse_oi_nullable(0) == 0.0
+    assert _parse_oi_nullable(0.0) == 0.0
+    assert _parse_oi_nullable("0") == 0.0
+    assert _parse_oi_nullable(1234) == 1234.0
+
+
+def test_point_missing_oi_stays_null_not_zero():
+    row = {"strike": 100, "bid": 2.0, "ask": 2.4, "lastPrice": 2.2, "openInterest": None}
+    pt = _point_from_row(row, spot=100, T=0.25, r=0.04, q=0.0, option_type="call")
+    assert pt is not None
+    assert pt["oi"] is None
+    assert pt["price_source"] == "midpoint"
+    # Missing OI must not leak into GEX aggregates as zero.
+    assert build_gex_strikes([pt], spot=100) == []
+    assert build_gex_grid([pt] * 12, spot=100) == {"T_vals": [], "K_vals": [], "grid": []}
+
+
+def test_point_observed_zero_oi_preserved():
+    row = {"strike": 100, "bid": 2.0, "ask": 2.4, "lastPrice": 2.2, "openInterest": 0}
+    pt = _point_from_row(row, spot=100, T=0.25, r=0.04, q=0.0, option_type="call")
+    assert pt is not None
+    assert pt["oi"] == 0.0
+
+
+# ── P0: last-versus-midpoint provenance ─────────────────────────────────────
+
+def test_point_midpoint_provenance():
+    row = {"strike": 100, "bid": 2.0, "ask": 2.4, "lastPrice": 9.9, "openInterest": 10}
+    pt = _point_from_row(row, spot=100, T=0.25, r=0.04, q=0.0, option_type="call")
+    assert pt is not None
+    assert pt["price_source"] == "midpoint"
+    assert pt["iv_source"] == "midpoint"
+    assert pt["bid"] == 2.0
+    assert pt["ask"] == 2.4
+    assert abs(pt["price"] - 2.2) < 1e-9
+
+
+def test_point_last_fallback_provenance_not_midpoint():
+    # No two-sided market: bid missing, ask missing -> last-derived, never midpoint.
+    row = {"strike": 100, "bid": 0, "ask": 0, "lastPrice": 2.2, "openInterest": 10}
+    pt = _point_from_row(row, spot=100, T=0.25, r=0.04, q=0.0, option_type="call")
+    assert pt is not None
+    assert pt["price_source"] == "last"
+    assert pt["iv_source"] == "last"
+    assert pt["bid"] is None
+    assert pt["ask"] is None
+    assert pt["last"] == 2.2
+
+
+def test_point_one_sided_quote_falls_back_to_last():
+    # One-sided (bid only) is not executable two-sided: must not claim midpoint.
+    row = {"strike": 100, "bid": 2.0, "ask": 0, "lastPrice": 2.2, "openInterest": 10}
+    pt = _point_from_row(row, spot=100, T=0.25, r=0.04, q=0.0, option_type="call")
+    assert pt is not None
+    assert pt["price_source"] == "last"
+
+
+def test_point_no_price_unavailable():
+    row = {"strike": 100, "bid": 0, "ask": 0, "lastPrice": 0, "openInterest": 10}
+    assert _point_from_row(row, spot=100, T=0.25, r=0.04, q=0.0, option_type="call") is None
+
+
+def test_positive_price_rejects_non_executable():
+    assert _positive_price_or_none(0) is None
+    assert _positive_price_or_none(-1) is None
+    assert _positive_price_or_none(float("nan")) is None
+    assert _positive_price_or_none(None) is None
+    assert _positive_price_or_none(2.5) == 2.5

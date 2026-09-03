@@ -226,6 +226,59 @@ def build_greeks_surface(ticker: str, r: float | None = None, q: float = 0.0, cu
     }
 
 
+def _parse_oi_nullable(raw) -> float | None:
+    """Missing OI stays null — never coerced to observed zero.
+
+    Returns None for None/missing/blank/bool/NaN/Infinity/negative/unparseable.
+    An observed zero (0, 0.0, "0") stays 0.0 and remains distinguishable
+    from missing in serialized points (null vs 0).
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, str):
+        s = raw.strip()
+        if s == "":
+            return None
+        try:
+            v = float(s)
+        except ValueError:
+            return None
+    else:
+        try:
+            v = float(raw)
+        except (TypeError, ValueError):
+            return None
+    if not math.isfinite(v):
+        return None
+    if v < 0:
+        return None
+    return float(v)
+
+
+def _positive_price_or_none(raw) -> float | None:
+    """Finite positive price or None (missing/unavailable). Zero/negative/NaN/Infinity are unavailable."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    if isinstance(raw, str):
+        s = raw.strip()
+        if s == "":
+            return None
+        try:
+            v = float(s)
+        except ValueError:
+            return None
+    else:
+        try:
+            v = float(raw)
+        except (TypeError, ValueError):
+            return None
+    if not math.isfinite(v) or v <= 0:
+        return None
+    return float(v)
+
+
 def _point_from_row(row, spot, T, r, q, option_type: str):
     if r is None:
         # No observed/supplied rate available → point unavailable (fail-closed).
@@ -233,18 +286,23 @@ def _point_from_row(row, spot, T, r, q, option_type: str):
     K = float(row["strike"])
     if K < spot * 0.85 or K > spot * 1.15:
         return None
-    bid = float(row.get("bid", 0) or 0)
-    ask = float(row.get("ask", 0) or 0)
-    last = float(row.get("lastPrice", 0) or 0)
-    oi_raw = row.get("openInterest", 0)
-    oi = float(oi_raw) if oi_raw and not (isinstance(oi_raw, float) and math.isnan(oi_raw)) else 0.0
-    if bid > 0 and ask > 0:
-        mid = (bid + ask) / 2
-    elif last > 0:
-        mid = last
+    bid = _positive_price_or_none(row.get("bid"))
+    ask = _positive_price_or_none(row.get("ask"))
+    last = _positive_price_or_none(row.get("lastPrice"))
+    # Missing OI stays None (null) — never 0.0. Observed zero stays 0.0.
+    oi = _parse_oi_nullable(row.get("openInterest"))
+    # Price provenance is preserved: midpoint-observed vs last-derived.
+    # A last-derived IV/Greek must never be represented as midpoint-observed
+    # or executable (executable long needs observed ask, short needs bid).
+    if bid is not None and ask is not None:
+        price = (bid + ask) / 2
+        price_source = "midpoint"
+    elif last is not None:
+        price = last
+        price_source = "last"
     else:
         return None
-    iv = compute_iv(mid, spot, K, T, r, q, option_type)
+    iv = compute_iv(price, spot, K, T, r, q, option_type)
     # Keep in sync with VALIDATION_CONFIG.ranges (TS) and iv_calculator (Python).
     if not iv or iv < 0.01 or iv > 3.0:
         return None
@@ -255,6 +313,12 @@ def _point_from_row(row, spot, T, r, q, option_type: str):
         "T": round(T, 4),
         "K": K,
         "iv": round(iv * 100, 2),
+        "iv_source": price_source,
+        "price": round(price, 4),
+        "price_source": price_source,
+        "bid": bid,
+        "ask": ask,
+        "last": last,
         "oi": oi,
         "type": option_type,
         **greeks,
@@ -271,8 +335,14 @@ def build_gex_grid(points: list, spot: float, n_T: int = 25, n_K: int = 35) -> d
     data = []
     for p in points:
         g = p.get("gamma")
-        oi = p.get("oi", 0)
-        if g is None or not oi:
+        oi = p.get("oi")
+        # Missing OI (None) is unavailable and never treated as zero.
+        # Observed zero contributes zero exposure and is skipped for sparsity.
+        if g is None or oi is None:
+            continue
+        if not math.isfinite(g) or not math.isfinite(oi):
+            continue
+        if oi == 0:
             continue
         gex = _gex_unit(g, oi, spot, p["type"])
         if math.isfinite(gex):
@@ -287,11 +357,16 @@ def build_gex_strikes(points: list, spot: float) -> list:
     for p in points:
         K = p["K"]
         g = p.get("gamma")
-        oi = p.get("oi", 0)
-        if g and oi and math.isfinite(g):
-            gex = _gex_unit(g, oi, spot, p["type"])
-            if math.isfinite(gex):
-                gex_by_strike[K] = gex_by_strike.get(K, 0) + gex
+        oi = p.get("oi")
+        if g is None or oi is None:
+            continue
+        if not math.isfinite(g) or not math.isfinite(oi):
+            continue
+        if oi == 0:
+            continue
+        gex = _gex_unit(g, oi, spot, p["type"])
+        if math.isfinite(gex):
+            gex_by_strike[K] = gex_by_strike.get(K, 0) + gex
     return [{"strike": k, "gex": round(v, 2)} for k, v in sorted(gex_by_strike.items()) if math.isfinite(v)]
 
 
@@ -343,8 +418,12 @@ def build_charm_exposure_grid(points: list, spot: float, n_T: int = 25, n_K: int
     data = []
     for p in points:
         c = p.get("charm")
-        oi = p.get("oi", 0)
-        if c is None or not oi:
+        oi = p.get("oi")
+        if c is None or oi is None:
+            continue
+        if not math.isfinite(c) or not math.isfinite(oi):
+            continue
+        if oi == 0:
             continue
         # Dollar-delta decay per calendar day (BS-signed charm)
         exposure = c * oi * 100 * spot

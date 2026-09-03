@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { BootBriefing } from './BootBriefing';
 
 vi.mock('../../lib/macrovol/api', () => ({
@@ -79,6 +79,8 @@ describe('BootBriefing (landing)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /enter terminal/i }));
     expect(onEnter).toHaveBeenCalled();
+    // Drain warming-fetch resolutions inside act so no setState lands after the test.
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
   });
 
   it('⏎ enters the terminal', async () => {
@@ -86,19 +88,22 @@ describe('BootBriefing (landing)', () => {
     render(<BootBriefing heavyReady={false} onEnter={onEnter} />);
     fireEvent.keyDown(window, { key: 'Enter' });
     expect(onEnter).toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
   });
 
   it('auto-enters shortly after heavyReady (never holds the user hostage)', async () => {
     const onEnter = vi.fn();
     render(<BootBriefing heavyReady onEnter={onEnter} />);
-    await vi.advanceTimersByTimeAsync(1_500);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_500); });
     await waitFor(() => expect(onEnter).toHaveBeenCalled());
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
   });
 
   it('auto-enters after the 6s escape hatch even when chains stay down (never traps the user)', async () => {
     const onEnter = vi.fn();
     render(<BootBriefing heavyReady={false} onEnter={onEnter} />);
-    await vi.advanceTimersByTimeAsync(7_000);
+    await act(async () => { await vi.advanceTimersByTimeAsync(7_000); });
     expect(onEnter).toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
   });
 });

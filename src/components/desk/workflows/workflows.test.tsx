@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { StructureWorkflow } from './StructureWorkflow';
@@ -12,6 +12,23 @@ class TestResizeObserver {
   disconnect() {}
 }
 globalThis.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver;
+
+// jsdom has no layout engine, so recharts' ResponsiveContainer always measures
+// 0x0 and warns. Render a fixed-size empty frame instead: charts stay
+// unrendered in jsdom exactly as today (real chart rendering is asserted by
+// Playwright geometry checks), without the environmental warning.
+vi.mock('recharts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('recharts')>();
+  const React = await import('react');
+  return {
+    ...actual,
+    ResponsiveContainer: ({ height }: { height?: number | string }) =>
+      React.createElement('div', {
+        'data-testid': 'recharts-viewport-mock',
+        style: { width: 800, height: typeof height === 'number' ? height : 400 },
+      }),
+  };
+});
 import { buildSnapshot } from '../../../lib/options/synthetic';
 import { templateLegs, breakEvenSpots, comboPayoffAtExpiry, evaluateCombo } from '../../../lib/options/portfolio';
 import { comboGreeksPnl, optionGreeksPnl, syntheticSpotPath } from '../../../lib/options/greeksPnl';

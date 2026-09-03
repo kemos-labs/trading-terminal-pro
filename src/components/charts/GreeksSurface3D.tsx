@@ -21,7 +21,9 @@
 
 import { useMemo, useState, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+// Deep import: the drei barrel re-exports Stats, which pulls a second three
+// revision (stats-gl) and trips three's multiple-instances warning.
+import { OrbitControls } from '@react-three/drei/core/OrbitControls.js';
 import * as THREE from 'three';
 import { CHART_RESOLVED } from '../../lib/chartTheme';
 import type { SurfaceGrid } from '../../lib/macrovol/api';

@@ -4,7 +4,7 @@
  * ramp, ATM nearest-strike ridge, no NaN/Infinity anywhere.
  */
 import { describe, expect, it } from 'vitest';
-import { buildGreekSurface3DData } from './greeksSurface3dData';
+import { buildGreekSurface3DData, buildGreekWireframeIndices, greekValueToHeight, rampTDiverging, GREEK3D_H } from './greeksSurface3dData';
 import type { SurfaceGrid } from '../../lib/macrovol/api';
 
 const grid: SurfaceGrid = {
@@ -72,5 +72,120 @@ describe('buildGreekSurface3DData', () => {
     expect(d.hasObserved).toBe(false);
     expect(d.points).toHaveLength(0);
     expect(d.atmRidge).toHaveLength(0);
+  });
+});
+
+describe('rampTDiverging signed normalization (P0 golden)', () => {
+  it('maps negative values to the lower half (t < 0.5)', () => {
+    expect(rampTDiverging(-1, 1)).toBeCloseTo(0, 9);
+    expect(rampTDiverging(-0.5, 1)).toBeCloseTo(0.25, 9);
+    expect(rampTDiverging(-0.2, 0.5)).toBeCloseTo(0.3, 9);
+  });
+
+  it('maps zero to the ramp midpoint (t = 0.5)', () => {
+    expect(rampTDiverging(0, 1)).toBeCloseTo(0.5, 9);
+    expect(rampTDiverging(0, 10)).toBeCloseTo(0.5, 9);
+    expect(rampTDiverging(0, 0)).toBeCloseTo(0.5, 9);
+  });
+
+  it('maps positive values to the upper half (t > 0.5)', () => {
+    expect(rampTDiverging(1, 1)).toBeCloseTo(1, 9);
+    expect(rampTDiverging(0.5, 1)).toBeCloseTo(0.75, 9);
+    expect(rampTDiverging(0.2, 0.5)).toBeCloseTo(0.7, 9);
+  });
+
+  it('handles asymmetric bounds via maxAbs without flipping sign', () => {
+    // lo=-2, hi=10 -> maxAbs=10: -2 maps below midpoint, +10 maps to top.
+    expect(rampTDiverging(-2, 10)).toBeCloseTo(0.4, 9);
+    expect(rampTDiverging(10, 10)).toBeCloseTo(1, 9);
+    expect(rampTDiverging(-10, 10)).toBeCloseTo(0, 9);
+    // Asymmetric negative-heavy: lo=-8, hi=2 -> maxAbs=8
+    expect(rampTDiverging(-8, 8)).toBeCloseTo(0, 9);
+    expect(rampTDiverging(2, 8)).toBeCloseTo(0.625, 9);
+  });
+
+  it('handles all-zero domain (maxAbs fallback) without NaN', () => {
+    const allZero: SurfaceGrid = {
+      T_vals: [0.08, 0.16],
+      K_vals: [95, 100],
+      grid: [[0, 0], [0, 0]],
+    };
+    const d = buildGreekSurface3DData(allZero, 100, true);
+    expect(d.hasObserved).toBe(true);
+    expect(d.maxAbs).toBe(1);
+    for (const p of d.points) {
+      expect(p.z).toBeCloseTo(0.5 * GREEK3D_H, 9);
+      expect(Number.isFinite(p.z)).toBe(true);
+    }
+    expect(rampTDiverging(0, 0)).toBeCloseTo(0.5, 9);
+  });
+
+  it('builds diverging node heights with correct sign ordering', () => {
+    const signed: SurfaceGrid = {
+      T_vals: [0.08],
+      K_vals: [95, 100, 105],
+      grid: [[-0.5, 0, 0.5]],
+    };
+    const d = buildGreekSurface3DData(signed, 100, true);
+    const byValue = [...d.points].sort((a, b) => a.value - b.value);
+    expect(byValue.map((p) => p.value)).toEqual([-0.5, 0, 0.5]);
+    // Heights must be strictly increasing with value when diverging.
+    expect(byValue[0]!.z).toBeLessThan(byValue[1]!.z);
+    expect(byValue[1]!.z).toBeLessThan(byValue[2]!.z);
+    expect(byValue[0]!.z).toBeCloseTo(0, 9);
+    expect(byValue[1]!.z).toBeCloseTo(0.5 * GREEK3D_H, 9);
+    expect(byValue[2]!.z).toBeCloseTo(GREEK3D_H, 9);
+  });
+});
+
+describe('greek wireframe holes (P0 geometry)', () => {
+  it('emits no triangles when a quad has any missing vertex', () => {
+    // 2x2 with one hole -> zero triangles (would be 2 triangles if bridged).
+    expect(buildGreekWireframeIndices([[1, 2], [3, null]])).toEqual([]);
+    expect(buildGreekWireframeIndices([[1, null], [3, 4]])).toEqual([]);
+    expect(buildGreekWireframeIndices([[null, 2], [3, 4]])).toEqual([]);
+    expect(buildGreekWireframeIndices([[1, 2], [null, 4]])).toEqual([]);
+  });
+
+  it('emits both triangles only for a fully observed quad', () => {
+    const idx = buildGreekWireframeIndices([[1, 2], [3, 4]]);
+    expect(idx).toHaveLength(6);
+    // Indices reference the four quad vertices exactly once per triangle.
+    expect(new Set(idx).size).toBe(4);
+  });
+
+  it('preserves a central hole across a 3x3 grid', () => {
+    const values: (number | null)[][] = [
+      [1, 2, 3],
+      [4, null, 6],
+      [7, 8, 9],
+    ];
+    const idx = buildGreekWireframeIndices(values);
+    // 4 quads touch the central hole -> all suppressed -> zero triangles.
+    expect(idx).toHaveLength(0);
+  });
+
+  it('keeps intact quads while suppressing holed quads', () => {
+    const values: (number | null)[][] = [
+      [1, 2, 3],
+      [4, 5, null],
+      [7, 8, 9],
+    ];
+    const idx = buildGreekWireframeIndices(values);
+    // Two quads remain fully observed: top-left (0,1,3,4) and bottom-left
+    // (3,4,6,7). The two quads touching the (1,2) hole are suppressed.
+    expect(idx).toHaveLength(12);
+    expect(idx).toEqual([0, 1, 3, 1, 4, 3, 3, 4, 6, 4, 7, 6]);
+  });
+
+  it('uses the shared diverging ramp for wireframe heights (no z=0 fabrication)', () => {
+    const lo = -0.5;
+    const hi = 0.5;
+    const maxAbs = 0.5;
+    expect(greekValueToHeight(-0.5, true, lo, hi, maxAbs)).toBeCloseTo(0, 9);
+    expect(greekValueToHeight(0, true, lo, hi, maxAbs)).toBeCloseTo(0.5 * GREEK3D_H, 9);
+    expect(greekValueToHeight(0.5, true, lo, hi, maxAbs)).toBeCloseTo(GREEK3D_H, 9);
+    expect(greekValueToHeight(null, true, lo, hi, maxAbs)).toBeNull();
+    expect(greekValueToHeight(NaN, true, lo, hi, maxAbs)).toBeNull();
   });
 });

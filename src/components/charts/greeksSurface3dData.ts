@@ -45,12 +45,62 @@ export interface GreekSurface3DData {
   hasObserved: boolean;
 }
 
+export function rampTDiverging(v: number, maxAbs: number): number {
+  const safeMax = Number.isFinite(maxAbs) && maxAbs > 0 ? maxAbs : 1;
+  const t = 0.5 + 0.5 * (v / safeMax);
+  return Math.max(0, Math.min(1, t));
+}
+
 function rampT(v: number, diverging: boolean, lo: number, hi: number, maxAbs: number): number {
   const range = (hi - lo) || 1;
   const t = diverging
-    ? v === 0 ? 0.5 : v > 0 ? 0.5 + 0.5 * (v / maxAbs) : 0.5 - 0.5 * (v / maxAbs)
+    ? rampTDiverging(v, maxAbs)
     : (v - lo) / range;
   return Math.max(0, Math.min(1, t));
+}
+
+export function greekValueToHeight(
+  v: number | null,
+  diverging: boolean,
+  lo: number,
+  hi: number,
+  maxAbs: number,
+): number | null {
+  if (v == null || !Number.isFinite(v)) return null;
+  const t = rampT(v, diverging, lo, hi, maxAbs);
+  const z = t * GREEK3D_H;
+  return Number.isFinite(z) ? z : null;
+}
+
+/**
+ * Wireframe triangle indices for a sparse values layout.
+ * A quad contributes two triangles ONLY when all four corners are present
+ * (finite observed values). Any hole suppresses both triangles, so real
+ * holes remain holes instead of being bridged with z=0 fabrications.
+ */
+export function buildGreekWireframeIndices(values: (number | null)[][]): number[] {
+  const idx: number[] = [];
+  if (!values.length) return idx;
+  const nCols = Math.max(...values.map((r) => r?.length ?? 0));
+  if (!Number.isFinite(nCols) || nCols < 2) return idx;
+  for (let ti = 0; ti + 1 < values.length; ti++) {
+    const rowA = values[ti];
+    const rowB = values[ti + 1];
+    if (!rowA || !rowB) continue;
+    for (let ki = 0; ki + 1 < nCols; ki++) {
+      const a = rowA[ki];
+      const b = rowA[ki + 1];
+      const c = rowB[ki];
+      const d = rowB[ki + 1];
+      if (a == null || b == null || c == null || d == null) continue;
+      const aIdx = ti * nCols + ki;
+      const bIdx = ti * nCols + ki + 1;
+      const cIdx = (ti + 1) * nCols + ki;
+      const dIdx = (ti + 1) * nCols + ki + 1;
+      idx.push(aIdx, bIdx, cIdx, bIdx, dIdx, cIdx);
+    }
+  }
+  return idx;
 }
 
 export function buildGreekSurface3DData(

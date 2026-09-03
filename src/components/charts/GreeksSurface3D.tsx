@@ -27,6 +27,8 @@ import type { SurfaceGrid } from '../../lib/macrovol/api';
 import type { GreekKey } from '../views/greeksTypes';
 import {
   buildGreekSurface3DData,
+  buildGreekWireframeIndices,
+  greekValueToHeight,
   GREEK3D_D,
   GREEK3D_H,
   GREEK3D_W,
@@ -79,30 +81,34 @@ function GreekSurface3D({ grid, spot, label, unit, diverging }: GreeksSurface3DP
 
   const d = useMemo(() => buildGreekSurface3DData(grid, spot, diverging), [grid, spot, diverging]);
 
-  // Optional observed-cell wireframe — interpolation view of observed cells, NOT a fitted model.
+  // Optional interpolated-model wireframe — holes stay holes: indices are
+  // emitted only when all four quad corners are present, and heights reuse
+  // the exact diverging/sequential ramp used for observed nodes (no z=0
+  // fabrication, no cross-hole triangles). Labelled explicitly as an
+  // interpolation view of the grid, never as observed cells.
   const wireGeometry = useMemo(() => {
     if (!showWire || d.dtes.length < 2 || d.strikes.length < 2) return null;
     const positions: number[] = [];
-    const idx: number[] = [];
     for (let ti = 0; ti < d.dtes.length; ti++) {
       const row = d.values[ti];
       for (let ki = 0; ki < d.strikes.length; ki++) {
         const v = row?.[ki];
         const y = ((d.tMax > d.tMin ? ((d.dtes[ti]! - d.tMin) / (d.tMax - d.tMin)) * GREEK3D_D - GREEK3D_D / 2 : 0));
         const tx = ((d.kMax > d.kMin ? ((d.strikes[ki]! - d.kMin) / (d.kMax - d.kMin)) * GREEK3D_W - GREEK3D_W / 2 : 0));
-        positions.push(tx, v != null ? ((v - d.lo) / ((d.hi - d.lo) || 1)) * GREEK3D_H : 0, y);
-        if (ki < d.strikes.length - 1 && ti < d.dtes.length - 1) {
-          const a = ti * d.strikes.length + ki;
-          idx.push(a, a + 1, a + d.strikes.length, a + 1, a + d.strikes.length + 1, a + d.strikes.length);
-        }
+        // Missing cells keep a placeholder vertex but are never indexed, so
+        // no triangle can bridge a hole. Height uses the shared ramp.
+        const z = greekValueToHeight(v ?? null, diverging, d.lo, d.hi, d.maxAbs) ?? 0;
+        positions.push(tx, z, y);
       }
     }
+    const idx = buildGreekWireframeIndices(d.values);
+    if (idx.length === 0) return null;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geo.setIndex(idx);
     geo.computeVertexNormals();
     return geo;
-  }, [showWire, d]);
+  }, [showWire, d, diverging]);
 
   if (!d.hasObserved) {
     return (

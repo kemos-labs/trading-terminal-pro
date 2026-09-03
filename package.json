@@ -14,6 +14,7 @@
     "lint": "oxlint",
     "report:routes": "node scripts/route-parity.mjs --write --list",
     "report:bundle": "node scripts/bundle-report.mjs",
+    "report:screenshots": "node scripts/collect-screenshot-manifest.mjs",
     "preview": "vite preview",
     "test": "NODE_ENV=test vitest",
     "test:ui": "NODE_ENV=test vitest --ui",

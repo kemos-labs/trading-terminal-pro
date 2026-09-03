@@ -8,7 +8,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import AxeBuilder from '@axe-core/playwright';
 
@@ -18,6 +18,9 @@ const registry = JSON.parse(
   workflows: Array<{ id: string; deepLink: string }>;
 };
 const EVIDENCE_HEAD = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+const EVIDENCE_FULL_HEAD = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+// Deterministic fixture clock shared by providerBoundaryFixtures (FIXED_NOW).
+const FIXTURE_CLOCK = new Date(Date.UTC(2026, 8, 1, 1, 30)).toISOString();
 const EVIDENCE_DIR = new URL('./screenshots/', import.meta.url);
 mkdirSync(EVIDENCE_DIR, { recursive: true });
 
@@ -132,10 +135,45 @@ for (const viewport of VIEWPORTS) {
           axe.violations,
           `${workflow.id} WCAG violations: ${JSON.stringify(axe.violations.map((item) => item.id))}`,
         ).toEqual([]);
+        const shotName = `real-${EVIDENCE_HEAD}-success-${viewport.name}-${workflow.id}.png`;
         await page.screenshot({
-          path: new URL(`real-${EVIDENCE_HEAD}-success-${viewport.name}-${workflow.id}.png`, EVIDENCE_DIR).pathname,
+          path: new URL(shotName, EVIDENCE_DIR).pathname,
           fullPage: true,
         });
+        // Machine-readable sidecar: exact commit, scenario, viewport, workflow,
+        // provider mode, and fixture/live status travel with every screenshot.
+        // Event/fetch times live in-app (provenance badges); the deterministic
+        // fixture clock is recorded here so fixture evidence is never
+        // mistaken for live-provider evidence.
+        writeFileSync(
+          new URL(`${shotName}.json`, EVIDENCE_DIR),
+          JSON.stringify(
+            {
+              screenshot: shotName,
+              commit: EVIDENCE_FULL_HEAD,
+              commitShort: EVIDENCE_HEAD,
+              scenario: 'success',
+              viewport: { name: viewport.name, width: viewport.width, height: viewport.height },
+              workflow: workflow.id,
+              deepLink: workflow.deepLink,
+              providerMode: 'fixture',
+              providerDetail: 'E2E_FIXTURE_SCENARIO=success stubbed at the server provider boundary; no live upstreams',
+              live: false,
+              fixtureClock: FIXTURE_CLOCK,
+              capturedAt: new Date().toISOString(),
+              checks: {
+                horizontalOverflowPx: diagnostics.overflow,
+                nonFiniteLeak: false,
+                axeViolations: axe.violations.map((item) => item.id),
+                failedRoutesSoFar: failedRoutes.length,
+                pageErrorsSoFar: pageErrors.length,
+                consoleErrorsSoFar: consoleErrors.length,
+              },
+            },
+            null,
+            2,
+          ),
+        );
       });
     }
 

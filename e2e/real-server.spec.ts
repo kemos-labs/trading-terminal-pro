@@ -1,7 +1,10 @@
 /**
- * Genuine local-server smoke gate. No page.route(), request interception, or
- * provider fixture is used here. Populated provider-bound success coverage is
- * a separate recovery-plan requirement and must not be inferred from this file.
+ * Real Fastify + built-browser gate with deterministic server-side adapter
+ * fixtures (E2E_FIXTURE_SCENARIO=success via providerBoundaryFixtures).
+ * No browser page.route() interception: the browser traverses the built UI and
+ * real Fastify routes, but provider data comes from recorded deterministic
+ * fixtures stubbed at the provider boundary — not live upstreams.
+ * Fixture success is deterministic state evidence, not live-provider evidence.
  */
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';

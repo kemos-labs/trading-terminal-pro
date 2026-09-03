@@ -1,6 +1,14 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-03T12:15:00Z
+Updated: 2026-09-03T15:20:00Z
+
+Conventions in this file: **Implementation HEAD** is the newest commit that
+changes product/test/config code. **Checkpoint commit** is the docs-only
+commit that records this file. They differ whenever memory is checkpointed
+separately; `git log --oneline` resolves both. Test counts below are measured
+in-session (not copied from older reports). A node is PASS only when its plan
+exit criteria are satisfied AND independently reviewed — otherwise it is
+IN PROGRESS with the unmet criteria listed.
 
 This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-rebuild`. It records execution state, not proof of completion. The master specification, audited recovery plan, and `AGENTS.md` remain authoritative when a statement conflicts.
 
@@ -22,17 +30,36 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `f4d1ca4` (fix(tests): correct fixture comment and add Greeks provenance contract tests).
+- Implementation HEAD: `fa6d55d` (fix(tests): eliminate Recharts zero-size and act warnings at the cause).
+- Checkpoint commit: the docs commit carrying this update (see `git log --oneline`; it touches only RECOVERY_MEMORY.md).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
-- P0 Greek provenance truth repaired (observed/derived/model separated, OI nullability, last-vs-midpoint, diverging ramp, wireframe holes, full 3D behaviors).
-- P1 REST correctness repaired (MacroVol status/OpenAPI parity + migration exception, Deribit index validation, byte-limit fallback without reader).
-- P1 tests partially repaired (act warning fixed, actual 3D Canvas asserted, provenance/OI/price-status/index/byte-limit tests added, fixture comment corrected).
-- C0 and C1 are substantially repaired.
-- C2 now includes method-aware parity plus canonical surface, Greeks, and positioning analytics.
-- C4 MCP surface/Greeks/positioning tools now return their own strict analytical contracts instead of raw chains. Full strict-TypeScript migration remains incomplete.
-- C6 deterministic success coverage has passed all 27 workflows at four viewports and 108 screenshots were visually inspected, but required failure-state matrix, final-HEAD screenshots with sidecars, and independent visual review remain incomplete.
+- Residual-defect tranche (this session, on top of `7679606`): derived-only
+  BSM terminology (`f3dcd38`), level-guides rename (`c1fd162`), structural
+  per-grid provenance (`c30cc1c`), fail-closed bounded reads (`55f6f7c`),
+  type-strict Deribit index (`76153ef`), non-finite Greeks fail-closed
+  (`87cc67b`), warning elimination (`fa6d55d`).
+- C0: exit criteria re-checked this session — zero false-SERFF labels, zero
+  hardcoded-rate fallbacks, rate_risk+stir 27 tests pass, no credential-value
+  printing (one absent-key skip notice names the env var only), secrets pass.
+  Independent review still pending, so C0 stays IN PROGRESS, not PASS.
+- C1: nullability/execution-basis guarded in covered paths (premiumMath +
+  indicators + portfolio + positioning-units: 29 tests pass; Greeks OI/price
+  provenance + non-finite fail-closed: 23 + 4 Python tests pass). Full exit
+  (all outputs finite-or-null everywhere + math review acceptance) is not
+  proven — C1 stays IN PROGRESS.
+- C2: method-aware parity PASS (38 frontend vs 65 runtime) and OpenAPI
+  validation PASS (65 paths / 65 ops / 16 strict v1 / 27 workflows). Required
+  canonical expansion (surface/Greeks/positioning and remaining analytics)
+  is incomplete — C2 stays IN PROGRESS.
+- C4 MCP surface/Greeks/positioning tools return their own strict analytical
+  contracts instead of raw chains (prior session). Full strict-TypeScript
+  migration remains incomplete.
+- C6 deterministic success coverage passed all 27 workflows at four viewports
+  with 108 screenshots at an older HEAD; required failure-state matrix,
+  final-HEAD screenshots with sidecars, and independent visual review remain
+  incomplete (screenshots are never reused as current evidence).
 
 ## Current in-progress concern
 
@@ -45,11 +72,23 @@ No dirty implementation tranche exists at this checkpoint. Starting HEAD for thi
 - `f727f64` fix(providers): Deribit index validation + byte-limit fallback (P1-9, P1-10).
 - `f4d1ca4` fix(tests): fixture comment correction + provenance contract tests (P1-12, P1-13).
 
-Verification at `f4d1ca4`: type-check PASS, lint PASS, build PASS (OrbitControls 238 kB gzip under 300 kB analytical exception), focused suites green (greeksSurface3dData 17 tests, GreeksView 4 tests, greeks_calculator 17 tests, macrovol cache+openapi 13 tests, deribit integration 27 tests), secrets PASS, owner clean.
+Measured verification (this session, implementation HEAD `fa6d55d`):
+type-check PASS; lint PASS; build PASS (OrbitControls 238 kB gzip under
+300 kB analytical exception; bundle verified single three revision 185);
+full suite 158 files / 885 tests PASS with zero width(0) and zero act
+warnings (one residual three dual-instance line: same-revision CJS/ESM
+double-load under vitest only, no prod impact — deep drei imports removed
+the cross-revision 0.170 copy from the graph). Focused counts measured:
+greeksSurface3dData 17, GreeksView 4, greeksProvenance 5, Greeks boot drain
+4, deskSectionIds 7, test_greeks_calculator 23, test_greeks_provenance 4,
+test_rate_risk + test_stir 27, C1 file quartet 29, macrovol cache 12 +
+openapi 2, deribit integration 15, restoredRoutes incl. boot no-reader case. Python
+worker suite green; route parity + OpenAPI validation PASS; secrets PASS
+(all three modes at gates); owner clean.
 
 Remaining work: P1-14 final-HEAD screenshots with sidecars; P1-15 C6 failure-state matrix (loading/empty/stale/partial/malformed/provider-down/entitlement) with pixel inspection; P1-16 layout defects (Home dead space, Trade P&L/Risk blank charts, Crypto Overview/Vol dead space, Academy sparse, four-viewport geometry); C3 quota/provenance propagation; C4 strict-TS migration; C5 Crypto 3D + measured geometry; C6 full matrix; C7 Python ownership + perf proofs; C8 all gates twice + independent falsification.
 
-Exact next action: P1-14/P1-15 — generate final-HEAD real-server screenshots with sidecars and build the deterministic failure-state harness, then P1-16 layout corrections.
+Exact next action: P1-14/P1-15 — generate final-HEAD real-server screenshots with machine-readable sidecars and build the deterministic failure-state harness (loading/empty/stale/partial/malformed/provider-down/entitlement-denied/success × 27 workflows × 4 viewports), then P1-16 layout corrections (Home dead space, Trade P&L/Risk principals, Crypto dead space, Academy density, measured geometry), Crypto 3D with 3D-network proof, C3/C4/C7 completions, and C8 gates twice + independent falsification.
 
 ## Recent verified commits
 

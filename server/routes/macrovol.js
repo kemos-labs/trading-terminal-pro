@@ -214,27 +214,22 @@ const MACRO_HEAVY_MAX_STALE_MS = 10 * TTL.OPTIONS_MS;     // explicit bounded st
 /**
  * Bounded streaming read with Content-Length precheck and reader cancel.
  * Never buffers an unbounded body: bytes past MACRO_MAX_BYTES abort the read.
+ * Fail-closed: without a streaming reader there is no bounded transport, so
+ * the body is never consumed via response.text() (which would buffer it all
+ * before any size check can run). Note Number(null) === 0, so a missing
+ * Content-Length must be detected via the raw header, not Number().
  */
 const readBoundedBody = async (response) => {
-  const contentLength = Number(response.headers.get('content-length'));
+  const rawLength = response.headers.get('content-length');
+  const contentLength = rawLength == null ? NaN : Number(rawLength);
   if (Number.isFinite(contentLength) && contentLength > MACRO_MAX_BYTES) {
     const error = new Error('worker response too large'); error.code = 'invalid_payload'; throw error;
   }
   const reader = response.body?.getReader?.();
-  if (!reader) {
-    if (!Number.isFinite(contentLength)) {
-      const error = new Error('worker body unavailable'); error.code = 'invalid_payload'; throw error;
-    }
-    // No streaming reader (e.g. test Response without body stream): the
-    // Content-Length precheck above already rejected declared-oversize bodies.
-    // Still enforce the byte ceiling on the decoded body in case the header
-    // lies — never return an unbounded text() result unchecked.
-    const text = await response.text();
-    const byteLen = new TextEncoder().encode(text).length;
-    if (byteLen > MACRO_MAX_BYTES) {
-      const error = new Error('worker response too large'); error.code = 'invalid_payload'; throw error;
-    }
-    return text;
+  if (!reader || typeof reader.read !== 'function' || typeof reader.cancel !== 'function') {
+    // No bounded streaming implementation available: fail closed without
+    // calling response.text(), which buffers the full body unbounded.
+    const error = new Error('worker body stream unavailable'); error.code = 'invalid_payload'; throw error;
   }
   const chunks = [];
   let total = 0;

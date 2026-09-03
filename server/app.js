@@ -190,19 +190,17 @@ function registerBootRoutes(fastify) {
   const MACROVOL_BASE = resolveRatesWorkerUrl();
   const readBoundedBody = async (response) => {
     const maxBytes = 500_000;
-    const contentLength = Number(response.headers.get('content-length'));
+    // Note Number(null) === 0: detect a missing header via the raw value.
+    const rawLength = response.headers.get('content-length');
+    const contentLength = rawLength == null ? NaN : Number(rawLength);
     if (Number.isFinite(contentLength) && contentLength > maxBytes) {
       const error = new Error('boot source too large'); error.code = 'invalid_payload'; throw error;
     }
     const reader = response.body?.getReader?.();
-    if (!reader) {
-      if (!Number.isFinite(contentLength)) { const error = new Error('boot source body unavailable'); error.code = 'invalid_payload'; throw error; }
-      const text = await response.text();
-      const byteLen = new TextEncoder().encode(text).length;
-      if (byteLen > maxBytes) {
-        const error = new Error('boot source too large'); error.code = 'invalid_payload'; throw error;
-      }
-      return text;
+    if (!reader || typeof reader.read !== 'function' || typeof reader.cancel !== 'function') {
+      // No bounded streaming implementation: fail closed without calling
+      // response.text(), which would buffer the full body unbounded.
+      const error = new Error('boot source stream unavailable'); error.code = 'invalid_payload'; throw error;
     }
     const chunks = [];
     let total = 0;

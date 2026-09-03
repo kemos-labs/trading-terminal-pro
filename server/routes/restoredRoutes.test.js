@@ -198,6 +198,7 @@ describe('restored routes (Phase 1 parity)', () => {
     let mode = 'ok';
     let release;
     let gate = Promise.resolve();
+    const bootTextSpy = vi.fn(async () => '{"sofr":5}');
     global.fetch = vi.fn(async (input) => {
       const url = String(input);
       if (mode === 'join') await gate;
@@ -205,6 +206,13 @@ describe('restored routes (Phase 1 parity)', () => {
       if (mode === 'partial' && url.includes('/api/macro/summary')) return new Response('{"secret":"worker body"}', { status: 503, headers: { 'content-type': 'application/json' } });
       if (mode === 'invalid') return new Response('<html>not json</html>', { status: 200, headers: { 'content-type': 'text/html' } });
       if (mode === 'oversize') return new Response('x'.repeat(500_001), { status: 200, headers: { 'content-type': 'application/json', 'content-length': '500001' } });
+      if (mode === 'noreader') return {
+        ok: true,
+        status: 200,
+        headers: { get: (name) => (String(name).toLowerCase() === 'content-length' ? '100' : 'application/json') },
+        body: {}, // no streaming reader: must fail closed without text()
+        text: bootTextSpy,
+      };
       const body = url.includes('/rates/summary') ? { sofr: 5 } : url.includes('/macro/summary') ? { vix: 18 } : { stress: 'low' };
       return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
     });
@@ -247,6 +255,14 @@ describe('restored routes (Phase 1 parity)', () => {
       const oversize = await app.inject('/api/boot/briefing');
       expect(oversize.statusCode).toBe(502);
       expect(JSON.stringify(oversize.json())).not.toContain('x'.repeat(20));
+
+      await app.close();
+      app = await makeApp();
+      mode = 'noreader';
+      bootTextSpy.mockClear();
+      const noReader = await app.inject('/api/boot/briefing');
+      expect(noReader.statusCode).toBe(502);
+      expect(bootTextSpy).not.toHaveBeenCalled();
 
       await app.close();
       app = await makeApp();

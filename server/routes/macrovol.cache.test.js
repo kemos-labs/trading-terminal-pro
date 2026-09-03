@@ -171,22 +171,39 @@ describe('MacroVol proxy: cache metadata, stale bounds, and fail-closed behavior
     expect(cancelled).toBe(true);
   });
 
-  it('enforces byte limits even when the body lacks getReader() (no unbounded text fallback)', async () => {
-    // Lying Content-Length (small) but actual text oversized: post-read byte
-    // check must reject; the unbounded text() path is never returned unchecked.
-    const oversizedText = 'x'.repeat(600_000);
+  it('fails closed without calling text() when the body lacks a streaming reader', async () => {
+    // Without getReader() there is no bounded transport: the handler must fail
+    // closed and never call response.text() (which buffers unbounded). A
+    // missing Content-Length (raw null, where Number(null) === 0) must also
+    // fail closed rather than pass a precheck as zero bytes.
+    const textSpy = vi.fn(async () => 'x'.repeat(600_000));
     global.fetch = vi.fn(async () => ({
       ok: true,
       status: 200,
       headers: { get: (name) => (String(name).toLowerCase() === 'content-length' ? '100' : 'application/json') },
       body: {}, // no getReader()
-      text: async () => oversizedText,
+      text: textSpy,
     }));
     clearCacheForTests();
     const res = await app.inject('/api/macrovol/rates/summary');
     expect(res.statusCode).toBe(502);
     expect(res.json().detail).toBe('invalid_payload');
-    // Malformed/oversized success payloads are never cached: a valid retry fills.
+    expect(textSpy).not.toHaveBeenCalled();
+
+    const missingLengthText = vi.fn(async () => JSON.stringify({ sofr: 4.3 }));
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => null }, // no Content-Length and no reader
+      body: {},
+      text: missingLengthText,
+    }));
+    clearCacheForTests();
+    const missing = await app.inject('/api/macrovol/rates/summary');
+    expect(missing.statusCode).toBe(502);
+    expect(missing.json().detail).toBe('invalid_payload');
+    expect(missingLengthText).not.toHaveBeenCalled();
+    // Rejected payloads are never cached: a valid retry fills.
     global.fetch = vi.fn(async () => jsonRes({ sofr: 4.3 }));
     const retry = await app.inject('/api/macrovol/rates/summary');
     expect(retry.statusCode).toBe(200);

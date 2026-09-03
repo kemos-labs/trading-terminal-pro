@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-02T21:55:00Z
+Updated: 2026-09-03T12:15:00Z
 
 This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-rebuild`. It records execution state, not proof of completion. The master specification, audited recovery plan, and `AGENTS.md` remain authoritative when a statement conflicts.
 
@@ -22,73 +22,34 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Recovery HEAD: `3d5a120` (`fix(a11y): remove duplicate sec-mm-strip section id`).
+- Recovery HEAD: `f4d1ca4` (fix(tests): correct fixture comment and add Greeks provenance contract tests).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
+- P0 Greek provenance truth repaired (observed/derived/model separated, OI nullability, last-vs-midpoint, diverging ramp, wireframe holes, full 3D behaviors).
+- P1 REST correctness repaired (MacroVol status/OpenAPI parity + migration exception, Deribit index validation, byte-limit fallback without reader).
+- P1 tests partially repaired (act warning fixed, actual 3D Canvas asserted, provenance/OI/price-status/index/byte-limit tests added, fixture comment corrected).
 - C0 and C1 are substantially repaired.
 - C2 now includes method-aware parity plus canonical surface, Greeks, and positioning analytics.
 - C4 MCP surface/Greeks/positioning tools now return their own strict analytical contracts instead of raw chains. Full strict-TypeScript migration remains incomplete.
-- C6 deterministic success coverage has passed all 27 workflows at four viewports and 108 screenshots were visually inspected, but required failure-state matrix and independent visual review remain incomplete.
+- C6 deterministic success coverage has passed all 27 workflows at four viewports and 108 screenshots were visually inspected, but required failure-state matrix, final-HEAD screenshots with sidecars, and independent visual review remain incomplete.
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. Session commits: boot
-briefing (`efd78b3`), MacroVol cache truth (`5f9a8d3`), MacroVol OpenAPI contract
-(`2c1a087`), legacy Deribit cache truth (`b52b401`), fastify security patch +
-full-suite race fix (`534433a`), legacy deribit deprecation marking +
-real-server evidence (`29eb677`), and 3D Greeks restore + bundle analytical
-exception docs (`66853af`), StructureWorkflow a11y fix (`66ec44b`), and
-RatesPanel duplicate-id fix (`3d5a120`).
+No dirty implementation tranche exists at this checkpoint. Starting HEAD for this session was `4d979fc` (checkpoint RatesPanel id fix and canonical C6 green). Session commits since then:
 
-3D Greeks restore (audit P0 '3D Greeks removed'): lazy explicit-entry module
-mirroring the accepted IvSurface3D pattern — observed nodes with true holes,
-ATM ridge, optional observed-cell wireframe (NOT a fitted model — canonical
-data has no model fit), diverging zero-centered ramp, exact-unit Z ticks, DOM
-overlay + hover readout, gate-testable Open 3D entry. Pure geometry helper
-(greeksSurface3dData.ts) is unit-testable (no WebGL). Bundle: shared lazy drei
-OrbitControls vendor chunk (230.4 kB gzip) documented under analytical
-exception (cap 300 kB), reachable only via explicit-entry dynamic imports.
-Full suite 156 files/864 tests pass twice; bundle gate PASS.
+- `5671143` fix(greeks-3d): diverging ramp sign + wireframe holes + golden tests (P0-4, P0-5).
+- `4763af5` fix(greeks): missing OI nullability + price provenance (P0-2, P0-3) with Python golden tests.
+- `07f03fb` fix(greeks): observed/derived/model provenance separation + full 3D behaviors + act-safe 3D test (P0-1, P0-6, P1-11).
+- `3515e75` fix(macrovol): runtime/OpenAPI status parity + migration exception (P1-7, P1-8).
+- `f727f64` fix(providers): Deribit index validation + byte-limit fallback (P1-9, P1-10).
+- `f4d1ca4` fix(tests): fixture comment correction + provenance contract tests (P1-12, P1-13).
 
-C6 real-server Playwright regression: the StructureWorkflow option grid
-scrollable region failed axe 'scrollable-region-focusable' (WCAG 2.1.1);
-fixed with tabIndex=0 + aria-label (advances the suite past the violation;
-deterministic render test added). The rates funding panel also carried a
-duplicate `id="sec-mm-strip"` (invalid HTML, non-deterministic locator);
-removed the redundant wrapper so exactly one section owns the id, with a
-deterministic render test. Canonical suite `npm run test:e2e:real-server`
-(NODE_ENV=test, E2E_FIXTURE_SCENARIO=success, deterministic adapter
-fixtures, no live upstreams) passes: 6/6 (contracts, Academy path, 27
-workflows x 4 viewports incl. axe, no-overflow, no-NaN, zero console/page
-errors) in 4.3m with 108 fresh screenshots; inspected vol-greeks (Open 3D
-entry renders, no auto-mount), rates-funding (populated strip, honest
-EXPIRED/fixture labels), trade-structure (populated blotter/grid/payoff),
-and home (truthful session/desk states) pixels directly. IMPORTANT
-CORRECTION: earlier failed Playwright runs this session used the WRONG
-config (default mocked-suite config without fixture env, hitting live
-throttled upstreams) — an invocation error, not a product regression.
-The canonical fixture suite is the authority and is green. A transient
-experiment (Playwright webServer starting a real rates worker via a helper
-script) was fully reverted; deterministic fixtures stub the worker boundary.
+Verification at `f4d1ca4`: type-check PASS, lint PASS, build PASS (OrbitControls 238 kB gzip under 300 kB analytical exception), focused suites green (greeksSurface3dData 17 tests, GreeksView 4 tests, greeks_calculator 17 tests, macrovol cache+openapi 13 tests, deribit integration 27 tests), secrets PASS, owner clean.
 
-Real-server evidence captured (docs/recovery-evidence/REAL_SERVER_2026-09-02.md):
-typed 502 fail-closed with the rates worker down, live Deribit 200 with a
-truthful cache envelope (993 instruments, coverage 1, no NaN/Infinity), v1
-crypto schemaVersion 1, openapi/workflows 200, live Deprecation/Link headers.
+Remaining work: P1-14 final-HEAD screenshots with sidecars; P1-15 C6 failure-state matrix (loading/empty/stale/partial/malformed/provider-down/entitlement) with pixel inspection; P1-16 layout defects (Home dead space, Trade P&L/Risk blank charts, Crypto Overview/Vol dead space, Academy sparse, four-viewport geometry); C3 quota/provenance propagation; C4 strict-TS migration; C5 Crypto 3D + measured geometry; C6 full matrix; C7 Python ownership + perf proofs; C8 all gates twice + independent falsification.
 
-Remaining work: C6 real-server failure-state matrix + four-viewport
-screenshots + independent visual review; C5 Crypto 3D (CryptoSurface3D.tsx
-also deleted in history) + measured geometry/overlap assertions + dead-space
-fixes; C4 strict-TypeScript server migration (blocked on `tsx` runtime
-tooling decision — deployment-affecting); C7 Python ownership restriction,
-naming/import cleanup, bundle/cache-hit/3D lazy-load performance proof; C8
-gates at final HEAD + independent adversarial review.
-
-Exact next action: C6 — build a deterministic real-server failure-state
-harness (loading/empty/stale/partial/malformed-provider/provider-down) and
-exercise the workflow roots against the real server, then continue measured
-geometry/overlap assertions for the restored 3D surfaces.
+Exact next action: P1-14/P1-15 — generate final-HEAD real-server screenshots with sidecars and build the deterministic failure-state harness, then P1-16 layout corrections.
 
 ## Recent verified commits
 

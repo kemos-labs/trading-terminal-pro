@@ -62,53 +62,83 @@ def compute_greeks(S, K, T, r, q, sigma, option_type="call"):
       ν       → per 1 volatility point (/100)
       vanna   → ∂²V/∂S∂σ on raw-σ scale
     """
-    if T <= 0 or sigma <= 0:
+    # Fail-closed input validation: non-finite or non-positive S/K/T/sigma
+    # can raise (log(0), overflow) or yield NaN — never let them through.
+    for _v in (S, K, T, r, q, sigma):
+        if not math.isfinite(_v):
+            return None
+    if S <= 0 or K <= 0 or T <= 0 or sigma <= 0:
         return None
-    d1 = (math.log(S / K) + (r - q + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
-    d2 = d1 - sigma * math.sqrt(T)
-    sqrt_T = math.sqrt(T)
-    exp_qT = math.exp(-q * T)
-    exp_rT = math.exp(-r * T)
-    pdf_d1 = norm.pdf(d1)
+    # np.errstate: numpy scalar overflow/invalid ops warn instead of raising;
+    # finiteness is asserted on every output below, so warnings are noise.
+    try:
+      with np.errstate(all="ignore"):
+        d1 = (math.log(S / K) + (r - q + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+        d2 = d1 - sigma * math.sqrt(T)
+        sqrt_T = math.sqrt(T)
+        exp_qT = math.exp(-q * T)
+        exp_rT = math.exp(-r * T)
+        pdf_d1 = norm.pdf(d1)
 
-    if option_type == "call":
-        delta = exp_qT * norm.cdf(d1)
-        theta = (
-            -(S * exp_qT * pdf_d1 * sigma) / (2 * sqrt_T)
-            - r * K * exp_rT * norm.cdf(d2)
-            + q * S * exp_qT * norm.cdf(d1)
-        ) / 365
-    else:
-        delta = -exp_qT * norm.cdf(-d1)
-        theta = (
-            -(S * exp_qT * pdf_d1 * sigma) / (2 * sqrt_T)
-            + r * K * exp_rT * norm.cdf(-d2)
-            - q * S * exp_qT * norm.cdf(-d1)
-        ) / 365
+        if option_type == "call":
+            delta = exp_qT * norm.cdf(d1)
+            theta = (
+                -(S * exp_qT * pdf_d1 * sigma) / (2 * sqrt_T)
+                - r * K * exp_rT * norm.cdf(d2)
+                + q * S * exp_qT * norm.cdf(d1)
+            ) / 365
+        else:
+            delta = -exp_qT * norm.cdf(-d1)
+            theta = (
+                -(S * exp_qT * pdf_d1 * sigma) / (2 * sqrt_T)
+                + r * K * exp_rT * norm.cdf(-d2)
+                - q * S * exp_qT * norm.cdf(-d1)
+            ) / 365
 
-    gamma = (exp_qT * pdf_d1) / (S * sigma * sqrt_T)
-    vega = S * exp_qT * pdf_d1 * sqrt_T / 100  # per 1 vol point
+        gamma = (exp_qT * pdf_d1) / (S * sigma * sqrt_T)
+        vega = S * exp_qT * pdf_d1 * sqrt_T / 100  # per 1 vol point
 
-    # Vanna: ∂²V/∂S∂σ (per 1 vol unit; scale carefully in UI)
-    vanna = -exp_qT * pdf_d1 * d2 / sigma
+        # Vanna: ∂²V/∂S∂σ (per 1 vol unit; scale carefully in UI)
+        vanna = -exp_qT * pdf_d1 * d2 / sigma
 
-    # Charm (delta decay) — Wikipedia / Haug analytic form, then /365 for per-day
-    # call: -e^{-qT} [ n(d1)·(2(r-q)T − d2 σ√T)/(2T σ √T) − q N(d1) ]
-    # put:  -e^{-qT} [ n(d1)·(2(r-q)T − d2 σ√T)/(2T σ √T) + q N(-d1) ]
-    term = pdf_d1 * (2 * (r - q) * T - d2 * sigma * sqrt_T) / (2 * T * sigma * sqrt_T)
-    if option_type == "call":
-        charm_annual = -exp_qT * (term - q * norm.cdf(d1))
-    else:
-        charm_annual = -exp_qT * (term + q * norm.cdf(-d1))
-    charm = charm_annual / 365
+        # Charm (delta decay) — Wikipedia / Haug analytic form, then /365 for per-day
+        # call: -e^{-qT} [ n(d1)·(2(r-q)T − d2 σ√T)/(2T σ √T) − q N(d1) ]
+        # put:  -e^{-qT} [ n(d1)·(2(r-q)T − d2 σ√T)/(2T σ √T) + q N(-d1) ]
+        term = pdf_d1 * (2 * (r - q) * T - d2 * sigma * sqrt_T) / (2 * T * sigma * sqrt_T)
+        if option_type == "call":
+            charm_annual = -exp_qT * (term - q * norm.cdf(d1))
+        else:
+            charm_annual = -exp_qT * (term + q * norm.cdf(-d1))
+        charm = charm_annual / 365
+    except (ValueError, OverflowError, ZeroDivisionError):
+        # Domain/overflow errors (log of non-positive from rounding, exp
+        # overflow on absurd inputs) fail the point — never raise, never zero.
+        return None
 
+    # No fabricated zeros: any non-finite output fails the whole point.
+    # Callers treat None as unavailable; derivatives never see a 0 that was
+    # really NaN/Infinity. Finite inputs to closed-form BSM are finite in
+    # practice; reaching here means extreme/overflow inputs.
+    raw = {
+        "delta": delta,
+        "gamma": gamma,
+        "vega": vega,
+        "theta": theta,
+        "vanna": vanna,
+        "charm": charm,
+    }
+    if not all(math.isfinite(v) for v in raw.values()):
+        return None
+
+    # float() casts: scipy returns numpy scalars, which stock json encoders
+    # reject. Values are proven finite above, so the casts cannot hide NaN.
     return {
-        "delta": round(delta, 4) if math.isfinite(delta) else 0,
-        "gamma": round(gamma, 6) if math.isfinite(gamma) else 0,
-        "vega": round(vega, 4) if math.isfinite(vega) else 0,
-        "theta": round(theta, 4) if math.isfinite(theta) else 0,
-        "vanna": round(vanna, 4) if math.isfinite(vanna) else 0,
-        "charm": round(charm, 6) if math.isfinite(charm) else 0,
+        "delta": round(float(raw["delta"]), 4),
+        "gamma": round(float(raw["gamma"]), 6),
+        "vega": round(float(raw["vega"]), 4),
+        "theta": round(float(raw["theta"]), 4),
+        "vanna": round(float(raw["vanna"]), 4),
+        "charm": round(float(raw["charm"]), 6),
     }
 
 

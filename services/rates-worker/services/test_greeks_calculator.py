@@ -188,3 +188,74 @@ def test_positive_price_rejects_non_executable():
     assert _positive_price_or_none(float("nan")) is None
     assert _positive_price_or_none(None) is None
     assert _positive_price_or_none(2.5) == 2.5
+
+
+# ── Non-finite outputs fail the point (never fabricated zero) ────────────────
+
+def _assert_point_clean(pt):
+    """Recursive guard: no NaN/Infinity anywhere in a built point."""
+    import json
+
+    body = json.dumps(pt, allow_nan=False)  # raises on NaN/Infinity
+    assert "NaN" not in body and "Infinity" not in body
+    for key in ("delta", "gamma", "vega", "theta", "vanna", "charm"):
+        assert math.isfinite(pt[key]), key
+
+
+def test_compute_greeks_degenerate_spot_fails_point():
+    # S=0 makes gamma 0/0 (NaN): the point must fail, not serialize gamma 0.
+    assert compute_greeks(0, 100, 0.25, 0.04, 0.0, 0.2, "call") is None
+    assert compute_greeks(0, 100, 0.25, 0.04, 0.0, 0.2, "put") is None
+
+
+def test_compute_greeks_non_finite_inputs_fail_point():
+    inf = float("inf")
+    nan = float("nan")
+    assert compute_greeks(inf, 100, 0.25, 0.04, 0.0, 0.2, "call") is None
+    assert compute_greeks(100, 100, inf, 0.04, 0.0, 0.2, "call") is None
+    assert compute_greeks(100, 100, 0.25, 0.04, 0.0, nan, "call") is None
+    assert compute_greeks(nan, 100, 0.25, 0.04, 0.0, 0.2, "put") is None
+
+
+def test_compute_greeks_expiry_and_vol_boundaries():
+    # Expired / zero-vol inputs fail closed (unchanged behavior).
+    assert compute_greeks(100, 100, 0.0, 0.04, 0.0, 0.2, "call") is None
+    assert compute_greeks(100, 100, -0.5, 0.04, 0.0, 0.2, "call") is None
+    assert compute_greeks(100, 100, 0.25, 0.04, 0.0, 0.0, "call") is None
+    # Far-wing but finite inputs still produce finite greeks (no false fail).
+    far = compute_greeks(100, 1000, 2.0, 0.04, 0.0, 0.6, "call")
+    assert far is not None
+    _assert_point_clean({"T": 2.0, "K": 1000, **far})
+
+
+def test_compute_greeks_overflow_ratio_fails_point_not_zero():
+    # S/K overflows float division to inf: d1=inf, pdf=0, vanna=0*inf=nan.
+    # The point must fail — the old code serialized gamma/vanna as 0 here.
+    assert compute_greeks(1e308, 1e-308, 0.25, 0.04, 0.0, 0.2, "call") is None
+    assert compute_greeks(1e308, 1e-308, 0.25, 0.04, 0.0, 0.2, "put") is None
+
+
+def test_compute_greeks_extreme_rates_stay_finite_or_fail():
+    # Absurd carry/rate magnitudes: either finite or failed — never NaN/zero-fill.
+    g = compute_greeks(100, 100, 30.0, 5.0, -5.0, 0.2, "call")
+    assert g is None or _finite_greeks(g)
+
+
+def _finite_greeks(g):
+    assert g is not None
+    assert all(math.isfinite(v) for v in g.values())
+    return True
+
+
+def test_built_points_recursive_no_nan_no_infinity():
+    rows = [
+        {"strike": 95, "bid": 2.0, "ask": 2.4, "lastPrice": 2.2, "openInterest": 10},
+        {"strike": 100, "bid": 0, "ask": 0, "lastPrice": 3.1, "openInterest": None},
+        {"strike": 105, "bid": 1.6, "ask": 2.0, "lastPrice": 1.9, "openInterest": 0},
+        {"strike": 500, "bid": 0.1, "ask": 0.2, "lastPrice": 0.15, "openInterest": 5},
+    ]
+    for row in rows:
+        for option_type in ("call", "put"):
+            pt = _point_from_row(row, spot=100, T=0.25, r=0.04, q=0.0, option_type=option_type)
+            if pt is not None:
+                _assert_point_clean(pt)

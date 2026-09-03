@@ -61,16 +61,15 @@ function safeErrorCode(err) {
 }
 
 /** Validate Deribit index payload before caching or returning.
- *  Requires a plain object with finite positive index_price; optional
- *  estimated_delivery_price must be finite positive when present.
- *  Malformed payloads throw invalid_payload so they are never cached. */
+ *  Type-strict: index_price must be a finite positive number (numeric
+ *  strings are rejected, never coerced); optional estimated_delivery_price
+ *  must be a finite positive number when present. Malformed payloads throw
+ *  invalid_payload so they are never cached. */
 export function isValidDeribitIndexPayload(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
-  const px = Number(body.index_price);
-  if (!Number.isFinite(px) || px <= 0) return false;
+  if (typeof body.index_price !== 'number' || !Number.isFinite(body.index_price) || body.index_price <= 0) return false;
   if (body.estimated_delivery_price != null) {
-    const edp = Number(body.estimated_delivery_price);
-    if (!Number.isFinite(edp) || edp <= 0) return false;
+    if (typeof body.estimated_delivery_price !== 'number' || !Number.isFinite(body.estimated_delivery_price) || body.estimated_delivery_price <= 0) return false;
   }
   return true;
 }

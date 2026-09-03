@@ -283,7 +283,7 @@ describe('Deribit legacy routes: full cache envelope and error redaction', () =>
 });
 
 describe('Deribit index payload validation (P1: never cache malformed)', () => {
-  it('accepts only finite positive index_price with optional finite-positive EDP', async () => {
+  it('accepts only finite positive numeric index_price (type-strict, no string coercion)', async () => {
     const { isValidDeribitIndexPayload } = await import('../../routes/deribitMarket.js');
     expect(isValidDeribitIndexPayload({ index_price: 60150 })).toBe(true);
     expect(isValidDeribitIndexPayload({ index_price: 60150, estimated_delivery_price: 60150.25 })).toBe(true);
@@ -295,6 +295,9 @@ describe('Deribit index payload validation (P1: never cache malformed)', () => {
     expect(isValidDeribitIndexPayload({ index_price: NaN })).toBe(false);
     expect(isValidDeribitIndexPayload({ index_price: Infinity })).toBe(false);
     expect(isValidDeribitIndexPayload({ index_price: 'abc' })).toBe(false);
+    // Numeric strings are rejected, never coerced into cacheable numbers.
+    expect(isValidDeribitIndexPayload({ index_price: '60150' })).toBe(false);
+    expect(isValidDeribitIndexPayload({ index_price: 60150, estimated_delivery_price: '60150.25' })).toBe(false);
     expect(isValidDeribitIndexPayload({ index_price: 60150, estimated_delivery_price: -1 })).toBe(false);
     expect(isValidDeribitIndexPayload({ index_price: 60150, estimated_delivery_price: NaN })).toBe(false);
   });
@@ -312,6 +315,7 @@ describe('Deribit index payload validation (P1: never cache malformed)', () => {
         { index_price: -5 },
         { index_price: NaN },
         { index_price: Infinity },
+        { index_price: '60150' },
         {},
         null,
       ]) {
@@ -325,11 +329,17 @@ describe('Deribit index payload validation (P1: never cache malformed)', () => {
         expect(res.json().detail).toBe('invalid_payload');
       }
       // Valid payload after malformed fills succeeds (malformed never cached).
+      // Both runtime and cached responses carry numeric types, not strings.
       deribitFetch.mockImplementation(baseImpl);
       clearCacheForTests();
       const good = await app.inject('/api/deribit/index/btc_usd');
       expect(good.statusCode).toBe(200);
       expect(good.json().index_price).toBe(60150);
+      expect(typeof good.json().index_price).toBe('number');
+      const cached = await app.inject('/api/deribit/index/btc_usd');
+      expect(cached.statusCode).toBe(200);
+      expect(typeof cached.json().index_price).toBe('number');
+      expect(cached.json().cache.hit).toBe(true);
     } finally {
       deribitFetch.mockImplementation(baseImpl);
     }

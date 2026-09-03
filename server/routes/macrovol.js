@@ -338,12 +338,13 @@ export function registerMacrovolRoutes(fastify) {
         return body;
       } catch (err) {
         // Fail closed with sanitized codes only; worker bodies, stack traces,
-        // and internal diagnostics never cross the public boundary. Original
-        // worker HTTP status is preserved for uncached 4xx/5xx semantics.
+        // and internal diagnostics never cross the public boundary. Only the
+        // documented upstream statuses (500/502/503/504) are preserved; any
+        // other worker HTTP status maps to 502 so runtime and OpenAPI agree.
         const code = err?.name === 'TimeoutError' || err?.name === 'AbortError'
           ? 'timeout'
           : sanitizeProviderErrorCode(err?.code);
-        const statusMatch = /^http-(\d{3})$/.exec(code || '');
+        const statusMatch = /^http-(500|502|503|504)$/.exec(code || '');
         reply.code(statusMatch ? Number(statusMatch[1]) : 502);
         return { error: 'UPSTREAM_ERROR', detail: code || 'upstream-error' };
       }

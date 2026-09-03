@@ -5862,6 +5862,11 @@
         "x-legacy-adapter": true,
         "summary": "Deprecated rates-worker compatibility proxy",
         "description": "Allowlisted GET-only forwarding to the private loopback rates worker (formerly MacroVol; a route prefix, not a vendor). Cached light and greeks/surface paths carry a `cache` envelope; canonical consumers migrate to /api/v1 domain services. POST/OPTIONS are not supported.",
+        "x-migration-exception": {
+          "reason": "Wildcard legacy adapter covers 29 allowlisted worker paths with path-specific shapes; per-path strict schemas land with canonical /api/v1 migration. Generic object remains until then.",
+          "deadline": "2026-12-31",
+          "successor": "/api/v1 domain services"
+        },
         "parameters": [
           {
             "name": "wildcard",
@@ -5874,7 +5879,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Worker payload; shape is path specific",
+            "description": "Worker payload; shape is path specific (see x-migration-exception; strict per-path schemas arrive with /api/v1 migration)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5975,8 +5980,77 @@
               }
             }
           },
+          "500": {
+            "description": "Rates worker internal failure (preserved worker 500) — fail closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "const": "UPSTREAM_ERROR"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "502": {
             "description": "Rates worker unavailable or response failed validation (timeout, non-JSON, oversized, malformed) — fail closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "const": "UPSTREAM_ERROR"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Rates worker unavailable (preserved worker 503) — fail closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "const": "UPSTREAM_ERROR"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Rates worker timeout (preserved worker 504) — fail closed",
             "content": {
               "application/json": {
                 "schema": {

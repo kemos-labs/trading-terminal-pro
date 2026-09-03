@@ -180,12 +180,15 @@ describe('MacroVol proxy: cache metadata, stale bounds, and fail-closed behavior
     expect(res.json()).toEqual({ error: 'UPSTREAM_ERROR', detail: 'timeout' });
   });
 
-  it('uncached routes forward worker status semantics with sanitized bodies', async () => {
+  it('uncached routes normalize undocumented worker statuses to documented 502 with sanitized bodies', async () => {
     global.fetch = vi.fn(async () => new Response('{"detail":"worker internal traceback SECRET"}', {
       status: 404, headers: { 'content-type': 'application/json' },
     }));
     const res = await app.inject('/api/macrovol/macro/series/UNKNOWN?limit=10');
-    expect(res.statusCode).toBe(404);
+    // Runtime/OpenAPI parity: only 500/502/503/504 are preserved; other worker
+    // statuses (e.g. 404/418/429) normalize to documented 502 with the worker
+    // status preserved in `detail` (http-404) and bodies redacted.
+    expect(res.statusCode).toBe(502);
     expect(res.json()).toEqual({ error: 'UPSTREAM_ERROR', detail: 'http-404' });
     expect(res.body).not.toContain('SECRET');
     expect(res.body).not.toContain('traceback');

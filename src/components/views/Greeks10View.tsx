@@ -136,6 +136,24 @@ export function Greeks10View() {
   const greek = GREEKS.find((g) => g.key === selectedGreek)!;
   const [show3d, setShow3d] = useState(false);
   const surfaceData = data?.surfaces?.[selectedGreek];
+  // Observed-layer nodes built directly from derived per-contract points
+  // (no interpolation): each contract contributes one node at (K, T).
+  const observedNodes = useMemo(() => {
+    if (!data?.points) return [];
+    const out: { strike: number; dte: number; value: number; price_source?: string }[] = [];
+    for (const p of data.points) {
+      const v = (p as unknown as Record<string, unknown>)[selectedGreek];
+      if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+      if (!Number.isFinite(p.K) || !Number.isFinite(p.T)) continue;
+      out.push({
+        strike: p.K,
+        dte: Math.max(0, Math.round(p.T * 365)),
+        value: v,
+        price_source: (p as unknown as Record<string, unknown>).price_source as string | undefined,
+      });
+    }
+    return out;
+  }, [data?.points, selectedGreek]);
 
   const gexData = data?.gex?.filter((g) => Math.abs(g.gex) > 0) || [];
   const gexTotal = data?.gex_flip?.net_gex ?? gexData.reduce((s, g) => s + g.gex, 0);
@@ -267,7 +285,7 @@ export function Greeks10View() {
                         {data.q != null ? ` · q=${(data.q * 100).toFixed(2)}%` : ''}
                       </span>
                     )}
-                    <span className="ml-2 rounded bg-border/40 px-1.5 py-0.5 text-muted-foreground">observed grid · exact table below</span>
+                    <span className="ml-2 rounded bg-border/40 px-1.5 py-0.5 text-muted-foreground">interpolated model grid · exact table below</span>
                   </p>
                   <div className="overflow-hidden rounded-xl border border-border bg-card">
                     {surfaceData && surfaceData.T_vals?.length > 0 ? (
@@ -314,17 +332,17 @@ export function Greeks10View() {
                           </div>
                         </div>
                         <p className="text-type-2xs text-muted-foreground">
-                          Observed cells only — missing cells stay unavailable. The 3D view renders
-                          the same observed grid with holes preserved; there is no fitted model layer
-                          for Greeks, so no model mesh is shown.{' '}
+                          Interpolated MODEL grid (linear interior + nearest hole-fill) of BSM-derived Greeks — not observed provider cells. Observed-layer nodes ({observedNodes.length}) are per-contract derived values built without interpolation and render separately in 3D; unavailable cells stay null.{' '}
                           {data?.units?.[selectedGreek as keyof typeof data.units]
                             ? `Units: ${data.units[selectedGreek as keyof typeof data.units]}.` : ''}
+                          {data?.surface_provenance?.model_method ? ` Method: ${data.surface_provenance.model_method}.` : ''}
                         </p>
                         {show3d && surfaceData && surfaceData.T_vals.length > 0 && (
                           <div className="mt-2 h-[380px] overflow-hidden rounded-xl border border-border bg-card">
                             <Suspense fallback={<div className="flex h-full items-center justify-center font-mono text-type-2xs text-muted-foreground">3D engine loads on open…</div>}>
                               <GreeksSurface3D
                                 grid={surfaceData}
+                                observedNodes={observedNodes}
                                 spot={data?.spot ?? surfaceData.K_vals[Math.floor(surfaceData.K_vals.length / 2)] ?? 0}
                                 greek={greek.key}
                                 label={greek.label}
@@ -585,7 +603,9 @@ function GexBarsChart({
 /** VS3D-style OI ladder: put OI left (amber), call OI right (info) — fixed height, nearest strikes. */
 function OiByStrike({ data, ticker }: { data: GreeksData; ticker: string }) {
   const oiByStrike: Record<number, { calls: number; puts: number }> = {};
+  // Missing OI (null) stays unavailable and never contributes as zero.
   data.points.forEach((p) => {
+    if (p.oi == null) return;
     if (!oiByStrike[p.K]) oiByStrike[p.K] = { calls: 0, puts: 0 };
     if (p.type === 'call') oiByStrike[p.K]!.calls += p.oi;
     else oiByStrike[p.K]!.puts += p.oi;
@@ -682,6 +702,8 @@ function GexCalendar({ data, ticker }: { data: GreeksData; ticker: string }) {
   const allStrikes = new Set<number>();
 
   data.points.forEach((p) => {
+    // Missing OI is unavailable — never treated as observed zero.
+    if (p.oi == null) return;
     const sign = p.type === 'call' ? 1 : -1;
     const gex = sign * p.gamma * p.oi * 100 * data.spot * data.spot * 0.01;
     const T = p.T.toFixed(3);

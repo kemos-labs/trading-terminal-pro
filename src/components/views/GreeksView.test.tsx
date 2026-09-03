@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import { useTerminalStore } from '../../store/terminalStore';
 import {
@@ -22,7 +22,7 @@ vi.mock('../../lib/macrovol/api', () => ({
     greeks: vi.fn().mockResolvedValue({
       ticker: 'SPY',
       spot: 100,
-      total_points: 10,
+      total_points: 3,
       atm: {
         delta: 0.5,
         gamma: 0.02,
@@ -32,7 +32,11 @@ vi.mock('../../lib/macrovol/api', () => ({
         charm: -0.001,
       },
       gex: [],
-      points: [],
+      points: [
+        { T: 0.08, K: 95, iv: 22.5, iv_source: 'midpoint', price: 2.2, price_source: 'midpoint', bid: 2.0, ask: 2.4, last: 2.2, oi: 120, type: 'put', delta: -0.3, gamma: 0.02, vega: 0.1, theta: -0.05, vanna: 0.01, charm: -0.001 },
+        { T: 0.08, K: 100, iv: 20.1, iv_source: 'last', price: 3.1, price_source: 'last', bid: null, ask: null, last: 3.1, oi: null, type: 'call', delta: 0.5, gamma: 0.025, vega: 0.12, theta: -0.06, vanna: 0.02, charm: -0.002 },
+        { T: 0.16, K: 105, iv: 21.0, iv_source: 'midpoint', price: 1.8, price_source: 'midpoint', bid: 1.6, ask: 2.0, last: 1.9, oi: 0, type: 'call', delta: 0.4, gamma: 0.02, vega: 0.11, theta: -0.055, vanna: 0.015, charm: -0.0015 },
+      ],
       surfaces: {
         delta: {
           T_vals: [0.08, 0.16],
@@ -41,12 +45,25 @@ vi.mock('../../lib/macrovol/api', () => ({
             [0.4, 0.5, 0.6],
             [0.35, 0.48, 0.55],
           ],
+          provenance: { kind: 'interpolated-model', method: 'linear+nearest' },
         },
       },
       r: 0.04,
       q: 0.013,
       r_source: 'SOFR',
       source: 'yfinance',
+      surface_provenance: {
+        observed: 'yfinance bid/ask/last quotes',
+        derived: 'per-contract BSM Greeks',
+        model: 'interpolated OTM grid: linear interior + nearest-neighbor hole-fill',
+        model_kind: 'interpolated-model',
+        model_method: 'linear+nearest',
+        surface_side: 'otm',
+        holes: 'model grid holes are filled via nearest; observed-layer holes stay unavailable (null)',
+        oi: 'missing OI is null, observed zero stays 0.0',
+        price_provenance: 'price_source midpoint when two-sided, else last',
+      },
+      points_provenance: 'derived per-contract BSM (price_source/iv_source per point); not observed provider cells',
     }),
     greeksHistory: vi.fn().mockResolvedValue({ ticker: 'SPY', data: [] }),
   },
@@ -97,7 +114,7 @@ describe('GreeksView (Greeks 1.0 host)', () => {
     expect(screen.queryByText('QQQ')).toBeNull();
   });
 
-  it('exposes observed 2D profiles, exact tables, and a lazy 3D entry gate', async () => {
+  it('exposes interpolated model grid, exact tables, and a lazy 3D entry gate', async () => {
     render(<GreeksView />);
     await waitFor(
       () => {
@@ -106,7 +123,11 @@ describe('GreeksView (Greeks 1.0 host)', () => {
       { timeout: 8000 },
     );
     expect(screen.getByText(/Term profile/i)).toBeInTheDocument();
-    expect(screen.getByText(/observed grid · exact table below/i)).toBeInTheDocument();
+    // Honest provenance: interpolated MODEL grid, never observed cells.
+    expect(screen.getByText(/interpolated model grid · exact table below/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Interpolated MODEL grid/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/Observed cells only/i)).toBeNull();
+    expect(screen.queryByText(/no fitted model layer/i)).toBeNull();
     expect(screen.queryByText(/3D removed/i)).toBeNull();
     // 3D is NOT mounted before explicit entry (WebGL engine not loaded).
     expect(screen.queryByTestId('greeks-surface-3d')).toBeNull();
@@ -121,13 +142,29 @@ describe('GreeksView (Greeks 1.0 host)', () => {
       { timeout: 8000 },
     );
     expect(screen.queryByTestId('greeks-surface-3d')).toBeNull();
-    screen.getByTestId('open-3d-greeks').click();
+    // fireEvent keeps the state update inside act (no React act warning).
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('open-3d-greeks'));
+    });
+    // Assert the actual 3D surface render, not only the Suspense fallback.
     await waitFor(
       () => {
-        expect(screen.queryByText(/3D engine loads on open/i)).toBeInTheDocument();
+        expect(screen.getByTestId('greeks-surface-3d')).toBeInTheDocument();
       },
       { timeout: 8000 },
     );
+    const surface = screen.getByTestId('greeks-surface-3d');
+    // Canvas actually mounted (explicit-entry lazy chunk rendered).
+    expect(surface.querySelector('canvas')).not.toBeNull();
+    // Observed/model separation is visible with exact units and controls.
+    expect(surface.textContent).toMatch(/observed contracts/);
+    expect(surface.textContent).toMatch(/model grid/);
+    expect(surface.textContent).toMatch(/Strike \(\$\)/);
+    expect(surface.textContent).toMatch(/DTE \(days\)/);
+    expect(screen.getByTestId('greeks-3d-wireframe-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('greeks-3d-contours-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('greeks-3d-preset-default')).toBeInTheDocument();
+    expect(screen.getByTestId('greeks-3d-fallback-note')).toBeInTheDocument();
   });
 
   it('ATM greek cards drive selection labels', async () => {

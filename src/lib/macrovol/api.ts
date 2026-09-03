@@ -680,7 +680,16 @@ export interface GreeksPoint {
   T: number;
   K: number;
   iv: number;
-  oi: number;
+  /** IV price basis: midpoint (two-sided) or last (fallback) — never midpoint-observed when last-derived. */
+  iv_source?: 'midpoint' | 'last';
+  /** Solved option price with preserved provenance. */
+  price?: number;
+  price_source?: 'midpoint' | 'last';
+  bid?: number | null;
+  ask?: number | null;
+  last?: number | null;
+  /** Missing OI is null/unavailable; observed zero stays 0. */
+  oi: number | null;
   type: 'call' | 'put';
   delta: number;
   gamma: number;
@@ -694,6 +703,11 @@ export interface SurfaceGrid {
   T_vals: number[];
   K_vals: number[];
   grid: (number | null)[][];
+  /** Interpolated-model provenance for grid layers (never observed cells). */
+  provenance?: {
+    kind: 'interpolated-model';
+    method: string;
+  };
 }
 
 export interface GreeksData {
@@ -715,12 +729,27 @@ export interface GreeksData {
   q_source?: string;
   r_mode?: string;
   units?: {
+    delta?: string;
+    gamma?: string;
     theta?: string;
     vega?: string;
     charm?: string;
     vanna?: string;
     surface_side?: string;
   };
+  /** Explicit layer separation: observed quotes -> derived points -> interpolated model grid. */
+  surface_provenance?: {
+    observed: string;
+    derived: string;
+    model: string;
+    model_kind: 'interpolated-model';
+    model_method: string;
+    surface_side: string;
+    holes: string;
+    oi: string;
+    price_provenance: string;
+  };
+  points_provenance?: string;
   charm_note?: string;
   surface_note?: string;
   as_of?: string;

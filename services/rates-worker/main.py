@@ -1794,20 +1794,43 @@ async def get_greeks(
         result["q_source"] = q_source
         result["r_mode"] = r_mode
         result["units"] = {
+            "delta": "dimensionless",
+            "gamma": "per_dollar",
             "theta": "per_calendar_day",
             "vega": "per_1_vol_point",
             "charm": "per_calendar_day",
             "vanna": "raw_dV_dS_dsigma",
             "surface_side": "otm",
         }
+        # Explicit provenance separation (P0): observed quotes -> derived
+        # per-contract Greeks -> interpolated model grid -> unavailable holes.
+        # `points` are derived per-contract BSM values (never observed provider
+        # cells); `surfaces`/`gex_grid`/`charm_grid` are interpolated model
+        # layers (linear interior + nearest hole-fill); holes in the model grid
+        # are filled and must never be read as observed.
+        result["surface_provenance"] = {
+            "observed": "yfinance bid/ask/last quotes (two-sided midpoint when bid>0 and ask>0, else last)",
+            "derived": "per-contract BSM Greeks solved from price_source (midpoint or last); iv_source mirrors price_source",
+            "model": "interpolated OTM grid: linear interior + nearest-neighbor hole-fill (scipy griddata)",
+            "model_kind": "interpolated-model",
+            "model_method": "linear+nearest",
+            "surface_side": "otm",
+            "holes": "model grid holes are filled via nearest; observed-layer holes stay unavailable (null)",
+            "oi": "missing OI is null (unavailable), observed zero stays 0.0; GEX/charm skip null OI",
+            "price_provenance": "price_source is midpoint when two-sided, else last; last-derived IV/Greeks are not midpoint-observed or executable",
+        }
+        result["points_provenance"] = "derived per-contract BSM (price_source/iv_source per point); not observed provider cells"
         result["charm_note"] = (
             "Charm is per calendar day (Δ delta / day) — same unit as terminal 3D/heatmap. "
             "Surfaces use OTM quotes (put K<S, call K≥S). Exposure grid = charm × OI × 100 × S."
         )
         result["surface_note"] = (
-            "Interpolated OTM greek surface from yfinance chain. "
-            "Terminal 3D uses the same OTM convention on the LIVE desk chain (FMP/yfinance) — "
-            "levels can still differ when r/q, IV solver, or chain source diverge."
+            "Interpolated MODEL grid (linear interior + nearest hole-fill) of BSM-derived "
+            "OTM Greeks from yfinance quotes — not observed provider cells. Observed-layer "
+            "values are the per-contract derived points (price_source midpoint/last); "
+            "unavailable cells stay null. Terminal 3D renders observed contract nodes "
+            "separately from this model mesh. Levels can differ when r/q, IV solver, "
+            "or chain source diverge."
         )
         ttl_cache.set_cached(key, result)
         return result

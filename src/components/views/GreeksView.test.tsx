@@ -162,7 +162,7 @@ describe('GreeksView (Greeks 1.0 host)', () => {
     expect(surface.textContent).toMatch(/Strike \(\$\)/);
     expect(surface.textContent).toMatch(/DTE \(days\)/);
     expect(screen.getByTestId('greeks-3d-wireframe-toggle')).toBeInTheDocument();
-    expect(screen.getByTestId('greeks-3d-contours-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('greeks-3d-level-guides-toggle')).toBeInTheDocument();
     expect(screen.getByTestId('greeks-3d-preset-default')).toBeInTheDocument();
     expect(screen.getByTestId('greeks-3d-fallback-note')).toBeInTheDocument();
   });

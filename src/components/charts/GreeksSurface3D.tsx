@@ -14,7 +14,7 @@
  * - Diverging Greeks use a zero-centered ramp (v=0 at midpoint); sequential
  *   Greeks map over model-grid [lo, hi].
  * - ATM ridge (nearest-strike model nodes), camera presets, model level
- *   guides (contours of the model mesh), crosshair + exact hover readout,
+ *   guides (horizontal reference planes at model Z ticks — not contour lines),
  *   keyboard navigation, and DOM axis overlays with exact units.
  * All pure geometry lives in `greeksSurface3dData.ts` (unit-testable, no WebGL).
  */
@@ -92,7 +92,7 @@ function GreekPoint({
 function GreekSurface3D({ grid, derivedNodes, spot, label, unit, diverging }: GreeksSurface3DProps) {
   const [hover, setHover] = useState<Readout | null>(null);
   const [showWire, setShowWire] = useState(false);
-  const [showContours, setShowContours] = useState(false);
+  const [showLevels, setShowLevels] = useState(false);
   const [preset, setPreset] = useState<PresetName>('default');
   const [kbIndex, setKbIndex] = useState<number>(-1);
   const colors = useMemo(() => ({
@@ -270,13 +270,15 @@ function GreekSurface3D({ grid, derivedNodes, spot, label, unit, diverging }: Gr
           </mesh>
         )}
 
-        {/* Model level guides (contours): honest horizontal references at Z ticks */}
-        {showContours && d.zTicks.map((v) => {
+        {/* Model level guides: honest horizontal reference planes at Z ticks.
+            These are level markers, not interpolated contour lines. */}
+        {showLevels && d.zTicks.map((v) => {
           const z = greekValueToHeight(v, diverging, d.lo, d.hi, d.maxAbs);
           if (z == null) return null;
           return (
-            <mesh key={`contour-${v}`} position={[0, z, 0]}>
+            <mesh key={`level-${v}`} position={[0, z, 0]}>
               <boxGeometry args={[GREEK3D_W, 0.004, GREEK3D_D]} />
+              {/* level-guide plane — not a contour line */}
               <meshBasicMaterial color={colors.foreground} transparent opacity={0.22} />
             </mesh>
           );
@@ -327,7 +329,7 @@ function GreekSurface3D({ grid, derivedNodes, spot, label, unit, diverging }: Gr
               model mesh (interpolated)
             </>
           )}
-          {showContours && (
+          {showLevels && (
             <>
               <span className="inline-block h-px w-4" style={{ background: colors.foreground }} aria-hidden />
               level guides
@@ -336,7 +338,7 @@ function GreekSurface3D({ grid, derivedNodes, spot, label, unit, diverging }: Gr
         </span>
       </div>
 
-      {/* Explicit controls: model mesh, contours, camera presets. Keyboard: arrows + Escape. */}
+      {/* Explicit controls: model mesh, level guides, camera presets. Keyboard: arrows + Escape. */}
       <div className="absolute top-2 right-2 flex flex-wrap justify-end gap-1">
         <button
           type="button"
@@ -349,12 +351,12 @@ function GreekSurface3D({ grid, derivedNodes, spot, label, unit, diverging }: Gr
         </button>
         <button
           type="button"
-          data-testid="greeks-3d-contours-toggle"
-          aria-pressed={showContours}
-          onClick={() => setShowContours((s) => !s)}
+          data-testid="greeks-3d-level-guides-toggle"
+          aria-pressed={showLevels}
+          onClick={() => setShowLevels((s) => !s)}
           className="rounded border border-border bg-card px-2 py-1 font-mono text-type-2xs text-foreground hover:bg-muted/30 focus-ring-term"
         >
-          {showContours ? 'Hide' : 'Show'} contours
+          {showLevels ? 'Hide' : 'Show'} level guides
         </button>
         {(Object.keys(CAMERA_PRESETS) as PresetName[]).map((name) => (
           <button

@@ -1,12 +1,14 @@
 /**
- * Greeks provenance contract tests (P1): observed/derived/model separation,
- * missing OI nullability, and last-versus-midpoint price provenance.
+ * Greeks provenance contract tests: quote/derived/model separation,
+ * missing OI nullability, last-versus-midpoint price provenance, and the
+ * structural per-grid provenance stamp.
  * These guard the frontend contract mirroring the Python
  * greeks_calculator guarantees — missing stays null, last-derived is never
- * midpoint-observed.
+ * represented as midpoint-sourced.
  */
 import { describe, expect, it } from 'vitest';
-import type { GreeksData, GreeksPoint } from './api';
+import type { GreeksData, GreeksPoint, SurfaceGrid } from './api';
+import { getSurfaceProvenance, validateSurfaceProvenance } from './api';
 
 function aggregateOiByStrike(points: GreeksPoint[]): Record<number, number> {
   // Mirrors OiByStrike/GexCalendar: missing OI (null) never contributes as zero.
@@ -19,7 +21,7 @@ function aggregateOiByStrike(points: GreeksPoint[]): Record<number, number> {
 }
 
 describe('greeks provenance contract', () => {
-  it('separates observed quotes, derived points, and interpolated model grid', () => {
+  it('separates provider quotes, derived points, and interpolated model grid', () => {
     const data = {
       surface_provenance: {
         observed: 'yfinance bid/ask/last quotes',
@@ -28,7 +30,7 @@ describe('greeks provenance contract', () => {
         model_kind: 'interpolated-model',
         model_method: 'linear+nearest',
         surface_side: 'otm',
-        holes: 'model grid holes are filled via nearest; observed-layer holes stay unavailable (null)',
+        holes: 'model grid holes are filled via nearest; derived-layer holes stay unavailable (null)',
         oi: 'missing OI is null',
         price_provenance: 'price_source midpoint when two-sided, else last',
       },
@@ -57,7 +59,7 @@ describe('greeks provenance contract', () => {
     expect(points[1]!.oi).toBe(0);
   });
 
-  it('preserves last-versus-midpoint provenance (last-derived is not midpoint)', () => {
+  it('preserves last-versus-midpoint provenance (last-derived is not midpoint-sourced)', () => {
     const mid = {
       K: 100, bid: 2.0, ask: 2.4, last: 2.2, price: 2.2,
       price_source: 'midpoint', iv_source: 'midpoint',
@@ -74,5 +76,42 @@ describe('greeks provenance contract', () => {
     // One-sided quotes must not claim midpoint.
     const oneSided = { bid: 2.0, ask: null, price_source: 'last' } as unknown as GreeksPoint;
     expect(oneSided.price_source).toBe('last');
+  });
+
+  it('validates the structural per-grid provenance stamp', () => {
+    const stamped = {
+      T_vals: [0.08],
+      K_vals: [100],
+      grid: [[0.5]],
+      provenance: {
+        kind: 'interpolated-model',
+        method: 'linear+nearest',
+        derived_source: 'per-contract BSM Greeks (price_source midpoint|last)',
+        observed_fields: ['bid', 'ask', 'last', 'openInterest'],
+        quote_time: '2026-09-03T00:00:00+00:00',
+        quote_time_note: 'chain snapshot time; yfinance exposes no per-quote event times',
+        side: 'otm',
+        unit: 'dimensionless',
+        nullability: 'unavailable cells are null; model-grid holes filled via nearest',
+      },
+    } as SurfaceGrid;
+    expect(getSurfaceProvenance(stamped)?.kind).toBe('interpolated-model');
+    expect(validateSurfaceProvenance(stamped)).toEqual([]);
+  });
+
+  it('flags grids without structural provenance (legacy payloads)', () => {
+    const legacy = { T_vals: [0.08], K_vals: [100], grid: [[0.5]] } as SurfaceGrid;
+    expect(getSurfaceProvenance(legacy)).toBeNull();
+    expect(validateSurfaceProvenance(legacy)).toEqual([
+      'provenance missing: grid carries no structural provenance',
+    ]);
+    const mislabeled = {
+      T_vals: [0.08],
+      K_vals: [100],
+      grid: [[0.5]],
+      provenance: { kind: 'observed', method: 'none' },
+    } as unknown as SurfaceGrid;
+    const violations = validateSurfaceProvenance(mislabeled);
+    expect(violations.some((v) => v.includes('kind'))).toBe(true);
   });
 });

@@ -699,15 +699,55 @@ export interface GreeksPoint {
   charm: number;
 }
 
+/**
+ * Structural provenance stamp for one interpolated Greeks model grid.
+ * Mirrors services/rates-worker/services/greeks_provenance.py — the worker
+ * emits this on every grid; only bid/ask/last quotes may be called observed.
+ */
+export interface GreeksSurfaceProvenance {
+  kind: 'interpolated-model';
+  method: string;
+  derived_source: string;
+  observed_fields: string[];
+  quote_time: string | null;
+  quote_time_note: string;
+  side: string;
+  unit: string;
+  nullability: string;
+}
+
 export interface SurfaceGrid {
   T_vals: number[];
   K_vals: number[];
   grid: (number | null)[][];
-  /** Interpolated-model provenance for grid layers (never observed cells). */
-  provenance?: {
-    kind: 'interpolated-model';
-    method: string;
-  };
+  /** Structural provenance stamp emitted by the worker (never provider quotes). */
+  provenance?: GreeksSurfaceProvenance;
+}
+
+/** Read a grid's structural provenance stamp, or null for legacy payloads. */
+export function getSurfaceProvenance(grid: SurfaceGrid | null | undefined): GreeksSurfaceProvenance | null {
+  if (!grid || typeof grid !== 'object') return null;
+  const p = (grid as { provenance?: unknown }).provenance;
+  if (!p || typeof p !== 'object') return null;
+  return p as GreeksSurfaceProvenance;
+}
+
+/** Violation strings when a grid lacks valid structural provenance. */
+export function validateSurfaceProvenance(grid: SurfaceGrid | null | undefined): string[] {
+  const p = getSurfaceProvenance(grid);
+  if (!p) return ['provenance missing: grid carries no structural provenance'];
+  const violations: string[] = [];
+  if (p.kind !== 'interpolated-model') violations.push('provenance.kind must be interpolated-model');
+  if (!p.method) violations.push('provenance.method missing');
+  if (!p.derived_source) violations.push('provenance.derived_source missing');
+  if (!Array.isArray(p.observed_fields) || p.observed_fields.length === 0) {
+    violations.push('provenance.observed_fields must be a non-empty list');
+  }
+  if (!p.side) violations.push('provenance.side missing');
+  if (!p.unit) violations.push('provenance.unit missing');
+  if (!p.quote_time_note) violations.push('provenance.quote_time_note missing');
+  if (!p.nullability) violations.push('provenance.nullability missing');
+  return violations;
 }
 
 export interface GreeksData {

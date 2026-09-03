@@ -1787,6 +1787,15 @@ async def get_greeks(
         result["gex_grid"] = build_gex_grid(result["points"], spot)
         result["charm_grid"] = build_charm_exposure_grid(result["points"], spot)
         result["as_of"] = datetime.now(timezone.utc).isoformat()
+        # Structural provenance: every interpolated grid carries its own stamp
+        # (kind/method/derived source/observed quote fields + snapshot
+        # timestamp/units/nullability). See services/greeks_provenance.py.
+        from services.greeks_provenance import attach_surface_provenance
+        attach_surface_provenance(result["surfaces"], quote_time=result["as_of"])
+        attach_surface_provenance(
+            {"gex": result["gex_grid"], "charm": result["charm_grid"]},
+            quote_time=result["as_of"],
+        )
         result["source"] = "yfinance"
         result["r"] = r_eff
         result["q"] = q_eff
@@ -1816,7 +1825,7 @@ async def get_greeks(
             "model_method": "linear+nearest",
             "surface_side": "otm",
             "holes": "model grid holes are filled via nearest; observed-layer holes stay unavailable (null)",
-            "oi": "missing OI is null (unavailable), observed zero stays 0.0; GEX/charm skip null OI",
+            "oi": "missing OI is null (unavailable), provider-reported zero stays 0.0; GEX/charm skip null OI",
             "price_provenance": "price_source is midpoint when two-sided, else last; last-derived IV/Greeks are not midpoint-observed or executable",
         }
         result["points_provenance"] = "derived per-contract BSM (price_source/iv_source per point); not observed provider cells"
@@ -1826,9 +1835,9 @@ async def get_greeks(
         )
         result["surface_note"] = (
             "Interpolated MODEL grid (linear interior + nearest hole-fill) of BSM-derived "
-            "OTM Greeks from yfinance quotes — not observed provider cells. Observed-layer "
+            "OTM Greeks from yfinance quotes — not provider quotes. Derived-layer "
             "values are the per-contract derived points (price_source midpoint/last); "
-            "unavailable cells stay null. Terminal 3D renders observed contract nodes "
+            "unavailable cells stay null. Terminal 3D renders derived contract nodes "
             "separately from this model mesh. Levels can differ when r/q, IV solver, "
             "or chain source diverge."
         )

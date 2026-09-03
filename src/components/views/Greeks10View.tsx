@@ -12,6 +12,7 @@ import { dealerExposure } from '../../lib/options/analytics';
 import type { VolSnapshot } from '../../lib/options/types';
 import { fmtCompact, fmtPrice } from '../../lib/format';
 import type { GreeksData, HistoryData } from '../../lib/macrovol/api';
+import { getSurfaceProvenance } from '../../lib/macrovol/api';
 import {
   loadGreeksPack,
   peekGreeksCache,
@@ -285,7 +286,17 @@ export function Greeks10View() {
                         {data.q != null ? ` · q=${(data.q * 100).toFixed(2)}%` : ''}
                       </span>
                     )}
-                    <span className="ml-2 rounded bg-border/40 px-1.5 py-0.5 text-muted-foreground">interpolated model grid · exact table below</span>
+                    <span
+                      className="ml-2 rounded bg-border/40 px-1.5 py-0.5 text-muted-foreground"
+                      data-testid="greeks-grid-provenance-badge"
+                      title={getSurfaceProvenance(surfaceData)?.derived_source ?? 'legacy payload without structural provenance'}
+                    >
+                      {(() => {
+                        const prov = getSurfaceProvenance(surfaceData);
+                        if (prov) return `${prov.kind} · ${prov.method} · exact table below`;
+                        return 'legacy grid · exact table below (provenance unavailable)';
+                      })()}
+                    </span>
                   </p>
                   <div className="overflow-hidden rounded-xl border border-border bg-card">
                     {surfaceData && surfaceData.T_vals?.length > 0 ? (

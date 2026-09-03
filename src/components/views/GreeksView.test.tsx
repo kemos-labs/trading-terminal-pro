@@ -17,8 +17,11 @@ class ResizeObserverStub {
 (globalThis as unknown as { ResizeObserver: typeof ResizeObserverStub }).ResizeObserver =
   ResizeObserverStub as unknown as typeof ResizeObserver;
 
-vi.mock('../../lib/macrovol/api', () => ({
-  macrovolApi: {
+vi.mock('../../lib/macrovol/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/macrovol/api')>();
+  return {
+    ...actual,
+    macrovolApi: {
     greeks: vi.fn().mockResolvedValue({
       ticker: 'SPY',
       spot: 100,
@@ -45,7 +48,17 @@ vi.mock('../../lib/macrovol/api', () => ({
             [0.4, 0.5, 0.6],
             [0.35, 0.48, 0.55],
           ],
-          provenance: { kind: 'interpolated-model', method: 'linear+nearest' },
+          provenance: {
+            kind: 'interpolated-model',
+            method: 'linear+nearest',
+            derived_source: 'per-contract BSM Greeks (price_source midpoint|last)',
+            observed_fields: ['bid', 'ask', 'last', 'openInterest'],
+            quote_time: '2026-09-03T00:00:00+00:00',
+            quote_time_note: 'chain snapshot time; yfinance exposes no per-quote event times',
+            side: 'otm',
+            unit: 'dimensionless',
+            nullability: 'unavailable cells are null; model-grid holes filled via nearest',
+          },
         },
       },
       r: 0.04,
@@ -59,15 +72,16 @@ vi.mock('../../lib/macrovol/api', () => ({
         model_kind: 'interpolated-model',
         model_method: 'linear+nearest',
         surface_side: 'otm',
-        holes: 'model grid holes are filled via nearest; observed-layer holes stay unavailable (null)',
+        holes: 'model grid holes are filled via nearest; derived-layer holes stay unavailable (null)',
         oi: 'missing OI is null (unavailable), provider-reported zero stays 0.0',
         price_provenance: 'price_source midpoint when two-sided, else last',
       },
       points_provenance: 'derived per-contract BSM (price_source/iv_source per point); not observed provider cells',
     }),
-    greeksHistory: vi.fn().mockResolvedValue({ ticker: 'SPY', data: [] }),
-  },
-}));
+      greeksHistory: vi.fn().mockResolvedValue({ ticker: 'SPY', data: [] }),
+    },
+  };
+});
 
 describe('GreeksView (Greeks 1.0 host)', () => {
   // Shared view-root coverage also protects lazy loading boundaries for all desks and test servers (including boot).
@@ -123,8 +137,10 @@ describe('GreeksView (Greeks 1.0 host)', () => {
       { timeout: 8000 },
     );
     expect(screen.getByText(/Term profile/i)).toBeInTheDocument();
-    // Honest provenance: interpolated MODEL grid, never observed cells.
-    expect(screen.getByText(/interpolated model grid · exact table below/i)).toBeInTheDocument();
+    // Structural provenance: badge renders kind + method from the grid stamp.
+    const badge = screen.getByTestId('greeks-grid-provenance-badge');
+    expect(badge.textContent).toMatch(/interpolated-model/);
+    expect(badge.textContent).toMatch(/linear\+nearest/);
     expect(screen.getAllByText(/Interpolated MODEL grid/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(/Observed cells only/i)).toBeNull();
     expect(screen.queryByText(/no fitted model layer/i)).toBeNull();

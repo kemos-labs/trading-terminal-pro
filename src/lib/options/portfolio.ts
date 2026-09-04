@@ -289,7 +289,11 @@ export function templateLegs(
   expiryIdx = 0,
 ): PortfolioLeg[] {
   const slice = snap.expiries[expiryIdx] ?? snap.expiries[0];
-  if (!slice) return [];
+  // Fail closed: a live slice can arrive with zero validated quotes on either
+  // side (all rows filtered). Reducing an empty side yields undefined and the
+  // atm.strike read below throws inside render (PnlWorkflow useMemo) — return
+  // no legs so callers render their honest empty states instead of crashing.
+  if (!slice || slice.calls.length === 0 || slice.puts.length === 0) return [];
   const atm = slice.calls.reduce((b, q) =>
     Math.abs(q.strike - snap.spot) < Math.abs(b.strike - snap.spot) ? q : b
   , slice.calls[0]!);

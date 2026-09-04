@@ -41,6 +41,24 @@ describe('portfolio / combo', () => {
     expect(payoff != null && payoff > 0).toBe(true);
   });
 
+  // ── Live-slice fail-closed (P0: TRADE pnl error boundary) ───────────────
+  // A live expiry slice can arrive with zero validated quotes on either side
+  // (all rows filtered). templateLegs must return [] so render shows honest
+  // empty states — never throw inside PnlWorkflow useMemo (was: reading
+  // 'strike' of undefined from reduce over an empty side).
+  it('returns no legs without throwing when a slice side is empty', () => {
+    const base = snap.expiries[0]!;
+    const emptyCalls = { ...snap, expiries: [{ ...base, calls: [] }] };
+    const emptyPuts = { ...snap, expiries: [{ ...base, puts: [] }] };
+    const noExpiries = { ...snap, expiries: [] };
+    for (const s of [emptyCalls, emptyPuts, noExpiries]) {
+      expect(templateLegs('short_straddle', s, 0)).toEqual([]);
+      expect(templateLegs('long_straddle', s, 0)).toEqual([]);
+    }
+    const m = evaluateCombo([], snap);
+    expect(Number.isFinite(m.mark)).toBe(true);
+  });
+
   // ── Structural executable-entry law (C1) ────────────────────────────────
 
   const quoteForLeg = (kind: 'call' | 'put' = 'call') => {

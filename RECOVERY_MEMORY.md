@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-03T15:20:00Z
+Updated: 2026-09-03T16:10:00Z
 
 Conventions in this file: **Implementation HEAD** is the newest commit that
 changes product/test/config code. **Checkpoint commit** is the docs-only
@@ -30,7 +30,8 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Implementation HEAD: `fa6d55d` (fix(tests): eliminate Recharts zero-size and act warnings at the cause).
+- Implementation HEAD: `ba36bc9` (docs(evidence): final-HEAD screenshot manifest with sidecars and pixel stats).
+- Last code change: `3c3612e` (feat(e2e): per-screenshot sidecars plus manifest collector). `ba36bc9` adds only the generated manifest JSON.
 - Checkpoint commit: the docs commit carrying this update (see `git log --oneline`; it touches only RECOVERY_MEMORY.md).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
@@ -39,7 +40,8 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
   BSM terminology (`f3dcd38`), level-guides rename (`c1fd162`), structural
   per-grid provenance (`c30cc1c`), fail-closed bounded reads (`55f6f7c`),
   type-strict Deribit index (`76153ef`), non-finite Greeks fail-closed
-  (`87cc67b`), warning elimination (`fa6d55d`).
+  (`87cc67b`), warning elimination (`fa6d55d`), e2e sidecars + collector
+  (`3c3612e`), screenshot manifest (`ba36bc9`).
 - C0: exit criteria re-checked this session — zero false-SERFF labels, zero
   hardcoded-rate fallbacks, rate_risk+stir 27 tests pass, no credential-value
   printing (one absent-key skip notice names the env var only), secrets pass.
@@ -72,23 +74,48 @@ No dirty implementation tranche exists at this checkpoint. Starting HEAD for thi
 - `f727f64` fix(providers): Deribit index validation + byte-limit fallback (P1-9, P1-10).
 - `f4d1ca4` fix(tests): fixture comment correction + provenance contract tests (P1-12, P1-13).
 
-Measured verification (this session, implementation HEAD `fa6d55d`):
-type-check PASS; lint PASS; build PASS (OrbitControls 238 kB gzip under
-300 kB analytical exception; bundle verified single three revision 185);
-full suite 158 files / 885 tests PASS with zero width(0) and zero act
-warnings (one residual three dual-instance line: same-revision CJS/ESM
-double-load under vitest only, no prod impact — deep drei imports removed
-the cross-revision 0.170 copy from the graph). Focused counts measured:
-greeksSurface3dData 17, GreeksView 4, greeksProvenance 5, Greeks boot drain
-4, deskSectionIds 7, test_greeks_calculator 23, test_greeks_provenance 4,
-test_rate_risk + test_stir 27, C1 file quartet 29, macrovol cache 12 +
-openapi 2, deribit integration 15, restoredRoutes incl. boot no-reader case. Python
-worker suite green; route parity + OpenAPI validation PASS; secrets PASS
-(all three modes at gates); owner clean.
+Measured verification (this session, HEAD `ba36bc9`; code HEAD `3c3612e`):
+type-check PASS; lint PASS; build PASS; bundle gate PASS (OrbitControls
+230.4 kB gzip under 300 kB analytical exception; dist verified single three
+revision 185). Full suite 158 files / 885 tests: 6 runs — 5x all-green,
+1x 884/885 with a single unidentified failure that never recurred (honest
+flake on record; consecutive-twice-green not cleanly claimed). Zero width(0)
+and zero act warnings (one residual three dual-instance line: same-revision
+CJS/ESM double-load under vitest only). Python worker 62 passed / 2 skipped;
+pip-audit clean (direct-deps coverage, 2 environment warnings). npm audit 0
+vulns (both scopes). Secrets PASS (all three modes). Route parity PASS
+(38 vs 65); OpenAPI validation PASS (65/65/16/27); owner clean.
+Real-server suite `test:e2e:real-server` 6/6 PASS in 4.5m at `3c3612e` with
+108/108 screenshots carrying sidecars (commit/scenario/viewport/workflow/
+fixture mode/fixture clock/checks) plus committed manifest
+`docs/recovery-evidence/SCREENSHOT_MANIFEST_3c3612e.json` with pixel stats.
+Five screenshots pixel-inspected (see findings below).
 
 Remaining work: P1-14 final-HEAD screenshots with sidecars; P1-15 C6 failure-state matrix (loading/empty/stale/partial/malformed/provider-down/entitlement) with pixel inspection; P1-16 layout defects (Home dead space, Trade P&L/Risk blank charts, Crypto Overview/Vol dead space, Academy sparse, four-viewport geometry); C3 quota/provenance propagation; C4 strict-TS migration; C5 Crypto 3D + measured geometry; C6 full matrix; C7 Python ownership + perf proofs; C8 all gates twice + independent falsification.
 
-Exact next action: P1-14/P1-15 — generate final-HEAD real-server screenshots with machine-readable sidecars and build the deterministic failure-state harness (loading/empty/stale/partial/malformed/provider-down/entitlement-denied/success × 27 workflows × 4 viewports), then P1-16 layout corrections (Home dead space, Trade P&L/Risk principals, Crypto dead space, Academy density, measured geometry), Crypto 3D with 3D-network proof, C3/C4/C7 completions, and C8 gates twice + independent falsification.
+Pixel findings at `3c3612e` (inspected, not filename-approved):
+- desktop-home: brief panels populated but contradictory CHAIN API-DOWN vs
+  FEEDS-ok badges; LPAD grid + KSA column leave ~55% near-empty (dead space
+  open); Volatility ATM IV shows unavailable dash.
+- desktop-trade-sub-pnl: blotter/controls populated but BOTH PnL principal
+  charts render empty axes (no curves) — blank-principal defect open.
+- desktop-crypto-v2-overview: regime/coverage/free-snapshot populated with
+  exact required labels, but bottom ~50% dead space — defect open.
+- desktop-vol-sub-greeks: structural fallback badge renders honestly
+  ('legacy grid · exact table below (provenance unavailable)'); CHARM/VANNA
+  chart populated; surface/GEX honestly empty in fixture mode; honest
+  EXPIRED deterministic-fixture badge.
+- desktop-academy-sub-start: populated header/hero; essay list below fold
+  (density to review).
+
+Exact next action: P1-15 C6 failure-state harness (loading/empty/stale/
+partial/malformed/provider-down/entitlement-denied × 27 workflows × 4
+viewports) with pixel review; P1-16 layout corrections for the confirmed
+defects above (Home dead space, Trade PnL blank principals, Crypto dead
+space, contradictory status badges); Crypto 3D restore with explicit entry
+and 3D-network proof; C3 quota/provenance propagation; C4 strict-TS/shared-
+schema/MCP completion; C7 Python ownership + perf proofs; independent
+API/security/math/visual/a11y reviews and final adversarial falsification.
 
 ## Recent verified commits
 

@@ -85,11 +85,12 @@ CJS/ESM double-load under vitest only). Python worker 62 passed / 2 skipped;
 pip-audit clean (direct-deps coverage, 2 environment warnings). npm audit 0
 vulns (both scopes). Secrets PASS (all three modes). Route parity PASS
 (38 vs 65); OpenAPI validation PASS (65/65/16/27); owner clean.
-Real-server suite `test:e2e:real-server` 6/6 PASS in 4.5m at `3c3612e` with
-108/108 screenshots carrying sidecars (commit/scenario/viewport/workflow/
-fixture mode/fixture clock/checks) plus committed manifest
-`docs/recovery-evidence/SCREENSHOT_MANIFEST_3c3612e.json` with pixel stats.
-Five screenshots pixel-inspected (see findings below).
+Real-server suite `test:e2e:real-server` 6/6 PASS in 4.5m at `3c3612e`.
+108/108 new-run (real-3c3612e-*) captures carry sidecars; 816 total PNGs in
+e2e/screenshots/, 708 archival without sidecars. Committed manifest
+`docs/recovery-evidence/SCREENSHOT_MANIFEST_3c3612e.json` aggregates
+sidecars plus pixel stats (automated signals only). Five screenshots
+pixel-inspected (see findings below).
 
 Remaining work: P1-14 final-HEAD screenshots with sidecars; P1-15 C6 failure-state matrix (loading/empty/stale/partial/malformed/provider-down/entitlement) with pixel inspection; P1-16 layout defects (Home dead space, Trade P&L/Risk blank charts, Crypto Overview/Vol dead space, Academy sparse, four-viewport geometry); C3 quota/provenance propagation; C4 strict-TS migration; C5 Crypto 3D + measured geometry; C6 full matrix; C7 Python ownership + perf proofs; C8 all gates twice + independent falsification.
 

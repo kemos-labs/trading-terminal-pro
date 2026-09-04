@@ -2,12 +2,19 @@
  * Collect per-screenshot sidecars into one committed manifest plus
  * dependency-free pixel statistics (node:zlib only).
  *
- * Usage: node scripts/collect-screenshot-manifest.mjs [screenshotsDir]
+ * Usage: node scripts/collect-screenshot-manifest.mjs [--head <sha>] [screenshotsDir]
  *
  * Reads e2e/screenshots/real-<head>-*.png + sibling .json sidecars (written
  * by e2e/real-server.spec.ts) and writes
  * docs/recovery-evidence/SCREENSHOT_MANIFEST_<head>.json containing every
- * sidecar plus automated pixel signals:
+ * sidecar plus automated pixel signals.
+ *
+ * --head scopes the manifest to one run (default: the sidecar commit head,
+ * i.e. the most frequent sidecar commitShort in the directory). Every shot is
+ * tagged run:'current-run' when its filename head matches the selected head,
+ * otherwise run:'archival'. heads lists every parsed filename head present
+ * in the directory — not just sidecar'd ones — so archival captures are
+ * never silently aggregated under a run they do not belong to.
  * - dimensions, unique-color sample, mean luminance
  * - blankFraction: share of sampled pixels within 3/255 of the corner color
  *   (dead-region heuristic — a rendering failure signal, not a verdict)
@@ -24,7 +31,28 @@ import { inflateSync } from 'node:zlib';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const shotDir = process.argv[2] ?? join(ROOT, 'e2e', 'screenshots');
+
+function parseArgs(argv) {
+  let head = null;
+  let shotDir = null;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--head') {
+      head = argv[++i] ?? null;
+      if (!head || !/^[0-9a-f]+$/i.test(head)) {
+        console.error('collect-screenshot-manifest: --head requires a hex commit prefix');
+        process.exit(1);
+      }
+    } else if (!shotDir) {
+      shotDir = argv[i];
+    } else {
+      console.error(`collect-screenshot-manifest: unexpected argument ${argv[i]}`);
+      process.exit(1);
+    }
+  }
+  return { headArg: head, shotDir: shotDir ?? join(ROOT, 'e2e', 'screenshots') };
+}
+
+const { headArg, shotDir } = parseArgs(process.argv.slice(2));
 
 function readChunk(view, offset) {
   const length = view.getUint32(offset);
@@ -156,9 +184,12 @@ function main() {
   }
   const files = readdirSync(shotDir).filter((f) => f.endsWith('.png')).sort();
   const shots = [];
-  const heads = new Set();
+  // Every parsed filename head in the directory (sidecar'd or not).
+  const parsedHeads = new Set();
+  const sidecarHeadCounts = new Map();
   for (const file of files) {
     const m = /^real-([0-9a-f]+)-([a-z]+)-([a-z0-9]+)-(.+)\.png$/.exec(file);
+    if (m) parsedHeads.add(m[1]);
     const sidecarPath = join(shotDir, `${file}.json`);
     let sidecar = null;
     if (existsSync(sidecarPath)) {
@@ -168,7 +199,9 @@ function main() {
         sidecar = { error: 'sidecar-unparseable' };
       }
     }
-    if (sidecar?.commitShort) heads.add(sidecar.commitShort);
+    if (sidecar && !sidecar.error && typeof sidecar.commitShort === 'string') {
+      sidecarHeadCounts.set(sidecar.commitShort, (sidecarHeadCounts.get(sidecar.commitShort) ?? 0) + 1);
+    }
     const { stats, reason } = pngStats(join(shotDir, file));
     shots.push({
       file,
@@ -178,25 +211,60 @@ function main() {
       pixelStatsReason: reason,
     });
   }
-  const withSidecar = shots.filter((s) => s.sidecar && !s.sidecar.error).length;
+  // Default scope: the sidecar commit head (most frequent sidecar commitShort).
+  // Explicit --head always wins. No sidecars at all -> 'mixed', all archival.
+  let head = headArg;
+  if (!head) {
+    let best = null;
+    let bestCount = 0;
+    for (const [h, count] of sidecarHeadCounts) {
+      if (count > bestCount) {
+        best = h;
+        bestCount = count;
+      }
+    }
+    head = best ?? 'mixed';
+  }
+  for (const s of shots) {
+    s.run = s.parsed && s.parsed.head === head ? 'current-run' : 'archival';
+  }
+  const currentRun = shots.filter((s) => s.run === 'current-run');
+  const archival = shots.filter((s) => s.run === 'archival');
+  const currentRunWithSidecar = currentRun.filter((s) => s.sidecar && !s.sidecar.error).length;
   const withStats = shots.filter((s) => s.pixelStats).length;
+  const perHead = {};
+  for (const h of [...parsedHeads].sort()) {
+    const inHead = shots.filter((s) => s.parsed?.head === h);
+    perHead[h] = {
+      pngs: inHead.length,
+      withSidecar: inHead.filter((s) => s.sidecar && !s.sidecar.error).length,
+    };
+  }
   const manifest = {
     generatedAt: new Date().toISOString(),
     screenshotsDir: shotDir,
-    heads: [...heads],
+    head,
+    headSource: headArg ? 'cli --head' : 'sidecar-commit-head',
+    heads: [...parsedHeads].sort(),
     totals: {
       pngs: shots.length,
-      withSidecar,
+      currentRun: currentRun.length,
+      archival: archival.length,
+      currentRunWithSidecar,
       withPixelStats: withStats,
     },
+    perHead,
     // Automated signals only: blankFraction near 1 or distinctRowFraction near
     // 0 means look at the pixels; human visual review is still required.
     shots,
   };
-  const head = heads.size === 1 ? [...heads][0] : 'mixed';
   const outPath = join(ROOT, 'docs', 'recovery-evidence', `SCREENSHOT_MANIFEST_${head}.json`);
   writeFileSync(outPath, JSON.stringify(manifest, null, 2));
-  console.log(`manifest: ${outPath} (${shots.length} pngs, ${withSidecar} sidecars, ${withStats} pixel stats)`);
+  console.log(`manifest: ${outPath}`);
+  console.log(`counts: ${shots.length} pngs = ${currentRun.length} current-run + ${archival.length} archival; ${currentRunWithSidecar} current-run sidecars; ${withStats} pixel stats`);
+  for (const h of [...parsedHeads].sort()) {
+    console.log(`head ${h}: ${perHead[h].pngs} pngs, ${perHead[h].withSidecar} sidecars`);
+  }
 }
 
 main();

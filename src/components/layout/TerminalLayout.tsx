@@ -78,6 +78,12 @@ export function TerminalLayout() {
     } catch { return true; }
   });
   const heavyReady = Boolean(snapshot && chainAvailable && lastChainUpdate > 0) || (!loading && lastChainUpdate > 0);
+  // Stable identity: BootBriefing's escape-hatch timers reset whenever this
+  // callback changes, so an inline closure here would trap users on landing.
+  const handleBootEnter = useCallback(() => {
+    try { sessionStorage.setItem('boot.seen', '1'); } catch { /* ignore */ }
+    setBootOpen(false);
+  }, []);
   // The landing must never hold the user hostage on a provider failure: cap the
   // briefing's auto-enter wait at 6s regardless of chain readiness.
   const effectiveBootOpen = bootOpen;
@@ -359,10 +365,7 @@ export function TerminalLayout() {
       {effectiveBootOpen && (
         <BootBriefing
           heavyReady={heavyReady}
-          onEnter={() => {
-            try { sessionStorage.setItem('boot.seen', '1'); } catch { /* ignore */ }
-            setBootOpen(false);
-          }}
+          onEnter={handleBootEnter}
         />
       )}
     </div>

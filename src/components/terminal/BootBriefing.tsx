@@ -67,11 +67,25 @@ export function BootBriefing({ heavyReady, onEnter }: BootBriefingProps) {
   const entered = useRef(false);
   const [eduIdx, setEduIdx] = useState(0);
 
+  // onEnter arrives as an inline prop from the layout (new identity every
+  // render). Route it through a ref so the escape-hatch timers below are
+  // never disarmed by a parent re-render — that starvation stuck the boot
+  // screen at 80% forever while the chain was still warming.
+  // onEnter arrives as an inline prop from the layout (new identity every
+  // render). Route it through a ref so the escape-hatch timers below are
+  // never disarmed by a parent re-render — that starvation stuck the boot
+  // screen at 80% forever while the chain was still warming.
+  // onEnter arrives as an inline prop from the layout (new identity every
+  // render). Route it through a ref so the escape-hatch timers below are
+  // never disarmed by a parent re-render — that starvation stuck the boot
+  // screen at 80% forever while the chain was still warming.
+  const onEnterRef = useRef(onEnter);
+  onEnterRef.current = onEnter;
   const enter = useCallback(() => {
     if (entered.current) return;
     entered.current = true;
-    onEnter();
-  }, [onEnter]);
+    onEnterRef.current();
+  }, []);
 
   // Warm every light feed; each result flips one honest status dot.
   useEffect(() => {

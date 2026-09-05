@@ -30,7 +30,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Implementation HEAD: `0cf60d8` (fix(briefing): server aggregate goes stale on over-age observations).
+- Implementation HEAD: `d916dc1` (fix(chain): chain load can never spin forever).
 - Checkpoint commit: the docs commit carrying this update (see `git log --oneline`; it touches only RECOVERY_MEMORY.md).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.

@@ -17,20 +17,24 @@ import { useTerminalStore } from '../../store/terminalStore';
 const REAL_FETCH = global.fetch;
 
 function briefing(desks: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+  // Fresh event times by default: Live assertions must hold at any wall clock.
+  // Stale-age tests pass explicit old timestamps instead.
+  const freshIso = new Date(Date.now() - 5000).toISOString();
+  const freshMs = Date.now() - 5000;
   return {
     schemaVersion: 1,
     symbol: 'SPY',
-    asOf: '2026-09-01T01:30:00.000Z',
+    asOf: freshIso,
     sources: ['finnhub/quote'],
     fromCache: false,
     ageMs: 1200,
     stale: false,
     freshness: { live: true, state: 'live' },
     desks: {
-      equities: { available: true, provider: 'finnhub', symbol: 'SPY', price: 500, changePct: 0.5, asOf: '2026-09-01T01:30:00.000Z', note: null },
-      rates: { available: true, provider: 'macrovol(fred)', sofr: 4.53, effr: 4.32, usy2: 4.25, usy10: 4.55, spread_2s10s_bps: 30, asOf: '2026-09-01T01:30:00.000Z' },
-      crypto: { available: true, provider: 'deribit', indexPrice: 60000, funding8h: 0.00005, optionCount: 40, asOf: 1788300000000, freeFallback: { available: false, reason: 'unavailable', provider: 'binance+bybit' } },
-      ksa: { available: true, provider: 'sahmk', tasi: 12150, tasiChangePct: 0.42, delayed: true, asOf: '2026-09-01T01:30:00.000Z' },
+      equities: { available: true, provider: 'finnhub', symbol: 'SPY', price: 500, changePct: 0.5, asOf: freshIso, note: null },
+      rates: { available: true, provider: 'macrovol(fred)', sofr: 4.53, effr: 4.32, usy2: 4.25, usy10: 4.55, spread_2s10s_bps: 30, asOf: freshIso },
+      crypto: { available: true, provider: 'deribit', indexPrice: 60000, funding8h: 0.00005, optionCount: 40, asOf: freshMs, freeFallback: { available: false, reason: 'unavailable', provider: 'binance+bybit' } },
+      ksa: { available: true, provider: 'sahmk', tasi: 12150, tasiChangePct: 0.42, delayed: true, asOf: freshIso },
       ...desks,
     },
     ...extra,
@@ -147,11 +151,28 @@ describe('HomeBriefing freshness ledger (P1-16)', () => {
     }
     // Real provenance, never fabricated: provider names and full UTC stamps.
     expect(ledger).toMatch(/finnhub/);
-    expect(ledger).toMatch(/2026-09-01 01:30:00Z/);
+    expect(ledger).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z/);
     expect(ledger).not.toMatch(/NaN|Infinity/);
     // KSA is delayed-truthful, never Live.
     const ksaRow = screen.getByTestId('home-freshness-ledger').querySelector('tbody')?.textContent ?? '';
     expect(ksaRow).toMatch(/delayed/);
+  });
+
+  it('labels an available feed with a four-day-old observation stale, never live', async () => {
+    const oldIso = new Date(Date.now() - 102 * 3600_000).toISOString();
+    mockBriefing(briefing({
+      rates: { available: true, provider: 'macrovol(fred)', sofr: 4.53, effr: 4.32, usy2: 4.25, usy10: 4.55, spread_2s10s_bps: 30, asOf: oldIso },
+    }));
+    render(<HomeBriefing />);
+    await waitFor(() => expect(screen.getByTestId('home-freshness-ledger')).toBeInTheDocument());
+    const rows = [...screen.getByTestId('home-freshness-ledger').querySelectorAll('tbody tr')];
+    const ratesRow = rows.find((tr) => tr.textContent?.includes('Rates'))?.textContent ?? '';
+    expect(ratesRow).toMatch(/stale/);
+    expect(ratesRow).not.toMatch(/live/);
+    // Fresh desks stay Live; the exact age remains visible beside the badge.
+    const eqRow = rows.find((tr) => tr.textContent?.includes('Equities'))?.textContent ?? '';
+    expect(eqRow).toMatch(/live/);
+    expect(ratesRow).toMatch(/102h/);
   });
 
   it('ledger scroll region is keyboard-focusable (WCAG 2.1.1, axe scrollable-region-focusable)', async () => {

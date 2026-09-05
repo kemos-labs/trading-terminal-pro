@@ -413,6 +413,23 @@ function FreshnessLedger({
   const d = briefing?.desks;
   const agg: LedgerState =
     briefing?.stale ? 'stale' : ((briefing?.freshness?.state ?? 'unavailable') as LedgerState);
+  // Event-age stale rule: an available feed whose observation is older than
+  // four days is labelled stale, never live — even daily FRED lags never
+  // legitimately exceed this (a Friday print read on Tuesday is 96h and is
+  // genuinely the latest available, so the bound is inclusive). The Age
+  // column always shows the exact lag; this rule only fixes the badge.
+  const STALE_AFTER_MS = 96 * 3600_000;
+  const eventMs = (v: string | number | null | undefined): number | null => {
+    if (v == null) return null;
+    const ms = typeof v === 'number' ? v : Date.parse(v);
+    return Number.isFinite(ms) ? ms : null;
+  };
+  const deskState = (available: boolean, event: string | number | null | undefined, fresh: LedgerState): LedgerState => {
+    if (!available) return 'unavailable';
+    const ms = eventMs(event);
+    if (ms != null && nowMs - ms > STALE_AFTER_MS) return 'stale';
+    return fresh;
+  };
   const rows: { desk: string; provider: string; event: string | number | null; state: LedgerState }[] = d
     ? [
         {
@@ -421,16 +438,16 @@ function FreshnessLedger({
           event: briefing?.asOf ?? null,
           state: agg,
         },
-        { desk: 'Equities', provider: d.equities.provider, event: d.equities.asOf, state: d.equities.available ? 'live' : 'unavailable' },
-        { desk: 'Rates', provider: d.rates.provider, event: d.rates.asOf, state: d.rates.available ? 'live' : 'unavailable' },
-        { desk: 'Crypto (Deribit)', provider: d.crypto.provider, event: d.crypto.asOf, state: d.crypto.available ? 'live' : 'unavailable' },
+        { desk: 'Equities', provider: d.equities.provider, event: d.equities.asOf, state: deskState(d.equities.available, d.equities.asOf, 'live') },
+        { desk: 'Rates', provider: d.rates.provider, event: d.rates.asOf, state: deskState(d.rates.available, d.rates.asOf, 'live') },
+        { desk: 'Crypto (Deribit)', provider: d.crypto.provider, event: d.crypto.asOf, state: deskState(d.crypto.available, d.crypto.asOf, 'live') },
         {
           desk: 'Crypto (free)',
           provider: d.crypto.freeFallback.provider,
           event: d.crypto.freeFallback.asOf ?? null,
-          state: d.crypto.freeFallback.available ? 'live' : 'unavailable',
+          state: deskState(d.crypto.freeFallback.available, d.crypto.freeFallback.asOf, 'live'),
         },
-        { desk: 'KSA', provider: d.ksa.provider, event: d.ksa.asOf, state: d.ksa.available ? 'delayed' : 'unavailable' },
+        { desk: 'KSA', provider: d.ksa.provider, event: d.ksa.asOf, state: deskState(d.ksa.available, d.ksa.asOf, 'delayed') },
       ]
     : [];
   return (

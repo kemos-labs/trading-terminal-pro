@@ -44,6 +44,8 @@ export function DeskChartFrame({
   height,
   className,
   header,
+  testId,
+  chartPoints,
 }: {
   children: ReactNode;
   xTitle?: string;
@@ -51,9 +53,15 @@ export function DeskChartFrame({
   height?: number | string;
   className?: string;
   header?: ReactNode;
+  /** Stable hook for behavior tests (empty-axes regression). */
+  testId?: string;
+  /** Number of plotted data points; tests assert curves exist when available. */
+  chartPoints?: number;
 }) {
   return (
     <div
+      data-testid={testId}
+      data-chart-points={chartPoints}
       className={cn(
         'flex min-h-0 flex-1 flex-col rounded border border-border bg-black',
         className,

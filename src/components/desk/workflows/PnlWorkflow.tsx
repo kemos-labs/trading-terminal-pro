@@ -163,8 +163,12 @@ export function PnlWorkflow() {
           { label: 'Marks', value: 'BS sticky-IV', tone: 'muted' },
         ] : oSeries && !oSeries.available ? [{ label: 'Term PnL', value: '—', tone: 'muted' as const }, { label: 'Reason', value: oSeries.reason ?? 'unavailable', tone: 'muted' as const }, { label: 'Path', value: pathSrc, tone: 'muted' as const }] : [{ label: 'Path', value: pathSrc, tone: 'muted' as const }, { label: 'Marks', value: 'BS sticky-IV', tone: 'muted' as const }]} />}
       >
-        <DeskChartFrame {...xTitleDate} className="min-h-[220px]" header={<span className="text-muted-foreground">Single option — observed spot history (Historical label from path source)</span>}>
-          <ResponsiveContainer width="100%" height="100%">
+        {oSeries?.available && oChart.length > 0 ? (
+        <DeskChartFrame {...xTitleDate} className="min-h-[260px]" testId="pnl-chart-a" chartPoints={oChart.length} header={<span className="text-muted-foreground">Single option — observed spot history (Historical label from path source)</span>}>
+          {/* definite pixel height: ResponsiveContainer cannot resolve height:100%
+              inside the DeskChartFrame flex body and otherwise renders no svg. */}
+          <div className="w-full min-h-0" style={{ height: 240 }}>
+          <ResponsiveContainer width="100%" height={240}>
             <ComposedChart data={oChart} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
               <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} interval="preserveStartEnd" label={deskAxisLabel('Date')} />
@@ -176,7 +180,18 @@ export function PnlWorkflow() {
               <Line type="monotone" dataKey="theta" stroke={CHART_GREEK.theta} strokeWidth={1} dot={false} name="ΣΘ" />
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
         </DeskChartFrame>
+        ) : (
+        <div
+          data-testid="pnl-chart-unavailable-a"
+          role="status"
+          className="flex min-h-[220px] flex-col items-center justify-center gap-1 rounded border border-dashed border-border bg-black px-3 text-center font-mono text-type-xs text-muted-foreground"
+        >
+          <span className="font-bold text-foreground">Single-option PnL unavailable</span>
+          <span>No observed spot history — Historical replay needs a loaded chain (reason: {oSeries?.reason ?? 'no-history'} · path: {pathSrc}). Use Scenario Monte Carlo below for labelled synthetic paths.</span>
+        </div>
+        )}
       </DeskToolShell>
 
       {/* B — combo historical PnL */}
@@ -195,8 +210,10 @@ export function PnlWorkflow() {
           { label: 'Path', value: pathSrc, tone: 'muted' }, { label: 'Marks', value: 'BS sticky-IV', tone: 'muted' },
         ] : [{ label: 'Term PnL', value: '—', tone: 'muted' as const }, { label: 'Reason', value: cSeries.reason ?? 'unavailable', tone: 'muted' as const }, { label: 'Path', value: pathSrc, tone: 'muted' as const }]} />}
       >
-        <DeskChartFrame {...xTitleDate} className="min-h-[220px]" header={<span className="text-muted-foreground">Combo — observed spot history (Historical) · greeks attribution sticky-IV</span>}>
-          <ResponsiveContainer width="100%" height="100%">
+        {cSeries.available && cChart.length > 0 ? (
+        <DeskChartFrame {...xTitleDate} className="min-h-[260px]" testId="pnl-chart-b" chartPoints={cChart.length} header={<span className="text-muted-foreground">Combo — observed spot history (Historical) · greeks attribution sticky-IV</span>}>
+          <div className="w-full min-h-0" style={{ height: 240 }}>
+          <ResponsiveContainer width="100%" height={240}>
             <ComposedChart data={cChart} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
               <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} interval="preserveStartEnd" label={deskAxisLabel('Date')} />
@@ -210,7 +227,18 @@ export function PnlWorkflow() {
               <Line type="monotone" dataKey="residual" stroke={DESK_SERIES.zero} strokeWidth={1} strokeDasharray="2 2" dot={false} name="Residual" />
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
         </DeskChartFrame>
+        ) : (
+        <div
+          data-testid="pnl-chart-unavailable-b"
+          role="status"
+          className="flex min-h-[220px] flex-col items-center justify-center gap-1 rounded border border-dashed border-border bg-black px-3 text-center font-mono text-type-xs text-muted-foreground"
+        >
+          <span className="font-bold text-foreground">Combo PnL unavailable</span>
+          <span>No observed spot history — Historical replay needs a loaded chain (reason: {cSeries.reason ?? 'no-history'} · path: {pathSrc}). Use Scenario Monte Carlo below for labelled synthetic paths.</span>
+        </div>
+        )}
       </DeskToolShell>
 
       {/* C — straddle break-even / PnL */}
@@ -238,9 +266,12 @@ export function PnlWorkflow() {
           ...(sMode === 'pnl' ? [{ label: 'Path', value: pathSrc, tone: 'muted' as const }] : []),
         ]} />}
       >
+        {/* Definite pixel heights below: ResponsiveContainer cannot resolve height:100%
+            inside the DeskChartFrame flex body and otherwise renders no svg. */}
         {sMode === 'breakeven' ? (
-          <DeskChartFrame xTitle="Spot" yTitle="PnL ($)" className="min-h-[220px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <DeskChartFrame xTitle="Spot" yTitle="PnL ($)" className="min-h-[260px]" testId="pnl-chart-c-be" chartPoints={sPayoffChart.length}>
+          <div className="w-full min-h-0" style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height={240}>
               <ComposedChart data={sPayoffChart} margin={chrome.margin}>
                 <CartesianGrid {...chrome.grid} />
                 <XAxis dataKey="spot" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartPriceTick(v)} label={deskAxisLabel('Spot')} />
@@ -253,10 +284,12 @@ export function PnlWorkflow() {
                 {sBe.available ? <Area type="monotone" dataKey="pnl" stroke={DESK_SERIES.combo} fill={DESK_SERIES.combo} fillOpacity={0.2} name="Payoff" /> : <text x="50%" y="50%" textAnchor="middle" fill="var(--muted-foreground)" fontSize={12}>Unavailable — missing executable premium</text>}
               </ComposedChart>
             </ResponsiveContainer>
+          </div>
           </DeskChartFrame>
         ) : (
-          <DeskChartFrame {...xTitleDate} className="min-h-[220px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <DeskChartFrame {...xTitleDate} className="min-h-[260px]" testId="pnl-chart-c-pnl" chartPoints={sPnlChart.length}>
+          <div className="w-full min-h-0" style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height={240}>
               <ComposedChart data={sPnlChart} margin={chrome.margin}>
                 <CartesianGrid {...chrome.grid} />
                 <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} interval="preserveStartEnd" label={deskAxisLabel('Date')} />
@@ -268,6 +301,7 @@ export function PnlWorkflow() {
                 <Line type="monotone" dataKey="theta" stroke={CHART_GREEK.theta} strokeWidth={1} dot={false} name="ΣΘ" />
               </ComposedChart>
             </ResponsiveContainer>
+          </div>
           </DeskChartFrame>
         )}
       </DeskToolShell>
@@ -315,8 +349,9 @@ export function PnlWorkflow() {
             </tbody>
           </table>
         </div>
-        <DeskChartFrame xTitle="Strike" yTitle="BE dist %" height={120}>
-          <ResponsiveContainer width="100%" height="100%">
+        <DeskChartFrame xTitle="Strike" yTitle="BE dist %" height={120} testId="pnl-chart-d" chartPoints={bChart.length}>
+          <div className="w-full min-h-0" style={{ height: 80 }}>
+          <ResponsiveContainer width="100%" height={80}>
             <ComposedChart data={bChart} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
               <XAxis dataKey="strike" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartPriceTick(v)} label={deskAxisLabel('Strike')} />
@@ -327,6 +362,7 @@ export function PnlWorkflow() {
               <Bar dataKey="beDistPct" fill={DESK_SERIES.median} name="BE dist %" maxBarSize={14} />
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
         </DeskChartFrame>
       </DeskToolShell>
 
@@ -344,8 +380,9 @@ export function PnlWorkflow() {
           { label: 'Best long', value: eBestLong },
         ]} />}
       >
-        <DeskChartFrame xTitle="Strike" yTitle="Price ($)" className="min-h-[220px]" header={<span className="text-muted-foreground">Subjective fair value — user μ/VRP · market mid vs fair</span>}>
-          <ResponsiveContainer width="100%" height="100%">
+        <DeskChartFrame xTitle="Strike" yTitle="Price ($)" className="min-h-[260px]" testId="pnl-chart-e" chartPoints={eChart.length} header={<span className="text-muted-foreground">Subjective fair value — user μ/VRP · market mid vs fair</span>}>
+          <div className="w-full min-h-0" style={{ height: 240 }}>
+          <ResponsiveContainer width="100%" height={240}>
             <ComposedChart data={eChart} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
               <XAxis dataKey="strike" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartPriceTick(v)} label={deskAxisLabel('Strike')} />
@@ -357,6 +394,7 @@ export function PnlWorkflow() {
               <Line type="monotone" dataKey="edge" stroke={CHART.series.info} strokeWidth={1} strokeDasharray="2 2" dot={false} name={DESK_LEGEND.edge} />
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
         </DeskChartFrame>
       </DeskToolShell>
 
@@ -376,10 +414,11 @@ export function PnlWorkflow() {
         ]} />}
       >
         <DeskChartFrame
-          xTitle="Horizon (days)" yTitle="PnL ($)" className="min-h-[220px]"
+          xTitle="Horizon (days)" yTitle="PnL ($)" className="min-h-[260px]" testId="pnl-chart-f" chartPoints={mcChart.length}
           header={<span className="text-muted-foreground" title="Scenario Monte Carlo — seed 42, not live history">Scenario Monte Carlo · {weeks}w · {mcSim.t.length} steps · 120 paths · GBM(μ=0, σ=user) · seed 42</span>}
         >
-          <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full min-h-0" style={{ height: 240 }}>
+          <ResponsiveContainer width="100%" height={240}>
             <ComposedChart data={mcChart} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
               <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartDayTick(v)} label={deskAxisLabel('Days')} />
@@ -393,6 +432,7 @@ export function PnlWorkflow() {
               <Line type="monotone" dataKey="p50" stroke={DESK_SERIES.median} strokeWidth={2} dot={false} name="p50" />
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
         </DeskChartFrame>
       </DeskToolShell>
     </div>

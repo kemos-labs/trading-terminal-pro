@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { StructureWorkflow } from './StructureWorkflow';
 import { PnlWorkflow } from './PnlWorkflow';
 import { HedgeWorkflow } from './HedgeWorkflow';
@@ -74,6 +74,47 @@ describe('Trade workflows — behavior (not export existence)', () => {
     fireEvent.change(side, { target: { value: 'short' } });
     expect(side).toHaveValue('short');
     expect(screen.getAllByText(/Historical|Scenario/).length).toBeGreaterThan(0);
+  });
+
+  it('PnL principal charts show unavailable states without history, curves with history', () => {
+    // No observed history: compact truthful unavailable states, never empty axes.
+    useTerminalStore.setState({ snapshot: snap, symbol: 'SPY', fmpHistory: null, historySource: 'none' });
+    const first = render(<PnlWorkflow />);
+    expect(screen.getByTestId('pnl-chart-unavailable-a')).toBeInTheDocument();
+    expect(screen.getByTestId('pnl-chart-unavailable-b')).toBeInTheDocument();
+    expect(screen.getByTestId('pnl-chart-unavailable-a').textContent).toMatch(/No observed spot history/);
+    expect(screen.queryByTestId('pnl-chart-a')).toBeNull();
+    expect(screen.queryByTestId('pnl-chart-b')).toBeNull();
+    first.unmount();
+
+    // Observed history present: decision-useful curves with plotted points.
+    const bars = Array.from({ length: 45 }, (_, i) => ({
+      date: new Date(Date.UTC(2026, 5, 1) + i * 86_400_000).toISOString().slice(0, 10),
+      open: 480 + i, high: 482 + i, low: 478 + i, close: 480.5 + i, volume: 1_000_000,
+    }));
+    act(() => {
+      useTerminalStore.setState({ snapshot: snap, symbol: 'SPY', fmpHistory: bars as never, historySource: 'fmp' });
+    });
+    render(<PnlWorkflow />);
+    expect(screen.queryByTestId('pnl-chart-unavailable-a')).toBeNull();
+    expect(screen.queryByTestId('pnl-chart-unavailable-b')).toBeNull();
+    const chartA = screen.getByTestId('pnl-chart-a');
+    const chartB = screen.getByTestId('pnl-chart-b');
+    expect(Number(chartA.getAttribute('data-chart-points'))).toBeGreaterThan(0);
+    expect(Number(chartB.getAttribute('data-chart-points'))).toBeGreaterThan(0);
+    // Remaining PnL charts mount with definite heights and plotted points too
+    // (default straddle mode is breakeven, so pnl-chart-c-pnl is not mounted).
+    const chartCbe = screen.getByTestId('pnl-chart-c-be');
+    const chartD = screen.getByTestId('pnl-chart-d');
+    const chartE = screen.getByTestId('pnl-chart-e');
+    const chartF = screen.getByTestId('pnl-chart-f');
+    expect(Number(chartCbe.getAttribute('data-chart-points'))).toBeGreaterThan(0);
+    expect(Number(chartD.getAttribute('data-chart-points'))).toBeGreaterThan(0);
+    expect(Number(chartE.getAttribute('data-chart-points'))).toBeGreaterThan(0);
+    expect(Number.isFinite(Number(chartF.getAttribute('data-chart-points')))).toBe(true);
+    act(() => {
+      useTerminalStore.setState({ fmpHistory: null, historySource: 'none' });
+    });
   });
 
   it('renders Hedge controls and exposes the path-vol scenario label', () => {

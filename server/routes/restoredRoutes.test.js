@@ -609,6 +609,34 @@ describe('restored routes (Phase 1 parity)', () => {
     expect(partial.json().freshness).toMatchObject({ live: false, state: 'partial' });
   });
 
+  it('home briefing freeFallback carries an explicit available flag (ledger contract)', async () => {
+    const healthyFetch = async (input) => {
+      const url = String(input);
+      if (url.includes('/api/finnhub/quote')) return new Response(JSON.stringify({ price: 500, change_pct: 0.5, as_of: new Date().toISOString() }), { status: 200 });
+      if (url.includes('/api/rates/summary')) return new Response(JSON.stringify({ sofr: 4.5, effr: 4.3, usy2: 4.2, usy10: 4.5, spread_2s10s: 0.3, as_of: new Date().toISOString() }), { status: 200 });
+      if (url.includes('/api/deribit/market/BTC')) return new Response(JSON.stringify({ instruments: [{ kind: 'perp', markPrice: 60010, funding8h: 0.00005 }], fetchedAt: Date.now() }), { status: 200 });
+      if (url.includes('/api/free-crypto/market/BTC')) return new Response(JSON.stringify({ venues: [{ venue: 'Binance Futures', mark: 60010 }], fetchedAt: Date.now() }), { status: 200 });
+      if (url.includes('/api/ksa/board')) return new Response(JSON.stringify({ configured: true, tasi: { index_value: 12150 } }), { status: 200 });
+      return new Response(JSON.stringify({ available: false, reason: 'upstream_error' }), { status: 502 });
+    };
+    global.fetch = vi.fn(healthyFetch);
+    const healthy = await app.inject('/api/home/briefing?symbol=FREEUP');
+    expect(healthy.statusCode).toBe(200);
+    // Success branch must state available:true — the Home ledger and crypto
+    // cell read this flag, and its absence mislabelled live free data.
+    expect(healthy.json().desks.crypto.freeFallback).toMatchObject({ available: true });
+    expect(healthy.json().desks.crypto.freeFallback.asOf).not.toBeNull();
+
+    global.fetch = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/free-crypto/market/BTC')) return new Response(JSON.stringify({ available: false, reason: 'upstream_error' }), { status: 502 });
+      return healthyFetch(input);
+    });
+    const down = await app.inject('/api/home/briefing?symbol=FREEDOWN');
+    expect(down.statusCode).toBe(200);
+    expect(down.json().desks.crypto.freeFallback).toMatchObject({ available: false });
+  });
+
   it('home briefing coalesces joined requests and expires malformed stale snapshots', async () => {
     let malformed = false;
     let gate = null;

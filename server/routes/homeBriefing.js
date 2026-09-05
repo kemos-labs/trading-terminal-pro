@@ -128,6 +128,7 @@ export function registerHomeBriefingRoutes(fastify, opts = {}) {
               asOf: deribit?.fetchedAt ?? null,
               freeFallback: freeCrypto && freeCrypto.available !== false
                 ? {
+                    available: true,
                     provider: 'binance+bybit (public, not Velo-normalized)',
                     venues: (freeCrypto.venues ?? []).map((v) => ({ venue: v.venue, mark: v.mark ?? null, index: v.index ?? null, last: v.last ?? null })),
                     asOf: freeCrypto.fetchedAt ?? null,

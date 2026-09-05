@@ -175,7 +175,11 @@ function deribitPayload(url) {
 }
 
 function ratesPayload(pathname) {
-  const meta = { as_of: new Date(FIXED_NOW).toISOString(), source: 'deterministic-provider-fixture' };
+  // Observation event time is stamped live, like the finnhub/deribit/free
+  // fixtures: a frozen 2026-09-01 print would rot against the wall clock and
+  // trip the briefing 96h stale rule. Values stay deterministic; only the
+  // event stamp is live (sidecars capture it per run).
+  const meta = { as_of: new Date().toISOString(), source: 'deterministic-provider-fixture' };
   if (pathname.endsWith('/rates/summary')) return { ...meta, sofr: 4.53, effr: 4.32, usy2: 4.25, usy10: 4.55, spread_2s10s: 0.30, spread_3m10y: 0.18 };
   if (pathname.endsWith('/rates/curve')) return { ...meta, labels: ['1M','3M','6M','1Y','2Y','5Y','10Y','30Y'], yields: [4.4,4.42,4.39,4.31,4.25,4.36,4.55,4.7] };
   if (pathname.endsWith('/rates/curve-history')) return { ...meta, labels: ['1M','3M','6M','1Y','2Y','5Y','10Y','30Y'], today: [4.4,4.42,4.39,4.31,4.25,4.36,4.55,4.7], historical: [4.3,4.32,4.29,4.21,4.15,4.26,4.45,4.6] };

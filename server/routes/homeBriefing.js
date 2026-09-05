@@ -159,13 +159,39 @@ export function registerHomeBriefingRoutes(fastify, opts = {}) {
         providerError: sanitizeProviderErrorCode(providerError),
       };
       const availableDeskCount = Object.values(data.desks ?? {}).filter((desk) => desk?.available === true).length;
+      // Event-age stale rule (mirrors the Home ledger's deskState
+      // derivation in src/components/home/HomeBriefing.tsx — keep the 96h
+      // bound in sync): an available desk whose observation predates the
+      // snapshot fetch by more than four days makes a would-be-live snapshot
+      // stale, never live. Per-desk `available` still reports feed status;
+      // only the aggregate carries the age verdict, with the oldest desk named.
+      const STALE_AFTER_MS = 96 * 3600_000;
+      const fetchMs = Date.parse(data.asOf);
+      let oldestDesk = null;
+      let oldestAgeMs = -1;
+      for (const [name, desk] of Object.entries(data.desks ?? {})) {
+        if (!desk || desk.available !== true || desk.asOf == null) continue;
+        const eventMs = typeof desk.asOf === 'number' ? desk.asOf : Date.parse(desk.asOf);
+        if (!Number.isFinite(eventMs) || !Number.isFinite(fetchMs)) continue;
+        const ageMs = fetchMs - eventMs;
+        if (ageMs > oldestAgeMs) {
+          oldestAgeMs = ageMs;
+          oldestDesk = name;
+        }
+      }
+      const overAgeDesk = oldestAgeMs > STALE_AFTER_MS ? oldestDesk : null;
       const freshnessState = stale
         ? 'stale'
         : availableDeskCount === 0 || (data.sources ?? []).length === 0
           ? 'unavailable'
           : availableDeskCount < Object.keys(data.desks ?? {}).length
             ? 'partial'
-            : 'live';
+            : overAgeDesk != null
+              ? 'stale'
+              : 'live';
+      if (overAgeDesk != null && freshnessState === 'stale' && !stale) {
+        data.warnings.push(`stale-observation: desk '${overAgeDesk}' event is ${Math.round(oldestAgeMs / 3600_000)}h older than the snapshot fetch`);
+      }
       return {
         ...data,
         fromCache,

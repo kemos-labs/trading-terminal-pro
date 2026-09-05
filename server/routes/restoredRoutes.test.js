@@ -637,6 +637,27 @@ describe('restored routes (Phase 1 parity)', () => {
     expect(down.json().desks.crypto.freeFallback).toMatchObject({ available: false });
   });
 
+  it('home briefing aggregate is stale (never live) when a desk observation predates fetch by 96h', async () => {
+    const oldIso = new Date(Date.now() - 102 * 3600_000).toISOString();
+    const nowIso = new Date().toISOString();
+    global.fetch = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/finnhub/quote')) return new Response(JSON.stringify({ price: 500, change_pct: 0.5, as_of: nowIso }), { status: 200 });
+      if (url.includes('/api/rates/summary')) return new Response(JSON.stringify({ sofr: 4.5, effr: 4.3, usy2: 4.2, usy10: 4.5, spread_2s10s: 0.3, as_of: oldIso }), { status: 200 });
+      if (url.includes('/api/deribit/market/BTC')) return new Response(JSON.stringify({ instruments: [{ kind: 'perp', markPrice: 60010, funding8h: 0.00005 }], fetchedAt: Date.now() }), { status: 200 });
+      if (url.includes('/api/free-crypto/market/BTC')) return new Response(JSON.stringify({ venues: [{ venue: 'Binance Futures', mark: 60010 }], fetchedAt: Date.now() }), { status: 200 });
+      if (url.includes('/api/ksa/board')) return new Response(JSON.stringify({ configured: true, tasi: { index_value: 12150 } }), { status: 200 });
+      return new Response(JSON.stringify({ available: false, reason: 'upstream_error' }), { status: 502 });
+    });
+    const res = await app.inject('/api/home/briefing?symbol=OVERAGE');
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // Every feed is up, but the rates observation is four days old.
+    expect(body.desks.rates.available).toBe(true);
+    expect(body.freshness).toMatchObject({ live: false, state: 'stale' });
+    expect(body.warnings.join(' ')).toMatch(/stale-observation: desk 'rates'/);
+  });
+
   it('home briefing coalesces joined requests and expires malformed stale snapshots', async () => {
     let malformed = false;
     let gate = null;

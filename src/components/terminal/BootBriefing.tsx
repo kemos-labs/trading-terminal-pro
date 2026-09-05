@@ -71,14 +71,6 @@ export function BootBriefing({ heavyReady, onEnter }: BootBriefingProps) {
   // render). Route it through a ref so the escape-hatch timers below are
   // never disarmed by a parent re-render — that starvation stuck the boot
   // screen at 80% forever while the chain was still warming.
-  // onEnter arrives as an inline prop from the layout (new identity every
-  // render). Route it through a ref so the escape-hatch timers below are
-  // never disarmed by a parent re-render — that starvation stuck the boot
-  // screen at 80% forever while the chain was still warming.
-  // onEnter arrives as an inline prop from the layout (new identity every
-  // render). Route it through a ref so the escape-hatch timers below are
-  // never disarmed by a parent re-render — that starvation stuck the boot
-  // screen at 80% forever while the chain was still warming.
   const onEnterRef = useRef(onEnter);
   onEnterRef.current = onEnter;
   const enter = useCallback(() => {

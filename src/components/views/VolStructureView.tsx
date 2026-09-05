@@ -2,23 +2,24 @@
  * Vol desk — Focus (full panel) default; Split = surface + smile/term.
  * Greeks 1.0 lives here (not Trade). Fit is focus-only.
  */
-import { useEffect, lazy, Suspense, useState, useCallback } from 'react';
+import { useEffect, Suspense, useState, useCallback } from 'react';
 import { useTerminalStore } from '../../store/terminalStore';
 import { DeskLoading } from '../common/Skeleton';
 import { EmptyState } from '../common/EmptyState';
 import { SectionErrorBoundary } from '../common/SectionErrorBoundary';
 import { UI_COPY } from '../../config/uiCopy';
 import { GexLevelsStrip } from '../common/GexLevelsStrip';
+import { lazyWithRetry } from '../common/lazyWithRetry';
 import { consumeDeskJumpOnMount } from '../../lib/market/deskJump';
 import { cn } from '../../lib/utils';
 
-const SmileView = lazy(() => import('./SmileView').then(m => ({ default: m.SmileView })));
-const TermView = lazy(() => import('./TermView').then(m => ({ default: m.TermView })));
-const ArbitrageView = lazy(() => import('./ArbitrageView').then(m => ({ default: m.ArbitrageView })));
-const GreeksView = lazy(() =>
+const SmileView = lazyWithRetry(() => import('./SmileView').then(m => ({ default: m.SmileView })));
+const TermView = lazyWithRetry(() => import('./TermView').then(m => ({ default: m.TermView })));
+const ArbitrageView = lazyWithRetry(() => import('./ArbitrageView').then(m => ({ default: m.ArbitrageView })));
+const GreeksView = lazyWithRetry(() =>
   import('./GreeksView').then((m) => ({ default: m.GreeksView })),
 );
-const SurfaceMatrixView = lazy(() => import('./SurfaceMatrixView').then(m => ({ default: m.SurfaceMatrixView })));
+const SurfaceMatrixView = lazyWithRetry(() => import('./SurfaceMatrixView').then(m => ({ default: m.SurfaceMatrixView })));
 
 
 type Sub = 'surface' | 'smile' | 'term' | 'greeks' | 'quality';
@@ -202,7 +203,7 @@ export function VolStructureView() {
           <div className="h-full min-h-0 term-crossfade" key={focusSub}>
             {focusSub === 'surface' && (
               <SectionErrorBoundary name="Surface">
-                <Suspense fallback={<DeskLoading message={UI_COPY.load.chain} />}>
+                <Suspense fallback={<DeskLoading message={UI_COPY.load.surfaceModule} />}>
                   <SurfaceMatrixView />
                 </Suspense>
               </SectionErrorBoundary>

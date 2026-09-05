@@ -10,6 +10,7 @@ export const UI_COPY = {
     crypto: 'Loading crypto books… Deribit',
     view: 'Loading view…',
     greeks: 'Loading Greeks 1.0…',
+    surfaceModule: 'Loading surface module…',
   },
   empty: {
     chain:

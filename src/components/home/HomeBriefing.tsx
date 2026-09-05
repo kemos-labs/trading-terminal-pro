@@ -446,7 +446,7 @@ function FreshnessLedger({
         </span>
       </header>
       {d ? (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Freshness ledger rows">
           <table className="w-full font-mono text-type-2xs">
             <thead>
               <tr className="text-left text-muted-foreground">

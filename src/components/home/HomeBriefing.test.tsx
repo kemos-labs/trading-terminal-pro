@@ -154,6 +154,15 @@ describe('HomeBriefing freshness ledger (P1-16)', () => {
     expect(ksaRow).toMatch(/delayed/);
   });
 
+  it('ledger scroll region is keyboard-focusable (WCAG 2.1.1, axe scrollable-region-focusable)', async () => {
+    mockBriefing(briefing({}));
+    render(<HomeBriefing />);
+    await waitFor(() => expect(screen.getByTestId('home-freshness-ledger')).toBeInTheDocument());
+    const region = screen.getByLabelText('Freshness ledger rows');
+    expect(region).toHaveAttribute('tabindex', '0');
+    expect(region.className).toContain('overflow-x-auto');
+  });
+
   it('marks unavailable rows honestly on partial snapshots', async () => {
     mockBriefing(briefing({
       ksa: { available: false, provider: 'sahmk', tasi: null, tasiChangePct: null, delayed: null, asOf: null },

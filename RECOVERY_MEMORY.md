@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-04T10:00:00Z
+Updated: 2026-09-05T07:35:00Z
 
 Conventions in this file: **Implementation HEAD** is the newest commit that
 changes product/test/config code. **Checkpoint commit** is the docs-only
@@ -30,7 +30,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Implementation HEAD: `03698d6` (docs(evidence): failure-state screenshot manifests).
+- Implementation HEAD: `8f63eed` (fix(home): feeds strip shares the stale derivation).
 - Checkpoint commit: the docs commit carrying this update (see `git log --oneline`; it touches only RECOVERY_MEMORY.md).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
@@ -41,8 +41,18 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
   terminal freshness (`e733934`), PnL definite heights + no-history states
   (`0b88d9e`), KSA entitlement panel + Academy density (`ca3afa0`),
   failure-state manifests (`03698d6`).
-- Full unit suite at `03698d6`: 160 files / 907 tests PASS (first run;
-  second run plus type-check/lint/secrets/audits still required for C8).
+- B-tranche (on top of `bbb0c69`): Home freshness ledger (`b6c250e`),
+  ledger scroll-region a11y (`a0feac8`), stale-by-age rule (`e84d7cc`),
+  briefing freeFallback available flag (`3d99266`), shared
+  header/ledger/strip stale derivation (`86bd6c1`, `8f63eed`).
+- `test:e2e:failure-states` at `8f63eed`: 4/4 viewports PASS in 2.1m;
+  40/40 `fail-8f63eed-*` captures carry sidecars, indexed by
+  `docs/recovery-evidence/SCREENSHOT_MANIFEST_8f63eed.json` (axe 0
+  violations, 0 overflow, no non-finite leaks, zero pageErrors in every
+  shot).
+- Full unit suite at `8f63eed`: 160 files / 914 tests PASS twice
+  consecutively; type-check PASS; lint PASS; secrets PASS (standard mode
+  pre-commit every commit).
 - Residual-defect tranche (this session, on top of `7679606`): derived-only
   BSM terminology (`f3dcd38`), level-guides rename (`c1fd162`), structural
   per-grid provenance (`c30cc1c`), fail-closed bounded reads (`55f6f7c`),
@@ -72,37 +82,27 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-P1-15 representative failure-state gate: PASS at `ae15374` —
-`test:e2e:failure-states` 4/4 viewports green in 2.3m (10 steps x 4
-viewports = 40 `fail-ae15374-*` captures, all with sidecars, indexed by
-`docs/recovery-evidence/SCREENSHOT_MANIFEST_ae15374.json`). Every shot:
-axe 0 violations, 0 horizontal overflow, no NaN/Infinity leak, zero
-pageErrors, only in-step-asserted 4xx/5xx. Eight shots pixel-inspected
-(see findings below), not filename-approved.
+P1-15 representative failure-state gate: PASS at `8f63eed` — 4/4 viewports
+green in 2.1m (10 steps x 4 viewports = 40 `fail-8f63eed-*` captures, all
+with sidecars, indexed by
+`docs/recovery-evidence/SCREENSHOT_MANIFEST_8f63eed.json`). Nine shots
+pixel-inspected across the `ae15374`/`e84d7cc`/`3d99266`/`86bd6c1`/`8f63eed`
+runs (not filename-approved). Pixel review drove four real fixes this
+tranche: freeFallback available flag, 96h stale-by-age rule, shared
+header/ledger/strip stale derivation, ledger scroll-region a11y.
 
-Pixel findings at `ae15374` (inspected):
-- home-partial desktop: Feeds PARTIAL chip + KSA-unavailable honest; CHAIN
-  reads unknown (unattempted on Home — false API-DOWN defect fixed);
-  CLOSED is the true session state. DEFECT OPEN: bottom ~55% viewport void.
-- trade-loading desktop (post-load): Blotter populated, payoff/Greeks
-  curves render (definite-height fix works); Greeks curves correctly span
-  only the data range.
-- crypto-partial desktop: 4 listed expiries with dte/count, 6 top-OI rows,
-  free snapshot PARTIAL (Bybit only), exact Velo-alternative labels.
-  Dead space much reduced; ~35% bottom void remains.
-- ksa-stale desktop: dense and decision-useful — STALE badge, last-good
-  board with event/fetch times, honest dash-only Open/High/Low cells.
-- ksa-entitlement desktop: paywall denial with zero data leak (minor:
-  sparse centered card, acceptable for a denial state).
-- chain-empty mobile: honest no-synthetic-chain states; the header API DOWN
-  pill is the genuinely attempted-and-failed chain (correct per the
-  attempted-vs-down rule), axe/overflow clean.
-- rates-malformed desktop: honest UPSTREAM_ERROR fail-closed with Retry/
-  Reload (minor: failure page is mostly void — failure-state sparseness).
+Latest pixel findings at `8f63eed` (home-partial desktop, inspected):
+Feeds strip, Rates cell header, and ledger agree (Rates stale amber in
+all three; Equities/Deribit/free Live; KSA unavailable; Snapshot
+PARTIAL). Residual minor: ~30% bottom void below the ledger on 900px
+viewports (page scrolls; briefing content itself is now dense).
 
-P1-16 layout defects still open: Home desktop void, Crypto bottom void,
-rates-failure sparseness. Full C6 matrix (every workflow x scenario) and
-independent visual review remain scheduled.
+Earlier findings at `ae15374` still on record: trade-loading post-load
+populated with rendered curves; crypto-partial dense with expiries/top-OI
+(~35% void); ksa-stale dense and decision-useful; ksa-entitlement honest
+denial (sparse card, acceptable); chain-empty mobile honest with a
+correct attempted-and-failed API DOWN pill; rates-malformed honest
+fail-closed (sparse failure page, acceptable).
 
 - `5671143` fix(greeks-3d): diverging ramp sign + wireframe holes + golden tests (P0-4, P0-5).
 - `4763af5` fix(greeks): missing OI nullability + price provenance (P0-2, P0-3) with Python golden tests.

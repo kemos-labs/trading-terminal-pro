@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-04T13:31:23.615Z",
+  "generatedAt": "2026-09-05T06:57:25.549Z",
   "screenshotsDir": "/home/kalde/trading-terminal-pro-rebuild/e2e/screenshots",
   "head": "a089e2d",
   "headSource": "sidecar-commit-head",
@@ -10,15 +10,16 @@
     "840c1fe",
     "9397d82",
     "a089e2d",
+    "ae15374",
     "b76f150",
     "e686c08"
   ],
   "totals": {
-    "pngs": 964,
+    "pngs": 1004,
     "currentRun": 148,
-    "archival": 816,
+    "archival": 856,
     "currentRunWithSidecar": 148,
-    "withPixelStats": 964
+    "withPixelStats": 1004
   },
   "perHead": {
     "216ab84": {
@@ -44,6 +45,10 @@
     "a089e2d": {
       "pngs": 148,
       "withSidecar": 148
+    },
+    "ae15374": {
+      "pngs": 40,
+      "withSidecar": 40
     },
     "b76f150": {
       "pngs": 108,
@@ -3662,6 +3667,2046 @@
       },
       "pixelStatsReason": null,
       "run": "current-run"
+    },
+    {
+      "file": "fail-ae15374-academy-empty-desktop-academy.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "academy-empty",
+        "viewport": "desktop",
+        "workflow": "academy"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-academy-empty-desktop-academy.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "academy-sub-options",
+        "desk": "academy",
+        "scenario": "academy-empty",
+        "deepLink": "/?desk=academy&sec=academy-sub-options",
+        "viewport": {
+          "name": "desktop",
+          "width": 1440,
+          "height": 900
+        },
+        "mode": "fixture",
+        "providerState": "local docs index healthy; query matches zero essays client-side",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:21.835Z",
+        "capturedAt": "2026-09-05T06:55:23.226Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1440,
+        "height": 900,
+        "sampledPixels": 51840,
+        "meanLuminance": 3.43,
+        "blankFraction": 0.023,
+        "distinctRowFraction": 0.257,
+        "sampledUniqueColors": 661
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-academy-empty-laptop-academy.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "academy-empty",
+        "viewport": "laptop",
+        "workflow": "academy"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-academy-empty-laptop-academy.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "academy-sub-options",
+        "desk": "academy",
+        "scenario": "academy-empty",
+        "deepLink": "/?desk=academy&sec=academy-sub-options",
+        "viewport": {
+          "name": "laptop",
+          "width": 1280,
+          "height": 800
+        },
+        "mode": "fixture",
+        "providerState": "local docs index healthy; query matches zero essays client-side",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:53.463Z",
+        "capturedAt": "2026-09-05T06:55:54.798Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1280,
+        "height": 800,
+        "sampledPixels": 40960,
+        "meanLuminance": 3.93,
+        "blankFraction": 0.0253,
+        "distinctRowFraction": 0.3145,
+        "sampledUniqueColors": 642
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-academy-empty-mobile-academy.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "academy-empty",
+        "viewport": "mobile",
+        "workflow": "academy"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-academy-empty-mobile-academy.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "academy-sub-options",
+        "desk": "academy",
+        "scenario": "academy-empty",
+        "deepLink": "/?desk=academy&sec=academy-sub-options",
+        "viewport": {
+          "name": "mobile",
+          "width": 390,
+          "height": 844
+        },
+        "mode": "fixture",
+        "providerState": "local docs index healthy; query matches zero essays client-side",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:49.175Z",
+        "capturedAt": "2026-09-05T06:56:50.233Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 17,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 17,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 390,
+        "height": 844,
+        "sampledPixels": 82290,
+        "meanLuminance": 7.72,
+        "blankFraction": 0.0215,
+        "distinctRowFraction": 0.3278,
+        "sampledUniqueColors": 1726
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-academy-empty-tablet-academy.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "academy-empty",
+        "viewport": "tablet",
+        "workflow": "academy"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-academy-empty-tablet-academy.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "academy-sub-options",
+        "desk": "academy",
+        "scenario": "academy-empty",
+        "deepLink": "/?desk=academy&sec=academy-sub-options",
+        "viewport": {
+          "name": "tablet",
+          "width": 1024,
+          "height": 768
+        },
+        "mode": "fixture",
+        "providerState": "local docs index healthy; query matches zero essays client-side",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:22.742Z",
+        "capturedAt": "2026-09-05T06:56:23.918Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 17,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 17,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1024,
+        "height": 768,
+        "sampledPixels": 49152,
+        "meanLuminance": 4.87,
+        "blankFraction": 0.0237,
+        "distinctRowFraction": 0.3194,
+        "sampledUniqueColors": 833
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-chain-empty-desktop-positioning.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "chain-empty",
+        "viewport": "desktop",
+        "workflow": "positioning"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-chain-empty-desktop-positioning.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "pos-sub-chain",
+        "desk": "positioning",
+        "scenario": "chain-empty",
+        "deepLink": "/?desk=positioning&sec=pos-sub-chain",
+        "viewport": {
+          "name": "desktop",
+          "width": 1440,
+          "height": 900
+        },
+        "mode": "fixture",
+        "providerState": "equity chain returns zero quotes; missing OI stays missing",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:54:58.317Z",
+        "capturedAt": "2026-09-05T06:55:00.115Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 2,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 2,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1440,
+        "height": 900,
+        "sampledPixels": 51840,
+        "meanLuminance": 7.73,
+        "blankFraction": 0.8422,
+        "distinctRowFraction": 0.4022,
+        "sampledUniqueColors": 804
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-chain-empty-desktop-volatility.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "chain-empty",
+        "viewport": "desktop",
+        "workflow": "volatility"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-chain-empty-desktop-volatility.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "vol-sub-surface",
+        "desk": "volatility",
+        "scenario": "chain-empty",
+        "deepLink": "/?desk=vol&sec=vol-sub-surface",
+        "viewport": {
+          "name": "desktop",
+          "width": 1440,
+          "height": 900
+        },
+        "mode": "fixture",
+        "providerState": "equity chain returns zero quotes; no rows fabricated",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:54:56.455Z",
+        "capturedAt": "2026-09-05T06:54:57.637Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 1,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 1,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1440,
+        "height": 900,
+        "sampledPixels": 51840,
+        "meanLuminance": 3.18,
+        "blankFraction": 0.0464,
+        "distinctRowFraction": 0.2346,
+        "sampledUniqueColors": 614
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-chain-empty-laptop-positioning.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "chain-empty",
+        "viewport": "laptop",
+        "workflow": "positioning"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-chain-empty-laptop-positioning.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "pos-sub-chain",
+        "desk": "positioning",
+        "scenario": "chain-empty",
+        "deepLink": "/?desk=positioning&sec=pos-sub-chain",
+        "viewport": {
+          "name": "laptop",
+          "width": 1280,
+          "height": 800
+        },
+        "mode": "fixture",
+        "providerState": "equity chain returns zero quotes; missing OI stays missing",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:31.334Z",
+        "capturedAt": "2026-09-05T06:55:33.073Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 2,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 2,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1280,
+        "height": 800,
+        "sampledPixels": 40960,
+        "meanLuminance": 8.83,
+        "blankFraction": 0.82,
+        "distinctRowFraction": 0.4717,
+        "sampledUniqueColors": 767
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-chain-empty-laptop-volatility.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "chain-empty",
+        "viewport": "laptop",
+        "workflow": "volatility"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-chain-empty-laptop-volatility.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "vol-sub-surface",
+        "desk": "volatility",
+        "scenario": "chain-empty",
+        "deepLink": "/?desk=vol&sec=vol-sub-surface",
+        "viewport": {
+          "name": "laptop",
+          "width": 1280,
+          "height": 800
+        },
+        "mode": "fixture",
+        "providerState": "equity chain returns zero quotes; no rows fabricated",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:29.353Z",
+        "capturedAt": "2026-09-05T06:55:30.666Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 1,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 1,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1280,
+        "height": 800,
+        "sampledPixels": 40960,
+        "meanLuminance": 3.91,
+        "blankFraction": 0.1103,
+        "distinctRowFraction": 0.2642,
+        "sampledUniqueColors": 627
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-chain-empty-mobile-positioning.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "chain-empty",
+        "viewport": "mobile",
+        "workflow": "positioning"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-chain-empty-mobile-positioning.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "pos-sub-chain",
+        "desk": "positioning",
+        "scenario": "chain-empty",
+        "deepLink": "/?desk=positioning&sec=pos-sub-chain",
+        "viewport": {
+          "name": "mobile",
+          "width": 390,
+          "height": 844
+        },
+        "mode": "fixture",
+        "providerState": "equity chain returns zero quotes; missing OI stays missing",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:29.807Z",
+        "capturedAt": "2026-09-05T06:56:30.932Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 2,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 2,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 390,
+        "height": 844,
+        "sampledPixels": 82290,
+        "meanLuminance": 13.95,
+        "blankFraction": 0.7181,
+        "distinctRowFraction": 0.4466,
+        "sampledUniqueColors": 1793
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-chain-empty-mobile-volatility.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "chain-empty",
+        "viewport": "mobile",
+        "workflow": "volatility"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-chain-empty-mobile-volatility.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "vol-sub-surface",
+        "desk": "volatility",
+        "scenario": "chain-empty",
+        "deepLink": "/?desk=vol&sec=vol-sub-surface",
+        "viewport": {
+          "name": "mobile",
+          "width": 390,
+          "height": 844
+        },
+        "mode": "fixture",
+        "providerState": "equity chain returns zero quotes; no rows fabricated",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:28.002Z",
+        "capturedAt": "2026-09-05T06:56:29.082Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 1,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 1,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 390,
+        "height": 844,
+        "sampledPixels": 82290,
+        "meanLuminance": 7.12,
+        "blankFraction": 0.2756,
+        "distinctRowFraction": 0.2945,
+        "sampledUniqueColors": 1442
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-chain-empty-tablet-positioning.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "chain-empty",
+        "viewport": "tablet",
+        "workflow": "positioning"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-chain-empty-tablet-positioning.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "pos-sub-chain",
+        "desk": "positioning",
+        "scenario": "chain-empty",
+        "deepLink": "/?desk=positioning&sec=pos-sub-chain",
+        "viewport": {
+          "name": "tablet",
+          "width": 1024,
+          "height": 768
+        },
+        "mode": "fixture",
+        "providerState": "equity chain returns zero quotes; missing OI stays missing",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:02.932Z",
+        "capturedAt": "2026-09-05T06:56:04.617Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 2,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 2,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1024,
+        "height": 768,
+        "sampledPixels": 49152,
+        "meanLuminance": 9.23,
+        "blankFraction": 0.8014,
+        "distinctRowFraction": 0.4869,
+        "sampledUniqueColors": 856
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-chain-empty-tablet-volatility.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "chain-empty",
+        "viewport": "tablet",
+        "workflow": "volatility"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-chain-empty-tablet-volatility.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "vol-sub-surface",
+        "desk": "volatility",
+        "scenario": "chain-empty",
+        "deepLink": "/?desk=vol&sec=vol-sub-surface",
+        "viewport": {
+          "name": "tablet",
+          "width": 1024,
+          "height": 768
+        },
+        "mode": "fixture",
+        "providerState": "equity chain returns zero quotes; no rows fabricated",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:00.898Z",
+        "capturedAt": "2026-09-05T06:56:01.969Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 1,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 1,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1024,
+        "height": 768,
+        "sampledPixels": 49152,
+        "meanLuminance": 4.15,
+        "blankFraction": 0.0641,
+        "distinctRowFraction": 0.2932,
+        "sampledUniqueColors": 641
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-crypto-down-desktop-crypto.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "crypto-down",
+        "viewport": "desktop",
+        "workflow": "crypto"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-crypto-down-desktop-crypto.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "crypto-v2-overview",
+        "desk": "crypto",
+        "scenario": "crypto-down",
+        "deepLink": "/?desk=crypto&view=overview",
+        "viewport": {
+          "name": "desktop",
+          "width": 1440,
+          "height": 900
+        },
+        "mode": "fixture",
+        "providerState": "Deribit 503 at boundary; Binance+Bybit succeed independently",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:14.366Z",
+        "capturedAt": "2026-09-05T06:55:15.575Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1440,
+        "height": 900,
+        "sampledPixels": 51840,
+        "meanLuminance": 7.87,
+        "blankFraction": 0.0651,
+        "distinctRowFraction": 0.2514,
+        "sampledUniqueColors": 344
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-crypto-down-laptop-crypto.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "crypto-down",
+        "viewport": "laptop",
+        "workflow": "crypto"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-crypto-down-laptop-crypto.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "crypto-v2-overview",
+        "desk": "crypto",
+        "scenario": "crypto-down",
+        "deepLink": "/?desk=crypto&view=overview",
+        "viewport": {
+          "name": "laptop",
+          "width": 1280,
+          "height": 800
+        },
+        "mode": "fixture",
+        "providerState": "Deribit 503 at boundary; Binance+Bybit succeed independently",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:46.765Z",
+        "capturedAt": "2026-09-05T06:55:48.531Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1280,
+        "height": 800,
+        "sampledPixels": 40960,
+        "meanLuminance": 8.48,
+        "blankFraction": 0.0716,
+        "distinctRowFraction": 0.283,
+        "sampledUniqueColors": 344
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-crypto-down-mobile-crypto.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "crypto-down",
+        "viewport": "mobile",
+        "workflow": "crypto"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-crypto-down-mobile-crypto.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "crypto-v2-overview",
+        "desk": "crypto",
+        "scenario": "crypto-down",
+        "deepLink": "/?desk=crypto&view=overview",
+        "viewport": {
+          "name": "mobile",
+          "width": 390,
+          "height": 844
+        },
+        "mode": "fixture",
+        "providerState": "Deribit 503 at boundary; Binance+Bybit succeed independently",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:43.599Z",
+        "capturedAt": "2026-09-05T06:56:45.196Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 390,
+        "height": 844,
+        "sampledPixels": 82290,
+        "meanLuminance": 13.06,
+        "blankFraction": 0.09,
+        "distinctRowFraction": 0.3492,
+        "sampledUniqueColors": 815
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-crypto-down-tablet-crypto.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "crypto-down",
+        "viewport": "tablet",
+        "workflow": "crypto"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-crypto-down-tablet-crypto.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "crypto-v2-overview",
+        "desk": "crypto",
+        "scenario": "crypto-down",
+        "deepLink": "/?desk=crypto&view=overview",
+        "viewport": {
+          "name": "tablet",
+          "width": 1024,
+          "height": 768
+        },
+        "mode": "fixture",
+        "providerState": "Deribit 503 at boundary; Binance+Bybit succeed independently",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:17.506Z",
+        "capturedAt": "2026-09-05T06:56:18.689Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1024,
+        "height": 768,
+        "sampledPixels": 49152,
+        "meanLuminance": 9.09,
+        "blankFraction": 0.0664,
+        "distinctRowFraction": 0.2827,
+        "sampledUniqueColors": 416
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-crypto-partial-desktop-crypto.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "crypto-partial",
+        "viewport": "desktop",
+        "workflow": "crypto"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-crypto-partial-desktop-crypto.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "crypto-v2-overview",
+        "desk": "crypto",
+        "scenario": "crypto-partial",
+        "deepLink": "/?desk=crypto&view=overview",
+        "viewport": {
+          "name": "desktop",
+          "width": 1440,
+          "height": 900
+        },
+        "mode": "fixture",
+        "providerState": "Binance 500 at boundary; Bybit succeeds independently",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:12.293Z",
+        "capturedAt": "2026-09-05T06:55:14.114Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 14,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 14,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1440,
+        "height": 900,
+        "sampledPixels": 51840,
+        "meanLuminance": 8.2,
+        "blankFraction": 0.0651,
+        "distinctRowFraction": 0.4525,
+        "sampledUniqueColors": 425
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-crypto-partial-laptop-crypto.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "crypto-partial",
+        "viewport": "laptop",
+        "workflow": "crypto"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-crypto-partial-laptop-crypto.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "crypto-v2-overview",
+        "desk": "crypto",
+        "scenario": "crypto-partial",
+        "deepLink": "/?desk=crypto&view=overview",
+        "viewport": {
+          "name": "laptop",
+          "width": 1280,
+          "height": 800
+        },
+        "mode": "fixture",
+        "providerState": "Binance 500 at boundary; Bybit succeeds independently",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:44.989Z",
+        "capturedAt": "2026-09-05T06:55:46.118Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 14,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 14,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1280,
+        "height": 800,
+        "sampledPixels": 40960,
+        "meanLuminance": 9.02,
+        "blankFraction": 0.0716,
+        "distinctRowFraction": 0.5094,
+        "sampledUniqueColors": 426
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-crypto-partial-mobile-crypto.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "crypto-partial",
+        "viewport": "mobile",
+        "workflow": "crypto"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-crypto-partial-mobile-crypto.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "crypto-v2-overview",
+        "desk": "crypto",
+        "scenario": "crypto-partial",
+        "deepLink": "/?desk=crypto&view=overview",
+        "viewport": {
+          "name": "mobile",
+          "width": 390,
+          "height": 844
+        },
+        "mode": "fixture",
+        "providerState": "Binance 500 at boundary; Bybit succeeds independently",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:41.705Z",
+        "capturedAt": "2026-09-05T06:56:42.881Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 14,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 14,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 390,
+        "height": 844,
+        "sampledPixels": 82290,
+        "meanLuminance": 15.05,
+        "blankFraction": 0.09,
+        "distinctRowFraction": 0.5321,
+        "sampledUniqueColors": 1525
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-crypto-partial-tablet-crypto.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "crypto-partial",
+        "viewport": "tablet",
+        "workflow": "crypto"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-crypto-partial-tablet-crypto.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "crypto-v2-overview",
+        "desk": "crypto",
+        "scenario": "crypto-partial",
+        "deepLink": "/?desk=crypto&view=overview",
+        "viewport": {
+          "name": "tablet",
+          "width": 1024,
+          "height": 768
+        },
+        "mode": "fixture",
+        "providerState": "Binance 500 at boundary; Bybit succeeds independently",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:15.879Z",
+        "capturedAt": "2026-09-05T06:56:17.052Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 14,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 14,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1024,
+        "height": 768,
+        "sampledPixels": 49152,
+        "meanLuminance": 10.53,
+        "blankFraction": 0.0664,
+        "distinctRowFraction": 0.5183,
+        "sampledUniqueColors": 477
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-home-partial-desktop-home.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "home-partial",
+        "viewport": "desktop",
+        "workflow": "home"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-home-partial-desktop-home.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "home",
+        "desk": "home",
+        "scenario": "home-partial",
+        "deepLink": "/?desk=home",
+        "viewport": {
+          "name": "desktop",
+          "width": 1440,
+          "height": 900
+        },
+        "mode": "fixture",
+        "providerState": "sahmk 503 at boundary; finnhub/deribit/free-crypto/worker succeed",
+        "eventTime": "2026-09-05T06:54:52.686Z",
+        "fetchTime": "2026-09-05T06:54:52.788Z",
+        "capturedAt": "2026-09-05T06:54:55.556Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 0,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 0,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1440,
+        "height": 900,
+        "sampledPixels": 51840,
+        "meanLuminance": 5.21,
+        "blankFraction": 0.0237,
+        "distinctRowFraction": 0.324,
+        "sampledUniqueColors": 685
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-home-partial-laptop-home.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "home-partial",
+        "viewport": "laptop",
+        "workflow": "home"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-home-partial-laptop-home.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "home",
+        "desk": "home",
+        "scenario": "home-partial",
+        "deepLink": "/?desk=home",
+        "viewport": {
+          "name": "laptop",
+          "width": 1280,
+          "height": 800
+        },
+        "mode": "fixture",
+        "providerState": "sahmk 503 at boundary; finnhub/deribit/free-crypto/worker succeed",
+        "eventTime": "2026-09-05T06:55:25.605Z",
+        "fetchTime": "2026-09-05T06:55:25.663Z",
+        "capturedAt": "2026-09-05T06:55:28.471Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 0,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 0,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1280,
+        "height": 800,
+        "sampledPixels": 40960,
+        "meanLuminance": 6.61,
+        "blankFraction": 0.0258,
+        "distinctRowFraction": 0.3899,
+        "sampledUniqueColors": 703
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-home-partial-mobile-home.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "home-partial",
+        "viewport": "mobile",
+        "workflow": "home"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-home-partial-mobile-home.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "home",
+        "desk": "home",
+        "scenario": "home-partial",
+        "deepLink": "/?desk=home",
+        "viewport": {
+          "name": "mobile",
+          "width": 390,
+          "height": 844
+        },
+        "mode": "fixture",
+        "providerState": "sahmk 503 at boundary; finnhub/deribit/free-crypto/worker succeed",
+        "eventTime": "2026-09-05T06:56:24.711Z",
+        "fetchTime": "2026-09-05T06:56:24.765Z",
+        "capturedAt": "2026-09-05T06:56:27.242Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 0,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 0,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 390,
+        "height": 844,
+        "sampledPixels": 82290,
+        "meanLuminance": 15.17,
+        "blankFraction": 0.0237,
+        "distinctRowFraction": 0.677,
+        "sampledUniqueColors": 1510
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-home-partial-tablet-home.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "home-partial",
+        "viewport": "tablet",
+        "workflow": "home"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-home-partial-tablet-home.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "home",
+        "desk": "home",
+        "scenario": "home-partial",
+        "deepLink": "/?desk=home",
+        "viewport": {
+          "name": "tablet",
+          "width": 1024,
+          "height": 768
+        },
+        "mode": "fixture",
+        "providerState": "sahmk 503 at boundary; finnhub/deribit/free-crypto/worker succeed",
+        "eventTime": "2026-09-05T06:55:56.031Z",
+        "fetchTime": "2026-09-05T06:55:56.074Z",
+        "capturedAt": "2026-09-05T06:55:59.837Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 0,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 0,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1024,
+        "height": 768,
+        "sampledPixels": 49152,
+        "meanLuminance": 8.21,
+        "blankFraction": 0.0254,
+        "distinctRowFraction": 0.5079,
+        "sampledUniqueColors": 846
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-ksa-entitlement-desktop-ksa.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "ksa-entitlement",
+        "viewport": "desktop",
+        "workflow": "ksa"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-ksa-entitlement-desktop-ksa.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "ksa-sub-board",
+        "desk": "ksa",
+        "scenario": "ksa-entitlement",
+        "deepLink": "/?desk=ksa&sec=ksa-sub-board",
+        "viewport": {
+          "name": "desktop",
+          "width": 1440,
+          "height": 900
+        },
+        "mode": "fixture",
+        "providerState": "billing gate enabled, no entitlement: HTTP 402 subscription_required",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:19.341Z",
+        "capturedAt": "2026-09-05T06:55:20.821Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1440,
+        "height": 900,
+        "sampledPixels": 51840,
+        "meanLuminance": 2.97,
+        "blankFraction": 0.0739,
+        "distinctRowFraction": 0.2067,
+        "sampledUniqueColors": 371
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-ksa-entitlement-laptop-ksa.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "ksa-entitlement",
+        "viewport": "laptop",
+        "workflow": "ksa"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-ksa-entitlement-laptop-ksa.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "ksa-sub-board",
+        "desk": "ksa",
+        "scenario": "ksa-entitlement",
+        "deepLink": "/?desk=ksa&sec=ksa-sub-board",
+        "viewport": {
+          "name": "laptop",
+          "width": 1280,
+          "height": 800
+        },
+        "mode": "fixture",
+        "providerState": "billing gate enabled, no entitlement: HTTP 402 subscription_required",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:51.205Z",
+        "capturedAt": "2026-09-05T06:55:52.502Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1280,
+        "height": 800,
+        "sampledPixels": 40960,
+        "meanLuminance": 3.37,
+        "blankFraction": 0.0896,
+        "distinctRowFraction": 0.2327,
+        "sampledUniqueColors": 373
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-ksa-entitlement-mobile-ksa.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "ksa-entitlement",
+        "viewport": "mobile",
+        "workflow": "ksa"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-ksa-entitlement-mobile-ksa.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "ksa-sub-board",
+        "desk": "ksa",
+        "scenario": "ksa-entitlement",
+        "deepLink": "/?desk=ksa&sec=ksa-sub-board",
+        "viewport": {
+          "name": "mobile",
+          "width": 390,
+          "height": 844
+        },
+        "mode": "fixture",
+        "providerState": "billing gate enabled, no entitlement: HTTP 402 subscription_required",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:47.630Z",
+        "capturedAt": "2026-09-05T06:56:48.730Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 17,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 17,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 390,
+        "height": 844,
+        "sampledPixels": 82290,
+        "meanLuminance": 5.63,
+        "blankFraction": 0.1836,
+        "distinctRowFraction": 0.1805,
+        "sampledUniqueColors": 1093
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-ksa-entitlement-tablet-ksa.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "ksa-entitlement",
+        "viewport": "tablet",
+        "workflow": "ksa"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-ksa-entitlement-tablet-ksa.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "ksa-sub-board",
+        "desk": "ksa",
+        "scenario": "ksa-entitlement",
+        "deepLink": "/?desk=ksa&sec=ksa-sub-board",
+        "viewport": {
+          "name": "tablet",
+          "width": 1024,
+          "height": 768
+        },
+        "mode": "fixture",
+        "providerState": "billing gate enabled, no entitlement: HTTP 402 subscription_required",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:21.025Z",
+        "capturedAt": "2026-09-05T06:56:22.227Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 17,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 17,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1024,
+        "height": 768,
+        "sampledPixels": 49152,
+        "meanLuminance": 4.04,
+        "blankFraction": 0.1047,
+        "distinctRowFraction": 0.2408,
+        "sampledUniqueColors": 549
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-ksa-stale-desktop-ksa.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "ksa-stale",
+        "viewport": "desktop",
+        "workflow": "ksa"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-ksa-stale-desktop-ksa.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "ksa-sub-board",
+        "desk": "ksa",
+        "scenario": "ksa-stale",
+        "deepLink": "/?desk=ksa&sec=ksa-sub-board",
+        "viewport": {
+          "name": "desktop",
+          "width": 1440,
+          "height": 900
+        },
+        "mode": "fixture",
+        "providerState": "board warmed, then SAHMK 503; last-good board served stale",
+        "eventTime": "2026-09-05T06:55:15.592Z",
+        "fetchTime": "2026-09-05T06:55:16.178Z",
+        "capturedAt": "2026-09-05T06:55:18.046Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1440,
+        "height": 900,
+        "sampledPixels": 51840,
+        "meanLuminance": 14.25,
+        "blankFraction": 0.3488,
+        "distinctRowFraction": 0.7709,
+        "sampledUniqueColors": 1144
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-ksa-stale-laptop-ksa.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "ksa-stale",
+        "viewport": "laptop",
+        "workflow": "ksa"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-ksa-stale-laptop-ksa.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "ksa-sub-board",
+        "desk": "ksa",
+        "scenario": "ksa-stale",
+        "deepLink": "/?desk=ksa&sec=ksa-sub-board",
+        "viewport": {
+          "name": "laptop",
+          "width": 1280,
+          "height": 800
+        },
+        "mode": "fixture",
+        "providerState": "board warmed, then SAHMK 503; last-good board served stale",
+        "eventTime": "2026-09-05T06:55:48.545Z",
+        "fetchTime": "2026-09-05T06:55:48.980Z",
+        "capturedAt": "2026-09-05T06:55:50.683Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1280,
+        "height": 800,
+        "sampledPixels": 40960,
+        "meanLuminance": 15.16,
+        "blankFraction": 0.35,
+        "distinctRowFraction": 0.7484,
+        "sampledUniqueColors": 1082
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-ksa-stale-mobile-ksa.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "ksa-stale",
+        "viewport": "mobile",
+        "workflow": "ksa"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-ksa-stale-mobile-ksa.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "ksa-sub-board",
+        "desk": "ksa",
+        "scenario": "ksa-stale",
+        "deepLink": "/?desk=ksa&sec=ksa-sub-board",
+        "viewport": {
+          "name": "mobile",
+          "width": 390,
+          "height": 844
+        },
+        "mode": "fixture",
+        "providerState": "board warmed, then SAHMK 503; last-good board served stale",
+        "eventTime": "2026-09-05T06:56:45.209Z",
+        "fetchTime": "2026-09-05T06:56:45.936Z",
+        "capturedAt": "2026-09-05T06:56:47.154Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 390,
+        "height": 844,
+        "sampledPixels": 82290,
+        "meanLuminance": 15.8,
+        "blankFraction": 0.3925,
+        "distinctRowFraction": 0.6295,
+        "sampledUniqueColors": 2217
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-ksa-stale-tablet-ksa.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "ksa-stale",
+        "viewport": "tablet",
+        "workflow": "ksa"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-ksa-stale-tablet-ksa.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "ksa-sub-board",
+        "desk": "ksa",
+        "scenario": "ksa-stale",
+        "deepLink": "/?desk=ksa&sec=ksa-sub-board",
+        "viewport": {
+          "name": "tablet",
+          "width": 1024,
+          "height": 768
+        },
+        "mode": "fixture",
+        "providerState": "board warmed, then SAHMK 503; last-good board served stale",
+        "eventTime": "2026-09-05T06:56:18.703Z",
+        "fetchTime": "2026-09-05T06:56:19.267Z",
+        "capturedAt": "2026-09-05T06:56:20.613Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 16,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 16,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1024,
+        "height": 768,
+        "sampledPixels": 49152,
+        "meanLuminance": 9.85,
+        "blankFraction": 0.2965,
+        "distinctRowFraction": 0.7225,
+        "sampledUniqueColors": 1216
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-rates-malformed-desktop-rates.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "rates-malformed",
+        "viewport": "desktop",
+        "workflow": "rates"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-rates-malformed-desktop-rates.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "rates-mode-funding",
+        "desk": "rates",
+        "scenario": "rates-malformed",
+        "deepLink": "/?desk=rates&sec=rates-mode-funding",
+        "viewport": {
+          "name": "desktop",
+          "width": 1440,
+          "height": 900
+        },
+        "mode": "fixture",
+        "providerState": "rates worker answers 200 text/html; rejected as invalid_payload, never cached",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:10.271Z",
+        "capturedAt": "2026-09-05T06:55:11.640Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 14,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 14,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1440,
+        "height": 900,
+        "sampledPixels": 51840,
+        "meanLuminance": 2.45,
+        "blankFraction": 0.0234,
+        "distinctRowFraction": 0.1397,
+        "sampledUniqueColors": 419
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-rates-malformed-laptop-rates.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "rates-malformed",
+        "viewport": "laptop",
+        "workflow": "rates"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-rates-malformed-laptop-rates.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "rates-mode-funding",
+        "desk": "rates",
+        "scenario": "rates-malformed",
+        "deepLink": "/?desk=rates&sec=rates-mode-funding",
+        "viewport": {
+          "name": "laptop",
+          "width": 1280,
+          "height": 800
+        },
+        "mode": "fixture",
+        "providerState": "rates worker answers 200 text/html; rejected as invalid_payload, never cached",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:55:43.163Z",
+        "capturedAt": "2026-09-05T06:55:44.369Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 14,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 14,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1280,
+        "height": 800,
+        "sampledPixels": 40960,
+        "meanLuminance": 3.06,
+        "blankFraction": 0.0249,
+        "distinctRowFraction": 0.1447,
+        "sampledUniqueColors": 433
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-rates-malformed-mobile-rates.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "rates-malformed",
+        "viewport": "mobile",
+        "workflow": "rates"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-rates-malformed-mobile-rates.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "rates-mode-funding",
+        "desk": "rates",
+        "scenario": "rates-malformed",
+        "deepLink": "/?desk=rates&sec=rates-mode-funding",
+        "viewport": {
+          "name": "mobile",
+          "width": 390,
+          "height": 844
+        },
+        "mode": "fixture",
+        "providerState": "rates worker answers 200 text/html; rejected as invalid_payload, never cached",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:40.064Z",
+        "capturedAt": "2026-09-05T06:56:41.134Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 14,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 14,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 390,
+        "height": 844,
+        "sampledPixels": 82290,
+        "meanLuminance": 4.01,
+        "blankFraction": 0.0205,
+        "distinctRowFraction": 0.1686,
+        "sampledUniqueColors": 1041
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-rates-malformed-tablet-rates.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "rates-malformed",
+        "viewport": "tablet",
+        "workflow": "rates"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-rates-malformed-tablet-rates.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "rates-mode-funding",
+        "desk": "rates",
+        "scenario": "rates-malformed",
+        "deepLink": "/?desk=rates&sec=rates-mode-funding",
+        "viewport": {
+          "name": "tablet",
+          "width": 1024,
+          "height": 768
+        },
+        "mode": "fixture",
+        "providerState": "rates worker answers 200 text/html; rejected as invalid_payload, never cached",
+        "eventTime": null,
+        "fetchTime": "2026-09-05T06:56:14.084Z",
+        "capturedAt": "2026-09-05T06:56:15.272Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 14,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 14,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1024,
+        "height": 768,
+        "sampledPixels": 49152,
+        "meanLuminance": 3.02,
+        "blankFraction": 0.025,
+        "distinctRowFraction": 0.1675,
+        "sampledUniqueColors": 557
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-trade-loading-desktop-trade.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "trade-loading",
+        "viewport": "desktop",
+        "workflow": "trade"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-trade-loading-desktop-trade.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "trade-sub-structure",
+        "desk": "trade",
+        "scenario": "trade-loading",
+        "deepLink": "/?desk=desk&sec=trade-sub-structure",
+        "viewport": {
+          "name": "desktop",
+          "width": 1440,
+          "height": 900
+        },
+        "mode": "fixture",
+        "providerState": "equity chain delayed ~6s at boundary, then succeeds",
+        "eventTime": "2026-09-01T01:30:00.000Z",
+        "fetchTime": "2026-09-05T06:55:07.424Z",
+        "capturedAt": "2026-09-05T06:55:09.453Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 2,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 2,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1440,
+        "height": 900,
+        "sampledPixels": 51840,
+        "meanLuminance": 8.52,
+        "blankFraction": 0.4768,
+        "distinctRowFraction": 0.8492,
+        "sampledUniqueColors": 1118
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-trade-loading-laptop-trade.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "trade-loading",
+        "viewport": "laptop",
+        "workflow": "trade"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-trade-loading-laptop-trade.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "trade-sub-structure",
+        "desk": "trade",
+        "scenario": "trade-loading",
+        "deepLink": "/?desk=desk&sec=trade-sub-structure",
+        "viewport": {
+          "name": "laptop",
+          "width": 1280,
+          "height": 800
+        },
+        "mode": "fixture",
+        "providerState": "equity chain delayed ~6s at boundary, then succeeds",
+        "eventTime": "2026-09-01T01:30:00.000Z",
+        "fetchTime": "2026-09-05T06:55:40.216Z",
+        "capturedAt": "2026-09-05T06:55:42.366Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 2,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 2,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1280,
+        "height": 800,
+        "sampledPixels": 40960,
+        "meanLuminance": 8.83,
+        "blankFraction": 0.4264,
+        "distinctRowFraction": 0.8302,
+        "sampledUniqueColors": 1065
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-trade-loading-mobile-trade.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "trade-loading",
+        "viewport": "mobile",
+        "workflow": "trade"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-trade-loading-mobile-trade.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "trade-sub-structure",
+        "desk": "trade",
+        "scenario": "trade-loading",
+        "deepLink": "/?desk=desk&sec=trade-sub-structure",
+        "viewport": {
+          "name": "mobile",
+          "width": 390,
+          "height": 844
+        },
+        "mode": "fixture",
+        "providerState": "equity chain delayed ~6s at boundary, then succeeds",
+        "eventTime": "2026-09-01T01:30:00.000Z",
+        "fetchTime": "2026-09-05T06:56:37.794Z",
+        "capturedAt": "2026-09-05T06:56:39.331Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 2,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 2,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 390,
+        "height": 844,
+        "sampledPixels": 82290,
+        "meanLuminance": 10.01,
+        "blankFraction": 0.2244,
+        "distinctRowFraction": 0.5867,
+        "sampledUniqueColors": 2213
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
+    },
+    {
+      "file": "fail-ae15374-trade-loading-tablet-trade.png",
+      "parsed": {
+        "gate": "fail",
+        "head": "ae15374",
+        "scenario": "trade-loading",
+        "viewport": "tablet",
+        "workflow": "trade"
+      },
+      "sidecar": {
+        "screenshot": "fail-ae15374-trade-loading-tablet-trade.png",
+        "commit": "ae15374b21dc2d059afb1927e2899e16be795ea7",
+        "commitShort": "ae15374",
+        "workflow": "trade-sub-structure",
+        "desk": "trade",
+        "scenario": "trade-loading",
+        "deepLink": "/?desk=desk&sec=trade-sub-structure",
+        "viewport": {
+          "name": "tablet",
+          "width": 1024,
+          "height": 768
+        },
+        "mode": "fixture",
+        "providerState": "equity chain delayed ~6s at boundary, then succeeds",
+        "eventTime": "2026-09-01T01:30:00.000Z",
+        "fetchTime": "2026-09-05T06:56:11.900Z",
+        "capturedAt": "2026-09-05T06:56:13.693Z",
+        "live": false,
+        "checks": {
+          "horizontalOverflowPx": 0,
+          "nonFiniteLeak": false,
+          "axeViolations": [],
+          "failedRoutesSoFar": 2,
+          "pageErrorsSoFar": 0,
+          "consoleErrorsSoFar": 2,
+          "unexpectedConsoleErrors": 0,
+          "externalFailedRequests": []
+        }
+      },
+      "pixelStats": {
+        "width": 1024,
+        "height": 768,
+        "sampledPixels": 49152,
+        "meanLuminance": 9.43,
+        "blankFraction": 0.3959,
+        "distinctRowFraction": 0.8743,
+        "sampledUniqueColors": 1290
+      },
+      "pixelStatsReason": null,
+      "run": "archival"
     },
     {
       "file": "laptop-carry.png",

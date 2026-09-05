@@ -72,16 +72,37 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-P1-15 representative failure-state gate (10 steps x 4 viewports, committed as
-`e2e/failure-states.spec.ts` + `playwright.failure-states.config.ts`). Prior
-`fail-a089e2d-*` captures (148 with sidecars) ran against pre-commit dirty
-code, so they are stale as HEAD evidence: the gate must be re-run at the
-current HEAD and its pixels inspected before P1-15 can close. P1-16 layout
-fixes for the confirmed defects (Home dead space via content-sized launcher
-row, Trade PnL blank principals via definite heights + unavailable states,
-Crypto dead space via expiry/top-OI recomposition, contradictory badges via
-unattempted-vs-down freshness) are implemented with behavior tests but await
-final-HEAD screenshot pixel review.
+P1-15 representative failure-state gate: PASS at `ae15374` —
+`test:e2e:failure-states` 4/4 viewports green in 2.3m (10 steps x 4
+viewports = 40 `fail-ae15374-*` captures, all with sidecars, indexed by
+`docs/recovery-evidence/SCREENSHOT_MANIFEST_ae15374.json`). Every shot:
+axe 0 violations, 0 horizontal overflow, no NaN/Infinity leak, zero
+pageErrors, only in-step-asserted 4xx/5xx. Eight shots pixel-inspected
+(see findings below), not filename-approved.
+
+Pixel findings at `ae15374` (inspected):
+- home-partial desktop: Feeds PARTIAL chip + KSA-unavailable honest; CHAIN
+  reads unknown (unattempted on Home — false API-DOWN defect fixed);
+  CLOSED is the true session state. DEFECT OPEN: bottom ~55% viewport void.
+- trade-loading desktop (post-load): Blotter populated, payoff/Greeks
+  curves render (definite-height fix works); Greeks curves correctly span
+  only the data range.
+- crypto-partial desktop: 4 listed expiries with dte/count, 6 top-OI rows,
+  free snapshot PARTIAL (Bybit only), exact Velo-alternative labels.
+  Dead space much reduced; ~35% bottom void remains.
+- ksa-stale desktop: dense and decision-useful — STALE badge, last-good
+  board with event/fetch times, honest dash-only Open/High/Low cells.
+- ksa-entitlement desktop: paywall denial with zero data leak (minor:
+  sparse centered card, acceptable for a denial state).
+- chain-empty mobile: honest no-synthetic-chain states; the header API DOWN
+  pill is the genuinely attempted-and-failed chain (correct per the
+  attempted-vs-down rule), axe/overflow clean.
+- rates-malformed desktop: honest UPSTREAM_ERROR fail-closed with Retry/
+  Reload (minor: failure page is mostly void — failure-state sparseness).
+
+P1-16 layout defects still open: Home desktop void, Crypto bottom void,
+rates-failure sparseness. Full C6 matrix (every workflow x scenario) and
+independent visual review remain scheduled.
 
 - `5671143` fix(greeks-3d): diverging ramp sign + wireframe holes + golden tests (P0-4, P0-5).
 - `4763af5` fix(greeks): missing OI nullability + price provenance (P0-2, P0-3) with Python golden tests.

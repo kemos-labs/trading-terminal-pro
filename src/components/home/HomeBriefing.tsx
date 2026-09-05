@@ -74,9 +74,9 @@ const DOT: Record<FeedState, string> = {
 };
 
 function DeskCell({
-  label, provider, available, asOf, children, testId, degraded = false,
+  label, provider, available, asOf, children, testId, degraded = false, degradedNote = 'delayed',
 }: {
-  label: string; provider: string; available: boolean; asOf: string | number | null; children: React.ReactNode; testId?: string; degraded?: boolean;
+  label: string; provider: string; available: boolean; asOf: string | number | null; children: React.ReactNode; testId?: string; degraded?: boolean; degradedNote?: string;
 }) {
   const state: FeedState = available ? (degraded ? 'degraded' : 'live') : 'unavailable';
   const asOfLabel = asOf != null
@@ -93,7 +93,7 @@ function DeskCell({
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <span className={cn('h-1.5 w-1.5 rounded-full', DOT[state])} aria-hidden />
           <span className={state === 'degraded' ? 'text-amber' : undefined}>
-            {state === 'live' ? provider : state === 'degraded' ? `${provider} · delayed` : 'unavailable'}
+            {state === 'live' ? provider : state === 'degraded' ? `${provider} · ${degradedNote}` : 'unavailable'}
           </span>
           {asOfLabel && <span title="observation time">· {asOfLabel}</span>}
         </span>
@@ -103,9 +103,9 @@ function DeskCell({
   );
 }
 
-function Row({ k, v, tone }: { k: string; v: string; tone?: 'up' | 'down' }) {
+function Row({ k, v, tone, title }: { k: string; v: string; tone?: 'up' | 'down'; title?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 py-[1px]">
+    <div className="flex items-baseline justify-between gap-2 py-[1px]" title={title}>
       <span className="shrink-0 text-muted-foreground">{k}</span>
       <span
         className={cn(
@@ -120,10 +120,28 @@ function Row({ k, v, tone }: { k: string; v: string; tone?: 'up' | 'down' }) {
   );
 }
 
-/** Signed-value tone: up green, down red, null neutral (never color-alone — sign is in the text). */
-function signedTone(v: number | null | undefined): 'up' | 'down' | undefined {
+/** Signed-value tone: up green, down red, null neutral (never color-alone — sign is in the text). */function signedTone(v: number | null | undefined): 'up' | 'down' | undefined {
   if (v == null || !Number.isFinite(v) || v === 0) return undefined;
   return v > 0 ? 'up' : 'down';
+}
+
+/** Full UTC timestamp for the ledger; null stays an honest dash. */
+function fmtEventTime(v: string | number | null | undefined): string {
+  if (v == null) return '—';
+  const ms = typeof v === 'number' ? v : Date.parse(v);
+  if (!Number.isFinite(ms)) return '—';
+  return new Date(ms).toISOString().replace('T', ' ').slice(0, 19) + 'Z';
+}
+
+/** Snapshot age from an event time against the client clock (labelled, approximate). */
+function fmtAge(v: string | number | null | undefined, nowMs: number): string {
+  if (v == null) return '—';
+  const ms = typeof v === 'number' ? v : Date.parse(v);
+  if (!Number.isFinite(ms)) return '—';
+  const s = Math.max(0, Math.round((nowMs - ms) / 1000));
+  if (s < 90) return `${s}s`;
+  if (s < 90 * 60) return `${Math.round(s / 60)}m`;
+  return `${Math.round(s / 3600)}h`;
 }
 
 export function HomeBriefing() {
@@ -237,7 +255,7 @@ export function HomeBriefing() {
                 v={d.equities.changePct != null ? `${d.equities.changePct >= 0 ? '+' : ''}${d.equities.changePct.toFixed(2)}%` : '—'}
                 tone={signedTone(d.equities.changePct)}
               />
-              <Row k="ATM IV" v="—" title-="opens with Vol desk" />
+              <Row k="ATM IV" v="—" title="opens with Vol desk" />
               {chainDisagreeDown ? (
                 <p className="pt-1 text-amber" data-testid="home-chain-disagree">
                   Snapshot fresh · terminal chain down — Vol desk opens fail-closed.
@@ -289,7 +307,15 @@ export function HomeBriefing() {
           )}
         </DeskCell>
 
-        <DeskCell label="Crypto" provider={d?.crypto.provider ?? '—'} available={!!d?.crypto.available} asOf={d?.crypto.asOf ?? null} testId="home-cell-crypto">
+        <DeskCell
+          label="Crypto"
+          provider={d?.crypto.available ? (d?.crypto.provider ?? '—') : (d?.crypto.freeFallback.available ? `${d.crypto.freeFallback.provider} (free)` : (d?.crypto.provider ?? '—'))}
+          available={!!d?.crypto.available || !!d?.crypto.freeFallback.available}
+          degraded={!d?.crypto.available && !!d?.crypto.freeFallback.available}
+          degradedNote="free fallback"
+          asOf={d?.crypto.available ? (d?.crypto.asOf ?? null) : (d?.crypto.freeFallback.asOf ?? null)}
+          testId="home-cell-crypto"
+        >
           {d ? (
             <>
               <Row k="BTC index (Deribit)" v={fmtPrice(d.crypto.indexPrice, 1)} />
@@ -307,9 +333,9 @@ export function HomeBriefing() {
         </DeskCell>
       </div>
 
-      {/* KSA + launcher row — content-sized (no flex-1 stretch): stretched
-          launcher cells were the desktop dead space. Page background, not
-          empty bordered cells, fills the remaining viewport. */}
+      {/* KSA + launcher row — content-sized: stretched launcher cells were
+          the desktop dead space. The freshness ledger below fills the
+          remaining viewport with real provenance instead. */}
       <div className="grid min-h-0 grid-cols-1 gap-2 lg:grid-cols-3">
         <DeskCell label="KSA (Tadawul)" provider={d?.ksa.provider ?? '—'} available={!!d?.ksa.available} degraded={!!d?.ksa.available} asOf={d?.ksa.asOf ?? null} testId="home-cell-ksa">
           {d?.ksa.available ? (
@@ -357,6 +383,103 @@ export function HomeBriefing() {
           </div>
         </div>
       </div>
+
+      {/* Freshness ledger — per-desk provenance from the already-fetched
+          snapshot (zero new requests). Fills the desktop viewport with real
+          event times and ages instead of dead space. */}
+      <FreshnessLedger briefing={b} loading={state.loading} error={state.error} />
     </div>
+  );
+}
+
+type LedgerState = 'live' | 'delayed' | 'partial' | 'stale' | 'unavailable';
+
+const LEDGER_DOT: Record<LedgerState, string> = {
+  live: 'bg-up',
+  delayed: 'bg-amber',
+  partial: 'bg-amber',
+  stale: 'bg-amber',
+  unavailable: 'bg-down/70',
+};
+
+function FreshnessLedger({
+  briefing, loading, error,
+}: {
+  briefing: Briefing | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const nowMs = Date.now();
+  const d = briefing?.desks;
+  const agg: LedgerState =
+    briefing?.stale ? 'stale' : ((briefing?.freshness?.state ?? 'unavailable') as LedgerState);
+  const rows: { desk: string; provider: string; event: string | number | null; state: LedgerState }[] = d
+    ? [
+        {
+          desk: 'Snapshot',
+          provider: briefing?.sources?.length ? `${briefing.sources.length} sources` : 'no sources',
+          event: briefing?.asOf ?? null,
+          state: agg,
+        },
+        { desk: 'Equities', provider: d.equities.provider, event: d.equities.asOf, state: d.equities.available ? 'live' : 'unavailable' },
+        { desk: 'Rates', provider: d.rates.provider, event: d.rates.asOf, state: d.rates.available ? 'live' : 'unavailable' },
+        { desk: 'Crypto (Deribit)', provider: d.crypto.provider, event: d.crypto.asOf, state: d.crypto.available ? 'live' : 'unavailable' },
+        {
+          desk: 'Crypto (free)',
+          provider: d.crypto.freeFallback.provider,
+          event: d.crypto.freeFallback.asOf ?? null,
+          state: d.crypto.freeFallback.available ? 'live' : 'unavailable',
+        },
+        { desk: 'KSA', provider: d.ksa.provider, event: d.ksa.asOf, state: d.ksa.available ? 'delayed' : 'unavailable' },
+      ]
+    : [];
+  return (
+    <section
+      data-testid="home-freshness-ledger"
+      aria-label="Freshness ledger"
+      className="rounded border border-border bg-black/40"
+    >
+      <header className="flex items-center justify-between border-b border-border/60 px-2 py-1 font-mono text-type-2xs">
+        <span className="font-bold uppercase tracking-wider text-foreground/80">Freshness ledger</span>
+        <span className="text-muted-foreground" title="Event time is the provider observation time, not fetch completion">
+          event time · age vs now (approx)
+        </span>
+      </header>
+      {d ? (
+        <div className="overflow-x-auto">
+          <table className="w-full font-mono text-type-2xs">
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="px-2 py-1 font-normal">Desk</th>
+                <th className="px-2 py-1 font-normal">Provider</th>
+                <th className="px-2 py-1 font-normal">Event time (UTC)</th>
+                <th className="px-2 py-1 font-normal">Age</th>
+                <th className="px-2 py-1 font-normal">State</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.desk} className="border-t border-border/40">
+                  <td className="px-2 py-1 text-foreground">{r.desk}</td>
+                  <td className="px-2 py-1 text-muted-foreground">{r.provider}</td>
+                  <td className="px-2 py-1 tabular-nums text-muted-foreground">{fmtEventTime(r.event)}</td>
+                  <td className="px-2 py-1 tabular-nums text-muted-foreground">{fmtAge(r.event, nowMs)}</td>
+                  <td className="px-2 py-1">
+                    <span className="flex items-center gap-1.5 uppercase tracking-wider">
+                      <span className={cn('h-1.5 w-1.5 rounded-full', LEDGER_DOT[r.state])} aria-hidden />
+                      {r.state}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="px-2 py-1.5 font-mono text-type-2xs text-muted-foreground">
+          {error ? `ledger unavailable: ${error}` : loading ? 'loading ledger…' : 'ledger unavailable — no snapshot'}
+        </p>
+      )}
+    </section>
   );
 }

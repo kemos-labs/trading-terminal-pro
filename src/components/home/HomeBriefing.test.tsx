@@ -122,3 +122,63 @@ describe('HomeBriefing feeds aggregate (A2)', () => {
     expect(screen.queryByTestId('home-chain-disagree-pos')).toBeNull();
   });
 });
+
+describe('HomeBriefing freshness ledger (P1-16)', () => {
+  beforeEach(() => {
+    useTerminalStore.setState({
+      symbol: 'SPY',
+      chainAvailable: false,
+      chainAttempted: false,
+      chainUsed: 'none',
+    });
+  });
+
+  afterEach(() => {
+    global.fetch = REAL_FETCH;
+  });
+
+  it('lists one row per desk with provider, UTC event time, and state', async () => {
+    mockBriefing(briefing({}));
+    render(<HomeBriefing />);
+    await waitFor(() => expect(screen.getByTestId('home-freshness-ledger')).toBeInTheDocument());
+    const ledger = screen.getByTestId('home-freshness-ledger').textContent ?? '';
+    for (const desk of ['Snapshot', 'Equities', 'Rates', 'Crypto (Deribit)', 'Crypto (free)', 'KSA']) {
+      expect(ledger).toMatch(new RegExp(desk.replace(/[()]/g, '\\$&')));
+    }
+    // Real provenance, never fabricated: provider names and full UTC stamps.
+    expect(ledger).toMatch(/finnhub/);
+    expect(ledger).toMatch(/2026-09-01 01:30:00Z/);
+    expect(ledger).not.toMatch(/NaN|Infinity/);
+    // KSA is delayed-truthful, never Live.
+    const ksaRow = screen.getByTestId('home-freshness-ledger').querySelector('tbody')?.textContent ?? '';
+    expect(ksaRow).toMatch(/delayed/);
+  });
+
+  it('marks unavailable rows honestly on partial snapshots', async () => {
+    mockBriefing(briefing({
+      ksa: { available: false, provider: 'sahmk', tasi: null, tasiChangePct: null, delayed: null, asOf: null },
+    }, { freshness: { live: false, state: 'partial' } }));
+    render(<HomeBriefing />);
+    await waitFor(() => expect(screen.getByTestId('home-freshness-ledger')).toBeInTheDocument());
+    const ledger = screen.getByTestId('home-freshness-ledger').textContent ?? '';
+    expect(ledger).toMatch(/partial/);
+    expect(ledger).toMatch(/unavailable/);
+  });
+
+  it('labels a Deribit-down free-fallback crypto cell honestly (never unavailable)', async () => {
+    mockBriefing(briefing({
+      crypto: {
+        available: false, provider: 'deribit', indexPrice: null, funding8h: null, optionCount: null, asOf: null,
+        freeFallback: { available: true, reason: 'partial', provider: 'binance+bybit', asOf: 1788300000000 },
+      },
+    }, { freshness: { live: false, state: 'partial' } }));
+    render(<HomeBriefing />);
+    await waitFor(() => expect(screen.getByTestId('home-cell-crypto')).toBeInTheDocument());
+    const cell = screen.getByTestId('home-cell-crypto');
+    expect(cell.textContent ?? '').toMatch(/free fallback/);
+    // Header state is the verdict: free provider, never an unavailable badge.
+    const header = cell.querySelector('header')?.textContent ?? '';
+    expect(header).toMatch(/free fallback/);
+    expect(header).not.toMatch(/unavailable/);
+  });
+});

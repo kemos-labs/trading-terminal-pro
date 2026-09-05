@@ -185,6 +185,10 @@ describe('HomeBriefing freshness ledger (P1-16)', () => {
     const header = screen.getByTestId('home-cell-rates').querySelector('header')?.textContent ?? '';
     expect(header).toMatch(/stale/);
     expect(header).not.toMatch(/delayed/);
+    // The Feeds strip agrees: no green 'Rates ok' beside a stale Rates cell.
+    const strip = screen.getByTestId('home-provider-strip').textContent ?? '';
+    expect(strip).toMatch(/Rates stale/);
+    expect(strip).not.toMatch(/Rates ok/);
   });
 
   it('ledger scroll region is keyboard-focusable (WCAG 2.1.1, axe scrollable-region-focusable)', async () => {

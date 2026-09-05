@@ -252,20 +252,20 @@ export function HomeBriefing() {
         {d ? (
           <>
             <span className="flex items-center gap-1">
-              <span className={cn('h-1.5 w-1.5 rounded-full', d.equities.available ? 'bg-up' : 'bg-down/70')} aria-hidden />
-              Equities {d.equities.available ? 'ok' : 'unavailable'}
+              <span className={cn('h-1.5 w-1.5 rounded-full', !d.equities.available ? 'bg-down/70' : eqStale ? 'bg-amber' : 'bg-up')} aria-hidden />
+              Equities {d.equities.available ? (eqStale ? 'stale' : 'ok') : 'unavailable'}
             </span>
             <span className="flex items-center gap-1">
-              <span className={cn('h-1.5 w-1.5 rounded-full', d.rates.available ? 'bg-up' : 'bg-down/70')} aria-hidden />
-              Rates {d.rates.available ? 'ok' : 'unavailable'}
+              <span className={cn('h-1.5 w-1.5 rounded-full', !d.rates.available ? 'bg-down/70' : ratesStale ? 'bg-amber' : 'bg-up')} aria-hidden />
+              Rates {d.rates.available ? (ratesStale ? 'stale' : 'ok') : 'unavailable'}
             </span>
             <span className="flex items-center gap-1">
-              <span className={cn('h-1.5 w-1.5 rounded-full', d.crypto.available ? 'bg-up' : 'bg-amber')} aria-hidden />
-              Crypto {d.crypto.available ? 'ok' : d.crypto.freeFallback.available ? 'free fallback' : 'unavailable'}
+              <span className={cn('h-1.5 w-1.5 rounded-full', d.crypto.available ? (cryptoShownStale ? 'bg-amber' : 'bg-up') : 'bg-amber')} aria-hidden />
+              Crypto {d.crypto.available ? (cryptoShownStale ? 'stale' : 'ok') : d.crypto.freeFallback.available ? 'free fallback' : 'unavailable'}
             </span>
             <span className="flex items-center gap-1">
               <span className={cn('h-1.5 w-1.5 rounded-full', d.ksa.available ? 'bg-amber' : 'bg-down/70')} aria-hidden />
-              KSA {d.ksa.available ? 'delayed' : 'unavailable'}
+              KSA {d.ksa.available ? (ksaStale ? 'stale' : 'delayed') : 'unavailable'}
             </span>
             <span className="ml-auto">{b?.sources?.length ? `sources: ${b.sources.join(' · ')}` : 'sources: —'}</span>
           </>

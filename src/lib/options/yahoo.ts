@@ -454,7 +454,13 @@ export async function fetchYahooSnapshot(
     return yfChainCache.value;
   }
   try {
-    const res = await fetch(`/api/v1/market/options/${encodeURIComponent(symbol)}`);
+    const res = await fetch(`/api/v1/market/options/${encodeURIComponent(symbol)}`, {
+      // Bounded chain load: the desk gate must never spin
+      // "Building chain surface…" forever on a stalled proxy/route.
+      // Server cold fills are capped server-side; an abort here fails
+      // closed through the existing catch below (negative cache + null).
+      signal: AbortSignal.timeout(100_000),
+    });
     if (!res.ok) {
       // Negative cache so auto-refresh doesn't stampede a dead proxy.
       // 30s keeps rate-limited Render IP from re-hammering yfinance every loop.

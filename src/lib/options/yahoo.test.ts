@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { buildYahooSnapshot, YahooResponse } from './yahoo';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { buildYahooSnapshot, YahooResponse, fetchYahooSnapshot, invalidateYahooChainCache } from './yahoo';
 import { priceGreeksMarket } from '../math/adapters';
 import { yearFractionToExpiry } from './time';
 
@@ -178,5 +178,32 @@ describe('buildYahooSnapshot', () => {
     expect(snap).not.toBeNull();
     const callStrikes = snap!.expiries[0]!.calls.map((q) => q.strike);
     expect(callStrikes).not.toContain(555);
+  });
+});
+
+describe('fetchYahooSnapshot bounded load', () => {
+  const REAL_FETCH = global.fetch;
+  afterEach(() => {
+    global.fetch = REAL_FETCH;
+    vi.useRealTimers();
+  });
+
+  it('aborts a stalled chain route and fails closed instead of hanging forever', async () => {
+    vi.useFakeTimers();
+    invalidateYahooChainCache();
+    // Hanging route with real abort semantics (mirrors undici fetch).
+    global.fetch = vi.fn(
+      (_url: unknown, init?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('The operation was aborted.', 'AbortError')),
+          );
+        }),
+    ) as unknown as typeof fetch;
+    const pending = fetchYahooSnapshot('SPY-HANG-PROBE', 12);
+    // Fire the 100s abort without waiting 100s of wall time.
+    await vi.advanceTimersByTimeAsync(100_001);
+    const result = await pending;
+    expect(result).toBeNull();
   });
 });

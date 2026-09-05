@@ -756,8 +756,13 @@ async function fetchLiveSnapshot(symbol: string, force: boolean) {
     }
     perfMark('live.snapshot.start');
     const snap = await provider.getSnapshot(upper, liveSnapshotCtx(useTerminalStore.getState()));
-    // Drop stale replies (user switched symbol / mode mid-flight).
-    if (gen !== liveFetchGen || useTerminalStore.getState().symbol !== upper) return;
+    // Drop stale replies (user switched symbol / mode mid-flight) — but never
+    // leave the desk gate spinning: the superseding fetch owns the final state,
+    // and if it also dies the gate must still settle.
+    if (gen !== liveFetchGen || useTerminalStore.getState().symbol !== upper) {
+      set({ loading: false });
+      return;
+    }
     if (!snap) {
       // Fail-closed: clear sticky chain state so UI never paints old LIVE surface as current.
       const prev = useTerminalStore.getState();
@@ -853,7 +858,11 @@ async function fetchLiveSnapshot(symbol: string, force: boolean) {
       });
     }
   } catch (err) {
-    if (gen !== liveFetchGen) return;
+    // A superseded fetch still clears a stuck gate; the live fetch owns the rest.
+    if (gen !== liveFetchGen) {
+      set({ loading: false });
+      return;
+    }
     console.error('Failed to fetch live snapshot:', err);
     if (useTerminalStore.getState().activeTab !== 'crypto') {
       toast.error('Live fetch failed', {

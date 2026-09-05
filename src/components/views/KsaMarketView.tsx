@@ -563,7 +563,14 @@ export function KsaMarketView() {
           />
         )}
 
-        {board?.error && board.configured !== false && board.tasi?.index_value == null && !board.stale && (
+        {board?.error === 'subscription_required' && (
+          <EmptyState
+            kind="error"
+            title="Subscription required"
+            body="The KSA desk is gated in this workspace. Billing-disabled public access does not entitle gated desks; unknown entitlement denies access. No account data is shown."
+          />
+        )}
+        {board?.error && board.error !== 'subscription_required' && board.configured !== false && board.tasi?.index_value == null && !board.stale && (
           <EmptyState
             kind="error"
             title={board.code === 'BUDGET' ? 'SAHMK budget exhausted' : 'Board error'}

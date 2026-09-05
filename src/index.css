@@ -755,6 +755,18 @@ main.academy-shell {
   margin-bottom: 20px;
   position: relative;
 }
+/* Desktop density: cap the hero so archive rows surface above the fold.
+   Mobile keeps full 2/1 (short viewport width bounds it naturally). */
+@media (min-width: 1024px) {
+  .academy-featured-cover {
+    aspect-ratio: 21 / 9;
+    max-height: 240px;
+  }
+  .academy-publication .academy-masthead,
+  .academy-root .academy-masthead {
+    padding: 18px 0 12px !important;
+  }
+}
 .academy-featured-cover img {
   display: block;
   width: 100%;

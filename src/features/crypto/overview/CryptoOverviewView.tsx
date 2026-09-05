@@ -37,6 +37,21 @@ export function CryptoOverviewView() {
   const perp = bundle.instruments.find(t => t.kind === 'perp');
   const spot = bundle.indexPrice ?? perp?.markPrice ?? null;
   const now = Date.now();
+  // Recomposition from the already-fetched bundle only — no new requests.
+  // Per-expiry listing depth and top-OI rows are computed client-side.
+  const options = bundle.instruments.filter(t => t.kind === 'option' && t.expiryMs != null && t.expiryMs > now);
+  const expiryGroups = [...new Map(options.map(t => [t.expiryMs as number, true])).keys()]
+    .sort((a, b) => a - b)
+    .slice(0, 8)
+    .map((expiryMs) => ({
+      expiryMs,
+      dte: Math.round((expiryMs - now) / 86_400_000),
+      count: options.filter(t => t.expiryMs === expiryMs).length,
+    }));
+  const topOi = options
+    .filter(t => t.openInterest != null && t.openInterest > 0)
+    .sort((a, b) => (b.openInterest ?? 0) - (a.openInterest ?? 0))
+    .slice(0, 6);
   // Annualization via canonical math — never inline ×1095 in views.
   const fundingAnn = bundle.funding8h != null
     ? toFundingSnapshot('Deribit', 'BTC-PERP', bundle.funding8h, bundle.fetchedAt, {}).simpleAnnualizedRunRate
@@ -58,7 +73,7 @@ export function CryptoOverviewView() {
             ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400" title={`Quotes joined for ${Math.round((bundle.coverage ?? 0) * 100)}% of active catalogue`}>Partial</span>
             : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-400" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()} — quotes joined for ${Math.round((bundle.coverage ?? 0) * 100)}% of active catalogue`}>Observed</span>}
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="rounded border p-3">
           <div className="font-mono text-xs font-bold uppercase">Regime Strip</div>
           <div className="mt-2 font-mono text-xs">
@@ -88,6 +103,28 @@ export function CryptoOverviewView() {
             <div>
               <a className="hover:underline" href="?desk=crypto&view=flow">Flow: live trades →</a>
             </div>
+          </div>
+        </div>
+        <div className="rounded border p-3" data-testid="overview-expiries">
+          <div className="font-mono text-xs font-bold uppercase">Listed expiries</div>
+          <div className="mt-2 font-mono text-xs">
+            {expiryGroups.length > 0 ? expiryGroups.map((g) => (
+              <div key={g.expiryMs} className="flex items-baseline justify-between gap-2">
+                <a className="hover:underline" href="?desk=crypto&view=volatility">{new Date(g.expiryMs).toISOString().slice(0, 10)}</a>
+                <span className="tabular-nums text-muted-foreground">{g.dte}d · {g.count} options</span>
+              </div>
+            )) : <span className="text-muted-foreground">No dated expiries listed — unavailable.</span>}
+          </div>
+        </div>
+        <div className="rounded border p-3" data-testid="overview-top-oi">
+          <div className="font-mono text-xs font-bold uppercase">Top open interest</div>
+          <div className="mt-2 font-mono text-xs">
+            {topOi.length > 0 ? topOi.map((t) => (
+              <div key={t.instrument} className="flex items-baseline justify-between gap-2">
+                <span className="truncate" title={t.instrument}>{t.instrument}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">OI {t.openInterest != null ? t.openInterest.toLocaleString() : '—'}</span>
+              </div>
+            )) : <span className="text-muted-foreground">No reported OI — unavailable, not zero.</span>}
           </div>
         </div>
       </div>

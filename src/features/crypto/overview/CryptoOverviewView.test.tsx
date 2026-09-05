@@ -36,6 +36,34 @@ describe('CryptoOverviewView provider states', () => {
     deribit.mockReturnValue(new Promise(() => {})); free.mockResolvedValue(market([venue])); render(<CryptoOverviewView />);
     await waitFor(() => expect(screen.getByText('Partial')).toBeInTheDocument()); expect(screen.getAllByText(venue).length).toBeGreaterThan(0); expect(screen.queryByText('Binance + Bybit')).not.toBeInTheDocument();
   });
+  it('recomposes expiry depth and top-OI panels from the fetched bundle only', async () => {
+    const now = Date.now();
+    const instruments = [30, 60].flatMap((dte, e) => [59000, 60000, 61000].flatMap((strike, s) => (['call', 'put'] as const).map((right, r) => ({
+      instrument: `BTC-01${e === 0 ? 'JAN' : 'FEB'}26-${strike}-${right === 'call' ? 'C' : 'P'}`,
+      kind: 'option', strike, expiryMs: now + dte * 86_400_000,
+      mark_price: 0.05, openInterest: 100 + e * 50 + s * 10 + r, hasQuote: true,
+    }))));
+    deribit.mockResolvedValue({ ...bundle, instruments });
+    free.mockResolvedValue(market(['Binance Futures', 'Bybit Linear']));
+    render(<CryptoOverviewView />);
+    await waitFor(() => expect(screen.getByTestId('overview-expiries')).toBeInTheDocument());
+    expect(screen.getByTestId('overview-top-oi')).toBeInTheDocument();
+    // 12 options per expiry across 2 expiries, all from the same bundle fetch.
+    expect(deribit).toHaveBeenCalledTimes(1);
+    // Rows render canonical instrument names (contract field `instrument`).
+    expect(screen.getByTestId('overview-top-oi').textContent).toMatch(/BTC-01FEB26-61000-P/);
+    // Required labels survive recomposition.
+    expect(screen.getByText('Free multi-venue snapshot')).toBeInTheDocument();
+    expect(screen.getByText('Public exchange data; free alternative to Velo, not Velo-normalized.')).toBeInTheDocument();
+  });
+  it('shows honest unavailable states instead of zero-filled panels when the bundle is empty', async () => {
+    deribit.mockResolvedValue(bundle);
+    free.mockResolvedValue(market(['Binance Futures', 'Bybit Linear']));
+    render(<CryptoOverviewView />);
+    await waitFor(() => expect(screen.getByTestId('overview-expiries')).toBeInTheDocument());
+    expect(screen.getByText(/No dated expiries listed/)).toBeInTheDocument();
+    expect(screen.getByText(/No reported OI — unavailable, not zero/)).toBeInTheDocument();
+  });
   it('retains the required Velo alternative labels', async () => {
     deribit.mockReturnValue(new Promise(() => {})); free.mockResolvedValue(market(['Binance Futures'])); render(<CryptoOverviewView />);
     await waitFor(() => expect(screen.getByText('Public exchange data; free alternative to Velo, not Velo-normalized.')).toBeInTheDocument());

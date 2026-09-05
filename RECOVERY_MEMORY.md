@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-05T07:35:00Z
+Updated: 2026-09-05T08:00:00Z
 
 Conventions in this file: **Implementation HEAD** is the newest commit that
 changes product/test/config code. **Checkpoint commit** is the docs-only
@@ -30,7 +30,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Implementation HEAD: `8f63eed` (fix(home): feeds strip shares the stale derivation).
+- Implementation HEAD: `0cf60d8` (fix(briefing): server aggregate goes stale on over-age observations).
 - Checkpoint commit: the docs commit carrying this update (see `git log --oneline`; it touches only RECOVERY_MEMORY.md).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
@@ -45,14 +45,13 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
   ledger scroll-region a11y (`a0feac8`), stale-by-age rule (`e84d7cc`),
   briefing freeFallback available flag (`3d99266`), shared
   header/ledger/strip stale derivation (`86bd6c1`, `8f63eed`).
-- `test:e2e:failure-states` at `8f63eed`: 4/4 viewports PASS in 2.1m;
-  40/40 `fail-8f63eed-*` captures carry sidecars, indexed by
-  `docs/recovery-evidence/SCREENSHOT_MANIFEST_8f63eed.json` (axe 0
-  violations, 0 overflow, no non-finite leaks, zero pageErrors in every
-  shot).
-- Full unit suite at `8f63eed`: 160 files / 914 tests PASS twice
-  consecutively; type-check PASS; lint PASS; secrets PASS (standard mode
-  pre-commit every commit).
+- `test:e2e:failure-states` at `0cf60d8`: 4/4 viewports PASS in 2.1m;
+  40/40 `fail-0cf60d8-*` captures carry sidecars, indexed by
+  `docs/recovery-evidence/SCREENSHOT_MANIFEST_0cf60d8.json`.
+- `test:e2e:real-server` at `0cf60d8`: 6/6 PASS in 4.1m; 108/108
+  `real-0cf60d8-*` captures carry sidecars (same manifest). Ten
+  pixel-inspected shots across both gates (not filename-approved).
+- Full unit suite at `0cf60d8`: 160 files / 915 tests PASS; type-check PASS; lint PASS; secrets PASS (standard mode pre-commit every commit); npm audit 0 vulns (both scopes).
 - Residual-defect tranche (this session, on top of `7679606`): derived-only
   BSM terminology (`f3dcd38`), level-guides rename (`c1fd162`), structural
   per-grid provenance (`c30cc1c`), fail-closed bounded reads (`55f6f7c`),
@@ -91,11 +90,17 @@ runs (not filename-approved). Pixel review drove four real fixes this
 tranche: freeFallback available flag, 96h stale-by-age rule, shared
 header/ledger/strip stale derivation, ledger scroll-region a11y.
 
-Latest pixel findings at `8f63eed` (home-partial desktop, inspected):
-Feeds strip, Rates cell header, and ledger agree (Rates stale amber in
-all three; Equities/Deribit/free Live; KSA unavailable; Snapshot
-PARTIAL). Residual minor: ~30% bottom void below the ledger on 900px
-viewports (page scrolls; briefing content itself is now dense).
+Latest pixel findings at `0cf60d8` (both gates, inspected):
+- home-partial desktop: strip/cells/ledger fully agree (PARTIAL; KSA
+  unavailable; everything else LIVE at 0s).
+- home-success desktop (`real-0cf60d8`): Feeds LIVE, KSA populated
+  (TASI 12,150, delayed-truthful), ledger all Live + KSA Delayed.
+  Rates fixture coherence fix confirmed (0s age, LIVE).
+- Server aggregate now carries the 96h age verdict with a
+  stale-observation warning naming the desk; fixture values stay
+  deterministic (only the observation stamp is live, per-run in sidecars).
+- Residual minor: ~30% bottom void below the ledger on 900px viewports;
+  KSA ledger event/age honestly dashed (fixture carries no KSA timestamp).
 
 Earlier findings at `ae15374` still on record: trade-loading post-load
 populated with rendered curves; crypto-partial dense with expiries/top-OI

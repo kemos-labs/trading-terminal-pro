@@ -5,28 +5,38 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei/core/OrbitControls.js';
 import * as THREE from 'three';
 import { CHART_RESOLVED } from '../../lib/chartTheme';
+import { ivRampCss } from '../../lib/options/color';
 import type { SurfaceGrid } from '../../lib/options/types';
 import type { SVIReadout } from '../../lib/options/surfaceTools';
+import {
+  surf3dDomain,
+  surf3dX,
+  surf3dY,
+  surf3dZ,
+  surf3dRampT,
+  surf3dVertexColors,
+  surf3dLegendGradient,
+  SURF3D_PRESET_CAMERA,
+  SURF3D_DEPTH,
+  type Surf3DXMode,
+  type Surf3DPreset,
+} from './surface3dModel';
 
 /**
- * 3D IV surface — lazy-loaded analytical module (Phase 3/4).
+ * 3D IV surface — lazy-loaded analytical module.
  * Loaded ONLY when the user opens the 3D tool (dynamic import from the desk);
  * the initial bundle never pays for three/r3f.
  *
- * Spec rules encoded:
- * - X = strike (or ln-moneyness toggle upstream), Y = DTE, Z = IV in vol points
- *   with an exact unit label.
+ * Restores the richness of the original pre-cleanup surface (shaded solid
+ * mesh with IV color ramp, wireframe toggle, moneyness axis, camera presets,
+ * gradient legend) on top of honest data rules:
  * - Observed nodes render as points; missing observations remain holes (no
  *   interpolation across gaps in the observed layer).
  * - The smooth SVI model mesh is a separate layer, toggleable, labelled Model
  *   (fit params + RMSE + samples), never overwriting observed markers.
- * - ATM ridge line, stable camera presets, exact hover tooltip via 2D overlay,
- *   keyboard-accessible table fallback rendered by the parent.
+ * - ATM ridge line, exact hover tooltip via 2D overlay, keyboard-accessible
+ *   table fallback rendered by the parent.
  */
-
-const WIDTH = 3.6;
-const DEPTH = 2.6;
-const HEIGHT = 1.6;
 
 export interface IvSurface3DProps {
   grid: SurfaceGrid;
@@ -34,6 +44,12 @@ export interface IvSurface3DProps {
   /** Per-expiry SVI model fits (model layer). */
   sviFits: SVIReadout[];
   showModel: boolean;
+  /** Solid shaded mesh (original look) vs wireframe. */
+  solid: boolean;
+  /** Strike axis vs symmetric log-moneyness wings (ATM centered). */
+  xMode: Surf3DXMode;
+  /** Camera preset — applied by remounting with a fresh initial camera. */
+  viewPreset: Surf3DPreset;
   onHover?: (info: { strike: number; dte: number; iv: number | null; source: 'observed' | 'model' | 'missing' } | null) => void;
 }
 
@@ -56,7 +72,7 @@ function IvPoint({
   );
 }
 
-export default function IvSurface3D({ grid, spot, sviFits, showModel, onHover }: IvSurface3DProps) {
+export default function IvSurface3D({ grid, spot, sviFits, showModel, solid, xMode, viewPreset, onHover }: IvSurface3DProps) {
   const colors = useMemo(() => ({
     brand: CHART_RESOLVED.brand,
     up: CHART_RESOLVED.up,
@@ -71,37 +87,15 @@ export default function IvSurface3D({ grid, spot, sviFits, showModel, onHover }:
     background: CHART_RESOLVED.background,
   }), []);
 
-  /** Normalization: X strike → [-W/2, W/2], Y dte → [-D/2, D/2], Z iv → [0, H]. */
-  const norm = useMemo(() => {
-    const strikes = grid.strikes;
-    const dtes = grid.dtes;
-    const kMin = strikes[0] ?? 0;
-    const kMax = strikes[strikes.length - 1] ?? 1;
-    const tMin = dtes[0] ?? 0;
-    const tMax = dtes[dtes.length - 1] ?? 1;
-    let ivLo = Infinity;
-    let ivHi = -Infinity;
-    for (const row of grid.iv) {
-      for (const v of row) {
-        if (v != null && Number.isFinite(v)) {
-          if (v < ivLo) ivLo = v;
-          if (v > ivHi) ivHi = v;
-        }
-      }
-    }
-    if (!Number.isFinite(ivLo)) { ivLo = 0.1; ivHi = 0.5; }
-    return {
-      x: (k: number) => (kMax > kMin ? ((k - kMin) / (kMax - kMin)) * WIDTH - WIDTH / 2 : 0),
-      y: (t: number) => (tMax > tMin ? ((t - tMin) / (tMax - tMin)) * DEPTH - DEPTH / 2 : 0),
-      z: (iv: number) => ((iv - ivLo) / ((ivHi - ivLo) || 1)) * HEIGHT,
-      kMin, kMax, tMin, tMax, ivLo, ivHi,
-    };
-  }, [grid]);
+  const domain = useMemo(
+    () => surf3dDomain(grid.strikes, grid.dtes, grid.iv, spot),
+    [grid, spot],
+  );
+  const X = (strike: number) => surf3dX(strike, spot, domain, xMode);
+  const atmX = xMode === 'moneyness' ? 0 : X(spot);
 
-  const atmX = norm.x(spot);
-
-  /** Model mesh geometry from per-expiry SVI fits (separate layer). */
-  const modelGeometry = useMemo(() => {
+  /** Model mesh geometry + per-vertex IV ramp colors from SVI fits. */
+  const modelLayer = useMemo(() => {
     if (!showModel || !sviFits.length) return null;
     const dteByExpiry = new Map<string, number>();
     grid.expiries.forEach((e, i) => dteByExpiry.set(e, grid.dtes[i] ?? 0));
@@ -112,14 +106,15 @@ export default function IvSurface3D({ grid, spot, sviFits, showModel, onHover }:
 
     const nCols = 40;
     const positions: number[] = [];
+    const ivs: number[] = [];
     const idx: number[] = [];
-    const kLo = Math.log(norm.kMin / spot);
-    const kHi = Math.log(norm.kMax / spot);
+    const kLo = Math.log(domain.kMin / Math.max(spot, 1e-9));
+    const kHi = Math.log(domain.kMax / Math.max(spot, 1e-9));
     for (let r = 0; r < fits.length; r++) {
       const fit = fits[r]!;
       const t = dteByExpiry.get(fit.expiry) ?? 0;
       const T = Math.max(t / 365, 1 / 365);
-      const y = norm.y(t);
+      const y = surf3dY(t, domain);
       for (let c = 0; c < nCols; c++) {
         const k = kLo + ((kHi - kLo) * c) / (nCols - 1);
         const strike = spot * Math.exp(k);
@@ -128,7 +123,8 @@ export default function IvSurface3D({ grid, spot, sviFits, showModel, onHover }:
         const kk = k - m;
         const w = Math.max(0, a + b * (rho * kk + Math.sqrt(kk * kk + sigma * sigma)));
         const iv = Math.sqrt(w / T);
-        positions.push(norm.x(strike), norm.z(iv), y);
+        positions.push(X(strike), surf3dZ(iv, domain), y);
+        ivs.push(iv);
         if (r < fits.length - 1 && c < nCols - 1) {
           const i0 = r * nCols + c;
           idx.push(i0, i0 + 1, i0 + nCols, i0 + 1, i0 + nCols + 1, i0 + nCols);
@@ -137,10 +133,11 @@ export default function IvSurface3D({ grid, spot, sviFits, showModel, onHover }:
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(surf3dVertexColors(ivs, domain), 3));
     geo.setIndex(idx);
     geo.computeVertexNormals();
     return geo;
-  }, [showModel, sviFits, grid, norm, spot]);
+  }, [showModel, sviFits, grid, domain, spot, xMode]);
 
   const observed = useMemo(() => {
     const pts: { x: number; y: number; z: number; strike: number; dte: number; iv: number }[] = [];
@@ -149,18 +146,19 @@ export default function IvSurface3D({ grid, spot, sviFits, showModel, onHover }:
       for (let c = 0; c < grid.strikes.length; c++) {
         const iv = grid.iv[r]?.[c];
         if (iv == null || !Number.isFinite(iv)) continue; // hole stays a hole
+        const strike = grid.strikes[c]!;
         pts.push({
-          x: norm.x(grid.strikes[c]!),
-          y: norm.y(dte),
-          z: norm.z(iv),
-          strike: grid.strikes[c]!,
+          x: X(strike),
+          y: surf3dY(dte, domain),
+          z: surf3dZ(iv, domain),
+          strike,
           dte,
           iv,
         });
       }
     }
     return pts;
-  }, [grid, norm]);
+  }, [grid, domain, spot, xMode]);
 
   /** ATM ridge from observed nearest-strike nodes. */
   const atmRidge = useMemo(() => {
@@ -174,32 +172,36 @@ export default function IvSurface3D({ grid, spot, sviFits, showModel, onHover }:
         if (iv == null || !Number.isFinite(iv)) continue;
         if (!best || Math.abs(k - spot) < Math.abs(best.strike - spot)) best = { iv, strike: k };
       }
-      if (best) pts.push({ x: norm.x(best.strike), y: norm.y(dte), z: norm.z(best.iv) });
+      if (best) pts.push({ x: X(best.strike), y: surf3dY(dte, domain), z: surf3dZ(best.iv, domain) });
     }
     return pts;
-  }, [grid, norm, spot]);
+  }, [grid, domain, spot, xMode]);
 
   const ivTicks = useMemo(
-    () => [0, 0.25, 0.5, 0.75, 1].map((t) => norm.ivLo + t * (norm.ivHi - norm.ivLo)),
-    [norm],
+    () => [0, 0.25, 0.5, 0.75, 1].map((t) => domain.ivLo + t * (domain.ivHi - domain.ivLo)),
+    [domain],
   );
+
+  const camera = SURF3D_PRESET_CAMERA[viewPreset] ?? SURF3D_PRESET_CAMERA.home;
 
   return (
     <div className="relative h-full min-h-[320px] w-full" data-testid="iv-surface-3d">
-      <Canvas camera={{ position: [3.2, 2.4, 4.2], fov: 42 }} dpr={[1, 2]} gl={{ antialias: true }} onCreated={({ gl }) => gl.setClearColor('#0a0e18')}>
+      <Canvas camera={{ position: camera, fov: 42 }} dpr={[1, 2]} gl={{ antialias: true }} onCreated={({ gl }) => gl.setClearColor('#0a0e18')}>
         <color attach="background" args={[colors.background]} />
-        {/* Stable camera presets handled by parent buttons adjusting OrbitControls via ref */}
         <OrbitControls enableDamping dampingFactor={0.08} />
-        <gridHelper args={[Math.max(WIDTH, DEPTH) * 1.2, 10, colors.grid, colors.gridMinor]} />
+        {/* Lighting for the shaded solid mesh (original look). */}
+        <ambientLight intensity={0.55} />
+        <directionalLight position={[4, 6, 3]} intensity={1.1} />
+        <gridHelper args={[Math.max(3.6, SURF3D_DEPTH) * 1.2, 10, colors.grid, colors.gridMinor]} />
 
-        {/* Observed nodes — holes remain holes */}
+        {/* Observed nodes, IV-tinted — holes remain holes */}
         {observed.map((p, i) => (
           <IvPoint
             key={i}
             x={p.x}
             y={p.y}
             z={p.z}
-            color={colors.foreground}
+            color={ivRampCss(surf3dRampT(p.iv, domain))}
             onHover={(info) => onHover?.(info)}
             info={{ strike: p.strike, dte: p.dte, iv: p.iv, source: 'observed' }}
           />
@@ -214,13 +216,25 @@ export default function IvSurface3D({ grid, spot, sviFits, showModel, onHover }:
         ))}
         {/* ATM reference — thin floor strip at the base (reads as a line, not a wall). */}
         <mesh position={[atmX, 0.002, 0]}>
-          <boxGeometry args={[0.012, 0.004, DEPTH]} />
+          <boxGeometry args={[0.012, 0.004, SURF3D_DEPTH]} />
           <meshBasicMaterial color={colors.brand} transparent opacity={0.8} />
         </mesh>
 
         {/* Model mesh — separate toggleable layer (SVI fit) */}
-        {modelGeometry && (
-          <mesh geometry={modelGeometry}>
+        {modelLayer && solid && (
+          <mesh geometry={modelLayer}>
+            <meshStandardMaterial
+              vertexColors
+              side={THREE.DoubleSide}
+              transparent
+              opacity={0.92}
+              roughness={0.55}
+              metalness={0.08}
+            />
+          </mesh>
+        )}
+        {modelLayer && !solid && (
+          <mesh geometry={modelLayer}>
             <meshBasicMaterial
               color={colors.warn}
               wireframe
@@ -231,9 +245,11 @@ export default function IvSurface3D({ grid, spot, sviFits, showModel, onHover }:
         )}
       </Canvas>
 
-      {/* 2D overlay: axis titles, Z ticks, legend — DOM, not canvas (accessible + exact) */}
+      {/* 2D overlay: axis titles, Z ticks, gradient legend — DOM, not canvas (accessible + exact) */}
       <div className="pointer-events-none absolute inset-0 font-mono text-type-2xs text-muted-foreground">
-        <span className="absolute bottom-1 left-1/2 -translate-x-1/2">Strike →</span>
+        <span className="absolute bottom-1 left-1/2 -translate-x-1/2">
+          {xMode === 'moneyness' ? 'ln(K/F) →' : 'Strike →'}
+        </span>
         <span className="absolute right-1 top-1/2 -translate-y-1/2 rotate-90">DTE →</span>
         <div className="absolute left-1 top-2 flex flex-col gap-0.5">
           <span className="font-semibold text-foreground">IV (vol, %)</span>
@@ -241,9 +257,21 @@ export default function IvSurface3D({ grid, spot, sviFits, showModel, onHover }:
             <span key={v} className="tabular-nums">{(v * 100).toFixed(1)}</span>
           ))}
         </div>
-        <span className="absolute left-1 bottom-1 flex items-center gap-2">
-          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: colors.foreground }} aria-hidden />
-          observed
+        <div className="absolute bottom-1 right-1 flex flex-col items-end gap-0.5">
+          <div className="flex w-36 justify-between tabular-nums">
+            <span>{(domain.ivLo * 100).toFixed(1)}%</span>
+            <span>IV</span>
+            <span>{(domain.ivHi * 100).toFixed(1)}%</span>
+          </div>
+          <div
+            className="h-2 w-36 rounded"
+            style={{ background: `linear-gradient(to right, ${surf3dLegendGradient()})` }}
+            role="img"
+            aria-label={`IV color ramp ${(domain.ivLo * 100).toFixed(1)} to ${(domain.ivHi * 100).toFixed(1)} percent`}
+          />
+        </div>
+        <span className="absolute bottom-1 left-1 flex items-center gap-2">
+          <span className="text-muted-foreground">nodes tinted by IV</span>
           {showModel && (
             <>
               <span className="inline-block h-px w-4" style={{ background: colors.rate }} aria-hidden />

@@ -1,6 +1,6 @@
 # Full-application recovery continuity memory
 
-Updated: 2026-09-03T16:10:00Z
+Updated: 2026-09-04T10:00:00Z
 
 Conventions in this file: **Implementation HEAD** is the newest commit that
 changes product/test/config code. **Checkpoint commit** is the docs-only
@@ -30,12 +30,19 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Implementation HEAD: `ba36bc9` (docs(evidence): final-HEAD screenshot manifest with sidecars and pixel stats).
-- Last code change: `3c3612e` (feat(e2e): per-screenshot sidecars plus manifest collector). `ba36bc9` adds only the generated manifest JSON.
+- Implementation HEAD: `03698d6` (docs(evidence): failure-state screenshot manifests).
 - Checkpoint commit: the docs commit carrying this update (see `git log --oneline`; it touches only RECOVERY_MEMORY.md).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.
 - Recovery verdict: **FAIL — recovery in progress**.
+- A-tranche (on top of `a089e2d`): crypto overview recomposition
+  (`1bd1133`), failure-state fixture scenarios + gate (`2f94808`), Home
+  feeds aggregate + chain agreement (`b92ae52`), unattempted-vs-down
+  terminal freshness (`e733934`), PnL definite heights + no-history states
+  (`0b88d9e`), KSA entitlement panel + Academy density (`ca3afa0`),
+  failure-state manifests (`03698d6`).
+- Full unit suite at `03698d6`: 160 files / 907 tests PASS (first run;
+  second run plus type-check/lint/secrets/audits still required for C8).
 - Residual-defect tranche (this session, on top of `7679606`): derived-only
   BSM terminology (`f3dcd38`), level-guides rename (`c1fd162`), structural
   per-grid provenance (`c30cc1c`), fail-closed bounded reads (`55f6f7c`),
@@ -65,7 +72,16 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current in-progress concern
 
-No dirty implementation tranche exists at this checkpoint. Starting HEAD for this session was `4d979fc` (checkpoint RatesPanel id fix and canonical C6 green). Session commits since then:
+P1-15 representative failure-state gate (10 steps x 4 viewports, committed as
+`e2e/failure-states.spec.ts` + `playwright.failure-states.config.ts`). Prior
+`fail-a089e2d-*` captures (148 with sidecars) ran against pre-commit dirty
+code, so they are stale as HEAD evidence: the gate must be re-run at the
+current HEAD and its pixels inspected before P1-15 can close. P1-16 layout
+fixes for the confirmed defects (Home dead space via content-sized launcher
+row, Trade PnL blank principals via definite heights + unavailable states,
+Crypto dead space via expiry/top-OI recomposition, contradictory badges via
+unattempted-vs-down freshness) are implemented with behavior tests but await
+final-HEAD screenshot pixel review.
 
 - `5671143` fix(greeks-3d): diverging ramp sign + wireframe holes + golden tests (P0-4, P0-5).
 - `4763af5` fix(greeks): missing OI nullability + price provenance (P0-2, P0-3) with Python golden tests.

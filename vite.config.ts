@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -36,8 +37,20 @@ function serveAcademyDocs(): Plugin {
   };
 }
 
+function appVersion(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8', timeout: 5000 }).trim() || 'dev';
+  } catch {
+    return 'dev';
+  }
+}
+
 export default defineConfig({
   plugins: [react(), tailwindcss(), serveAcademyDocs()],
+  // Build stamp: lets any open tab prove which code it runs (stale-tab diagnosis).
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion()),
+  },
   server: {
     port: Number(process.env.VITE_PORT) || 3000,
     proxy: {

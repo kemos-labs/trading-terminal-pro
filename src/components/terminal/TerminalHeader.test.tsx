@@ -122,8 +122,7 @@ describe('TerminalHeader', () => {
     expect(screen.getByLabelText('Data freshness: down')).toBeTruthy();
   });
 
-  it('calls onOpenShortcuts when keyboard button is clicked', () => {
-    useTerminalStore.setState({
+  it('calls onOpenShortcuts when keyboard button is clicked', () => {    useTerminalStore.setState({
       symbol: 'SPY',
       source: 'live',
       loading: false,
@@ -141,6 +140,27 @@ describe('TerminalHeader', () => {
     render(<TerminalHeader onOpenShortcuts={onOpenShortcuts} />);
     fireEvent.click(screen.getByTitle('Shortcuts (?)'));
     expect(onOpenShortcuts).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the build stamp so any tab can prove which code it runs', () => {
+    useTerminalStore.setState({
+      symbol: 'SPY',
+      source: 'live',
+      loading: false,
+      fmpQuote: null,
+      liveRFR: null,
+      snapshot: null,
+      chainAvailable: false,
+      chainUsed: 'none',
+      spotSource: 'none',
+      lastSpotUpdate: 0,
+      lastChainUpdate: 0,
+      provenance: { ...EMPTY_PROVENANCE },
+    });
+    render(<TerminalHeader />);
+    // Baked by Vite (git short hash) or 'dev' fallback — never blank.
+    const stamp = screen.getByTitle(/App build/);
+    expect(stamp.textContent).toMatch(/^v(dev|[0-9a-f]+)$/);
   });
 
   it('shows FMP spot in compact header (company name omitted for space)', () => {

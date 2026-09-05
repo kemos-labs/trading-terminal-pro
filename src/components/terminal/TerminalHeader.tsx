@@ -5,6 +5,9 @@ import { fmtPrice, fmtClock, fmtTime, fmtPct } from '../../lib/format';
 import { SymbolDialog } from './SymbolDialog';
 import { BillingDialog } from './BillingDialog';
 import { FreshnessChip } from '../common/Freshness';
+
+/** Build stamp baked by Vite (git short hash) — proves which code a tab runs. */
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 import {
   kindFromProvenance,
   worstFreshnessKind,
@@ -262,6 +265,12 @@ export function TerminalHeader({ onOpenShortcuts }: TerminalHeaderProps) {
             title={dataTitle}
             aria-label={`Data freshness: ${summaryKind}`}
           />
+          <span
+            className="hidden text-type-2xs tabular-nums text-muted-foreground/50 md:inline"
+            title={`App build ${APP_VERSION} — if this hash is older than the latest commit, hard-refresh for current code`}
+          >
+            v{APP_VERSION}
+          </span>
           <span className="hidden text-muted-foreground/70 xl:inline" title="Hotkeys">
             1–5 · [ ] · R · S · D · ?
           </span>

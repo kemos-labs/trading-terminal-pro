@@ -50,6 +50,8 @@ export function TerminalHeader({ onOpenShortcuts }: TerminalHeaderProps) {
     liveRFR,
     chainUsed,
     chainAvailable,
+    chainAttempted,
+    spotAttempted,
     spotSource,
     lastUpdate,
     lastSpotUpdate,
@@ -84,17 +86,25 @@ export function TerminalHeader({ onOpenShortcuts }: TerminalHeaderProps) {
 
   const spotMissing = spotSource === 'none';
   const chainMissing = !chainAvailable || chainUsed === 'none';
+  // Unattempted reads as unknown ('—'), never API DOWN: a feed that was never
+  // fetched is not a failed feed. Any path that delivered data implies attempt.
+  // An in-flight first load is loading, not down (the spinner already shows).
+  const spotTried =
+    (spotAttempted || spotSource !== 'none' || lastSpotUpdate > 0) && !loading;
+  const chainTried =
+    (chainAttempted || chainUsed !== 'none' || lastChainUpdate > 0 || snapshot != null) &&
+    !loading;
   const spotKind = kindFromProvenance(
     provenance.spot?.kind,
     provenance.spot?.asOfMs ?? (lastSpotUpdate > 0 ? lastSpotUpdate : null),
     'spot',
-    { demo: false, down: spotMissing },
+    { demo: false, down: spotMissing && spotTried },
   );
   const chainKind = kindFromProvenance(
     provenance.chain?.kind,
     provenance.chain?.asOfMs ?? (lastChainUpdate > 0 ? lastChainUpdate : null),
     'chain',
-    { demo: false, down: chainMissing },
+    { demo: false, down: chainMissing && chainTried },
   );
   const summaryKind = worstFreshnessKind(spotKind, chainKind);
   const streamKind: FreshnessKind = streamConnected ? 'live' : 'unknown';

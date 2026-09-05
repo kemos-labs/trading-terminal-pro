@@ -15,6 +15,8 @@ describe('TerminalHeader', () => {
       liveRFR: null,
       snapshot: null,
       chainAvailable: false,
+      chainAttempted: true,
+      spotAttempted: true,
       chainUsed: 'none',
       spotSource: 'none',
       lastSpotUpdate: 0,
@@ -40,6 +42,51 @@ describe('TerminalHeader', () => {
     expect(screen.queryByText('DEMO')).toBeNull();
   });
 
+  it('unattempted feeds read unknown, never API DOWN', () => {
+    useTerminalStore.setState({
+      symbol: 'SPY',
+      source: 'live',
+      loading: false,
+      fmpQuote: null,
+      liveRFR: null,
+      snapshot: null,
+      chainAvailable: false,
+      chainAttempted: false,
+      spotAttempted: false,
+      chainUsed: 'none',
+      spotSource: 'none',
+      lastSpotUpdate: 0,
+      lastChainUpdate: 0,
+      provenance: { ...EMPTY_PROVENANCE },
+    });
+    render(<TerminalHeader />);
+    // A feed that was never fetched is not a failed feed.
+    expect(screen.queryByText('API DOWN')).toBeNull();
+    expect(screen.getByLabelText('Data freshness: unknown')).toBeTruthy();
+  });
+
+  it('in-flight first load reads unknown, never API DOWN', () => {
+    useTerminalStore.setState({
+      symbol: 'SPY',
+      source: 'live',
+      loading: true,
+      fmpQuote: null,
+      liveRFR: null,
+      snapshot: null,
+      chainAvailable: false,
+      chainAttempted: true,
+      spotAttempted: true,
+      chainUsed: 'none',
+      spotSource: 'none',
+      lastSpotUpdate: 0,
+      lastChainUpdate: 0,
+      provenance: { ...EMPTY_PROVENANCE },
+    });
+    render(<TerminalHeader />);
+    expect(screen.queryByText('API DOWN')).toBeNull();
+    expect(screen.getByLabelText('Data freshness: unknown')).toBeTruthy();
+  });
+
   it('data summary is worst of live spot + missing chain (never greener than StatusBar)', () => {
     const now = Date.now();
     useTerminalStore.setState({
@@ -50,6 +97,8 @@ describe('TerminalHeader', () => {
       liveRFR: null,
       snapshot: null,
       chainAvailable: false,
+      chainAttempted: true,
+      spotAttempted: true,
       chainUsed: 'none',
       spotSource: 'fmp',
       lastSpotUpdate: now,

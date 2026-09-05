@@ -93,6 +93,7 @@ export function useSpotStream(symbol: string, enabled: boolean) {
           lastSpotUpdate: now,
           lastUpdate: now,
           spotSource: 'fmp',
+          spotAttempted: true,
           streamConnected: true,
         });
 

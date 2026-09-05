@@ -124,6 +124,10 @@ interface TerminalStore {
   fmpEarnings: FmpEarnings[] | null;
   /** Whether the live surface used a real option chain. */
   chainAvailable: boolean;
+  /** True once a chain load has been attempted (success or fail). Unattempted reads as unknown, never down. */
+  chainAttempted: boolean;
+  /** True once a spot fetch has been attempted (success or fail). Unattempted reads as unknown, never down. */
+  spotAttempted: boolean;
   /** Where the live spot came from (`none` = no real print yet). */
   spotSource: 'fmp' | 'yfinance' | 'deribit' | 'none';
   /** Which source actually served the chain (`none` = unavailable). */
@@ -232,6 +236,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   fmpHistory: null,
   fmpEarnings: null,
   chainAvailable: false,
+  chainAttempted: false,
+  spotAttempted: false,
   spotSource: 'none',
   chainUsed: 'none',
   historySource: 'none',
@@ -324,6 +330,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       historyMode: 'live',
       boardFocus: { boardId: null, rowIndex: 0, colKey: null },
       chainAvailable: false,
+      chainAttempted: false,
+      spotAttempted: false,
       chainUsed: 'none',
       spotSource: 'none',
       fundingAnn: null,
@@ -502,6 +510,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
     // When SSE is connected, skip poll-based spot (stream owns lastSpotUpdate).
     if (needSpot && !state.streamConnected && state.spotSource !== 'yfinance') {
+      set({ spotAttempted: true });
       const spotSym = state.symbol.toUpperCase();
       try {
         const quotes = await fetchFmpQuote(state.symbol);
@@ -736,6 +745,8 @@ async function fetchLiveSnapshot(symbol: string, force: boolean) {
   const provider = getProvider('live') as LiveProvider;
   const gen = ++liveFetchGen;
   const upper = symbol.toUpperCase();
+  // A load is now in flight: freshness may read down on failure, never before.
+  set({ chainAttempted: true });
   try {
     if (force) {
       invalidateYahooChainCache();
@@ -877,6 +888,7 @@ async function fetchLiveSnapshot(symbol: string, force: boolean) {
  */
 async function fetchLiveEnrichment(symbol: string) {
   const set = useTerminalStore.setState;
+  set({ spotAttempted: true });
   const upper = symbol.toUpperCase();
   // Capture gen at start — late enrichment must not clobber a newer symbol/chain.
   const gen = liveFetchGen;

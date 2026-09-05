@@ -24,6 +24,9 @@ export function StatusBar() {
     chainUsed,
     spotSource,
     chainAvailable,
+    chainAttempted,
+    spotAttempted,
+    loading,
     session,
     streamConnected,
     historyMode,
@@ -57,18 +60,24 @@ export function StatusBar() {
 
   const spotMissing = spotSource === 'none';
   const chainMissing = !chainAvailable || chainUsed === 'none';
-
+  // Unattempted reads as unknown ('—'), never API DOWN (same rule as header).
+  // An in-flight first load is loading, not down.
+  const spotTried =
+    (spotAttempted || spotSource !== 'none' || lastSpotUpdate > 0) && !loading;
+  const chainTried =
+    (chainAttempted || chainUsed !== 'none' || lastChainUpdate > 0 || snapshot != null) &&
+    !loading;
   const spotKind = kindFromProvenance(
     provenance.spot?.kind,
     provenance.spot?.asOfMs ?? (lastSpotUpdate > 0 ? lastSpotUpdate : null),
     'spot',
-    { demo: false, down: spotMissing },
+    { demo: false, down: spotMissing && spotTried },
   );
   const chainKind = kindFromProvenance(
     provenance.chain?.kind,
     provenance.chain?.asOfMs ?? (lastChainUpdate > 0 ? lastChainUpdate : null),
     'chain',
-    { demo: false, down: chainMissing },
+    { demo: false, down: chainMissing && chainTried },
   );
 
   const streamKind: FreshnessKind = streamConnected ? 'live' : 'unknown';

@@ -175,6 +175,18 @@ describe('HomeBriefing freshness ledger (P1-16)', () => {
     expect(ratesRow).toMatch(/102h/);
   });
 
+  it('shares the stale verdict between the Rates cell header and the ledger', async () => {
+    const oldIso = new Date(Date.now() - 102 * 3600_000).toISOString();
+    mockBriefing(briefing({
+      rates: { available: true, provider: 'macrovol(fred)', sofr: 4.53, effr: 4.32, usy2: 4.25, usy10: 4.55, spread_2s10s_bps: 30, asOf: oldIso },
+    }));
+    render(<HomeBriefing />);
+    await waitFor(() => expect(screen.getByTestId('home-cell-rates')).toBeInTheDocument());
+    const header = screen.getByTestId('home-cell-rates').querySelector('header')?.textContent ?? '';
+    expect(header).toMatch(/stale/);
+    expect(header).not.toMatch(/delayed/);
+  });
+
   it('ledger scroll region is keyboard-focusable (WCAG 2.1.1, axe scrollable-region-focusable)', async () => {
     mockBriefing(briefing({}));
     render(<HomeBriefing />);
@@ -195,8 +207,7 @@ describe('HomeBriefing freshness ledger (P1-16)', () => {
     expect(ledger).toMatch(/unavailable/);
   });
 
-  it('labels a Deribit-down free-fallback crypto cell honestly (never unavailable)', async () => {
-    mockBriefing(briefing({
+  it('labels a Deribit-down free-fallback crypto cell honestly (never unavailable)', async () => {    mockBriefing(briefing({
       crypto: {
         available: false, provider: 'deribit', indexPrice: null, funding8h: null, optionCount: null, asOf: null,
         freeFallback: { available: true, reason: 'partial', provider: 'binance+bybit', asOf: 1788300000000 },

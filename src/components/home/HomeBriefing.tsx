@@ -64,21 +64,22 @@ function sessionNow(): string {
   return 'Off-hours';
 }
 
-/** Three-state feed health: live (green), degraded/delayed (amber), unavailable (red). */
-type FeedState = 'live' | 'degraded' | 'unavailable';
+/** Three-state feed health: live (green), degraded/delayed/stale (amber), unavailable (red). */
+type FeedState = 'live' | 'degraded' | 'stale' | 'unavailable';
 
 const DOT: Record<FeedState, string> = {
   live: 'bg-up',
   degraded: 'bg-amber',
+  stale: 'bg-amber',
   unavailable: 'bg-down/70',
 };
 
 function DeskCell({
-  label, provider, available, asOf, children, testId, degraded = false, degradedNote = 'delayed',
+  label, provider, available, asOf, children, testId, degraded = false, degradedNote = 'delayed', stale = false,
 }: {
-  label: string; provider: string; available: boolean; asOf: string | number | null; children: React.ReactNode; testId?: string; degraded?: boolean; degradedNote?: string;
+  label: string; provider: string; available: boolean; asOf: string | number | null; children: React.ReactNode; testId?: string; degraded?: boolean; degradedNote?: string; stale?: boolean;
 }) {
-  const state: FeedState = available ? (degraded ? 'degraded' : 'live') : 'unavailable';
+  const state: FeedState = !available ? 'unavailable' : stale ? 'stale' : degraded ? 'degraded' : 'live';
   const asOfLabel = asOf != null
     ? new Date(typeof asOf === 'number' ? asOf : asOf).toISOString().slice(11, 19) + 'Z'
     : null;
@@ -92,8 +93,8 @@ function DeskCell({
         <span className="font-bold tracking-wider text-foreground">{label}</span>
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <span className={cn('h-1.5 w-1.5 rounded-full', DOT[state])} aria-hidden />
-          <span className={state === 'degraded' ? 'text-amber' : undefined}>
-            {state === 'live' ? provider : state === 'degraded' ? `${provider} · ${degradedNote}` : 'unavailable'}
+          <span className={state === 'degraded' || state === 'stale' ? 'text-amber' : undefined}>
+            {state === 'live' ? provider : state === 'degraded' ? `${provider} · ${degradedNote}` : state === 'stale' ? `${provider} · stale` : 'unavailable'}
           </span>
           {asOfLabel && <span title="observation time">· {asOfLabel}</span>}
         </span>
@@ -144,6 +145,25 @@ function fmtAge(v: string | number | null | undefined, nowMs: number): string {
   return `${Math.round(s / 3600)}h`;
 }
 
+// Event-age stale rule: an available feed whose observation is older than
+// four days is labelled stale, never live — even daily FRED lags never
+// legitimately exceed this (a Friday print read on Tuesday is 96h and is
+// genuinely the latest available, so the bound is inclusive). Desk cells
+// and the freshness ledger share this single derivation.
+const STALE_AFTER_MS = 96 * 3600_000;
+type LedgerState = 'live' | 'delayed' | 'partial' | 'stale' | 'unavailable';
+function deskEventMs(v: string | number | null | undefined): number | null {
+  if (v == null) return null;
+  const ms = typeof v === 'number' ? v : Date.parse(v);
+  return Number.isFinite(ms) ? ms : null;
+}
+function deskState(available: boolean, event: string | number | null | undefined, fresh: LedgerState, nowMs: number): LedgerState {
+  if (!available) return 'unavailable';
+  const ms = deskEventMs(event);
+  if (ms != null && nowMs - ms > STALE_AFTER_MS) return 'stale';
+  return fresh;
+}
+
 export function HomeBriefing() {
   const symbol = useTerminalStore((s) => s.symbol);
   // Terminal live-chain state, for agreement with the briefing snapshot:
@@ -192,6 +212,16 @@ export function HomeBriefing() {
   const eqSnapshotOk = !!d?.equities.available;
   const chainDisagreeDown = eqSnapshotOk && chainKnownDown;
   const chainDisagreeUp = !eqSnapshotOk && chainKnownUp;
+
+  // Cell headers share the ledger's stale derivation: an available feed with
+  // a four-day-old observation reads stale in the header too, never live.
+  const nowMs = Date.now();
+  const eqStale = deskState(!!d?.equities.available, d?.equities.asOf, 'live', nowMs) === 'stale';
+  const ratesStale = deskState(!!d?.rates.available, d?.rates.asOf, 'live', nowMs) === 'stale';
+  const cryptoShownStale = d?.crypto.available
+    ? deskState(true, d.crypto.asOf, 'live', nowMs) === 'stale'
+    : deskState(!!d?.crypto.freeFallback.available, d?.crypto.freeFallback.asOf, 'live', nowMs) === 'stale';
+  const ksaStale = deskState(!!d?.ksa.available, d?.ksa.asOf, 'delayed', nowMs) === 'stale';
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-3" data-testid="home-briefing">
@@ -246,7 +276,7 @@ export function HomeBriefing() {
 
       {/* Desk snapshot grid */}
       <div className="grid min-h-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
-        <DeskCell label="Volatility" provider={d?.equities.provider ?? '—'} available={!!d?.equities.available} asOf={d?.equities.asOf ?? null} testId="home-cell-vol">
+        <DeskCell label="Volatility" provider={d?.equities.provider ?? '—'} available={!!d?.equities.available} stale={eqStale} asOf={d?.equities.asOf ?? null} testId="home-cell-vol">
           {d?.equities.available ? (
             <>
               <Row k={d.equities.symbol} v={fmtPrice(d.equities.price)} />
@@ -276,7 +306,7 @@ export function HomeBriefing() {
           )}
         </DeskCell>
 
-        <DeskCell label="Positioning" provider="derivatives" available={!!d?.equities.available} asOf={d?.equities.asOf ?? null} testId="home-cell-positioning">
+        <DeskCell label="Positioning" provider="derivatives" available={!!d?.equities.available} stale={eqStale} asOf={d?.equities.asOf ?? null} testId="home-cell-positioning">
           {d?.equities.available ? (
             <>
               <p className="text-muted-foreground">
@@ -293,7 +323,7 @@ export function HomeBriefing() {
           )}
         </DeskCell>
 
-        <DeskCell label="Rates" provider={d?.rates.provider ?? '—'} available={!!d?.rates.available} asOf={d?.rates.asOf ?? null} testId="home-cell-rates">
+        <DeskCell label="Rates" provider={d?.rates.provider ?? '—'} available={!!d?.rates.available} stale={ratesStale} asOf={d?.rates.asOf ?? null} testId="home-cell-rates">
           {d?.rates.available ? (
             <>
               <Row k="SOFR" v={fmtPct(d.rates.sofr)} />
@@ -313,6 +343,7 @@ export function HomeBriefing() {
           available={!!d?.crypto.available || !!d?.crypto.freeFallback.available}
           degraded={!d?.crypto.available && !!d?.crypto.freeFallback.available}
           degradedNote="free fallback"
+          stale={cryptoShownStale}
           asOf={d?.crypto.available ? (d?.crypto.asOf ?? null) : (d?.crypto.freeFallback.asOf ?? null)}
           testId="home-cell-crypto"
         >
@@ -337,7 +368,7 @@ export function HomeBriefing() {
           the desktop dead space. The freshness ledger below fills the
           remaining viewport with real provenance instead. */}
       <div className="grid min-h-0 grid-cols-1 gap-2 lg:grid-cols-3">
-        <DeskCell label="KSA (Tadawul)" provider={d?.ksa.provider ?? '—'} available={!!d?.ksa.available} degraded={!!d?.ksa.available} asOf={d?.ksa.asOf ?? null} testId="home-cell-ksa">
+        <DeskCell label="KSA (Tadawul)" provider={d?.ksa.provider ?? '—'} available={!!d?.ksa.available} degraded={!!d?.ksa.available && !ksaStale} stale={ksaStale} asOf={d?.ksa.asOf ?? null} testId="home-cell-ksa">
           {d?.ksa.available ? (
             <>
               <Row k="TASI" v={fmtPrice(d.ksa.tasi, 2)} />
@@ -392,8 +423,6 @@ export function HomeBriefing() {
   );
 }
 
-type LedgerState = 'live' | 'delayed' | 'partial' | 'stale' | 'unavailable';
-
 const LEDGER_DOT: Record<LedgerState, string> = {
   live: 'bg-up',
   delayed: 'bg-amber',
@@ -413,23 +442,6 @@ function FreshnessLedger({
   const d = briefing?.desks;
   const agg: LedgerState =
     briefing?.stale ? 'stale' : ((briefing?.freshness?.state ?? 'unavailable') as LedgerState);
-  // Event-age stale rule: an available feed whose observation is older than
-  // four days is labelled stale, never live — even daily FRED lags never
-  // legitimately exceed this (a Friday print read on Tuesday is 96h and is
-  // genuinely the latest available, so the bound is inclusive). The Age
-  // column always shows the exact lag; this rule only fixes the badge.
-  const STALE_AFTER_MS = 96 * 3600_000;
-  const eventMs = (v: string | number | null | undefined): number | null => {
-    if (v == null) return null;
-    const ms = typeof v === 'number' ? v : Date.parse(v);
-    return Number.isFinite(ms) ? ms : null;
-  };
-  const deskState = (available: boolean, event: string | number | null | undefined, fresh: LedgerState): LedgerState => {
-    if (!available) return 'unavailable';
-    const ms = eventMs(event);
-    if (ms != null && nowMs - ms > STALE_AFTER_MS) return 'stale';
-    return fresh;
-  };
   const rows: { desk: string; provider: string; event: string | number | null; state: LedgerState }[] = d
     ? [
         {
@@ -438,16 +450,16 @@ function FreshnessLedger({
           event: briefing?.asOf ?? null,
           state: agg,
         },
-        { desk: 'Equities', provider: d.equities.provider, event: d.equities.asOf, state: deskState(d.equities.available, d.equities.asOf, 'live') },
-        { desk: 'Rates', provider: d.rates.provider, event: d.rates.asOf, state: deskState(d.rates.available, d.rates.asOf, 'live') },
-        { desk: 'Crypto (Deribit)', provider: d.crypto.provider, event: d.crypto.asOf, state: deskState(d.crypto.available, d.crypto.asOf, 'live') },
+        { desk: 'Equities', provider: d.equities.provider, event: d.equities.asOf, state: deskState(d.equities.available, d.equities.asOf, 'live', nowMs) },
+        { desk: 'Rates', provider: d.rates.provider, event: d.rates.asOf, state: deskState(d.rates.available, d.rates.asOf, 'live', nowMs) },
+        { desk: 'Crypto (Deribit)', provider: d.crypto.provider, event: d.crypto.asOf, state: deskState(d.crypto.available, d.crypto.asOf, 'live', nowMs) },
         {
           desk: 'Crypto (free)',
           provider: d.crypto.freeFallback.provider,
           event: d.crypto.freeFallback.asOf ?? null,
-          state: deskState(d.crypto.freeFallback.available, d.crypto.freeFallback.asOf, 'live'),
+          state: deskState(d.crypto.freeFallback.available, d.crypto.freeFallback.asOf, 'live', nowMs),
         },
-        { desk: 'KSA', provider: d.ksa.provider, event: d.ksa.asOf, state: deskState(d.ksa.available, d.ksa.asOf, 'delayed') },
+        { desk: 'KSA', provider: d.ksa.provider, event: d.ksa.asOf, state: deskState(d.ksa.available, d.ksa.asOf, 'delayed', nowMs) },
       ]
     : [];
   return (

@@ -38,6 +38,7 @@ import {
   type SurfaceUpdatePath,
 } from '../lib/options/surfaceMetrics';
 import { prefetchGreeks, invalidateGreeksCache } from '../lib/macrovol/greeksCache';
+import { withTimeout } from '../lib/withTimeout';
 import { startVisibilityPolling } from '../lib/polling/visibilityPolling';
 
 function processSurface(surface: SurfaceGrid, spot: number) {
@@ -755,7 +756,15 @@ async function fetchLiveSnapshot(symbol: string, force: boolean) {
       invalidateGreeksCache(upper);
     }
     perfMark('live.snapshot.start');
-    const snap = await provider.getSnapshot(upper, liveSnapshotCtx(useTerminalStore.getState()));
+    // Backstop for the whole chain build: FMP spot, yfinance history, Deribit,
+    // and the v1 proxy each await upstream without their own timeout. If any
+    // of them stalls, the race resolves null and the existing fail-closed
+    // path below clears the gate — no dependency can trap it forever.
+    const snap = await withTimeout(
+      provider.getSnapshot(upper, liveSnapshotCtx(useTerminalStore.getState())),
+      100_000,
+      null,
+    );
     // Drop stale replies (user switched symbol / mode mid-flight) — but never
     // leave the desk gate spinning: the superseding fetch owns the final state,
     // and if it also dies the gate must still settle.

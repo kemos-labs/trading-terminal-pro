@@ -46,11 +46,57 @@ function optionChain(symbol = 'SPY') {
   return { symbol, spot, expirations, quotes, timestamp: FIXED_NOW };
 }
 
+/**
+ * Named failure-state scenarios for the representative RC gate.
+ * Each scenario overrides the success baseline at exactly one boundary area;
+ * everything else behaves exactly like `success`. Scenarios are process-wide
+ * and switched at runtime via POST /api/__test/fixtures/scenario (test-only).
+ */
+export const FIXTURE_SCENARIOS = [
+  'success',
+  'home-partial', // sahmk down; all other providers succeed
+  'chain-empty', // equity chain returns zero quotes (empty-state desks)
+  'trade-loading', // equity chain resolves after ~6s (loading skeleton first)
+  'rates-malformed', // rates worker answers 200 text/html (rejected, fail-closed)
+  'crypto-partial', // Binance fails, Bybit succeeds (Partial venue badge)
+  'crypto-down', // Deribit 503s, free venues succeed (independent fallback)
+  'sahmk-down', // SAHMK 503s (Home partial + KSA stale/error paths)
+  'ksa-entitlement', // success fixtures; billing gate enabled by the route
+];
+
+let activeScenario = 'success';
+export function getFixtureScenario() {
+  return activeScenario;
+}
+/** Test-only accessor for the equity execFile double (scenario assertions). */
+export function __getEquityExecDoubleForTests() {
+  return equityHooks.execFile;
+}
+export function setFixtureScenario(name) {
+  if (!FIXTURE_SCENARIOS.includes(name)) {
+    throw new Error(`Unsupported E2E fixture scenario: ${name}`);
+  }
+  activeScenario = name;
+  return activeScenario;
+}
+
+const TRADE_LOADING_DELAY_MS = 6_000;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 function installEquityBoundary() {
   equityHooks.execFile = (_command, args, _options, callback) => {
     const script = String(args?.[0] ?? '');
     const symbol = String(args?.[1] ?? 'SPY').toUpperCase();
     if (script.endsWith('fetch_options.py')) {
+      if (activeScenario === 'chain-empty') {
+        callback(null, JSON.stringify({ symbol, spot: 500, expirations: [], quotes: [] }), '');
+        return;
+      }
+      if (activeScenario === 'trade-loading') {
+        // Slow boundary (route timeouts are 30-90s): UI must show loading first.
+        void wait(TRADE_LOADING_DELAY_MS).then(() => callback(null, JSON.stringify(optionChain(symbol)), ''));
+        return;
+      }
       callback(null, JSON.stringify(optionChain(symbol)), '');
       return;
     }
@@ -191,8 +237,14 @@ function installFetchBoundary() {
     if (url.hostname === '127.0.0.1' && url.port !== '8765' && url.port !== '8766') {
       return realFetch(input, init);
     }
-    if (url.hostname === 'www.deribit.com') return json({ jsonrpc: '2.0', result: deribitPayload(url) });
+    if (url.hostname === 'www.deribit.com') {
+      // crypto-down: Deribit 503s while free venues succeed (independent fallback).
+      if (activeScenario === 'crypto-down') return new Response('deribit unavailable (fixture)', { status: 503 });
+      return json({ jsonrpc: '2.0', result: deribitPayload(url) });
+    }
     if (url.hostname === 'fapi.binance.com') {
+      // crypto-partial: Binance fails, Bybit succeeds — Partial venue badge, never fabricated.
+      if (activeScenario === 'crypto-partial') return new Response('binance unavailable (fixture)', { status: 500 });
       if (url.pathname.endsWith('/ticker/24hr')) return json({ symbol: 'BTCUSDT', lastPrice: '60000', quoteVolume: '900000000', priceChangePercent: '1.2' });
       if (url.pathname.endsWith('/premiumIndex')) return json({ symbol: 'BTCUSDT', markPrice: '60010', indexPrice: '60000', lastFundingRate: '0.00005' });
       return json({ symbol: 'BTCUSDT', openInterest: '25000' });
@@ -202,8 +254,23 @@ function installFetchBoundary() {
       if (url.pathname.endsWith('/quote')) return json({ c: 500, d: 2.5, dp: 0.5, h: 503, l: 496, o: 498, pc: 497.5 });
       return json([{ id: 1, datetime: Math.floor(FIXED_NOW / 1000), headline: 'Deterministic market fixture headline', summary: 'Adapter-boundary fixture.', source: 'fixture', url: 'https://example.invalid/fixture' }]);
     }
-    if (url.hostname === 'app.sahmk.sa') return json(sahmkPayload(url.pathname + url.search));
-    if (url.hostname === '127.0.0.1' && (url.port === '8765' || url.port === '8766')) return json(ratesPayload(url.pathname));
+    if (url.hostname === 'app.sahmk.sa') {
+      // home-partial + sahmk-down: SAHMK 503s while every other provider succeeds.
+      if (activeScenario === 'home-partial' || activeScenario === 'sahmk-down') {
+        return new Response('sahmk unavailable (fixture)', { status: 503 });
+      }
+      return json(sahmkPayload(url.pathname + url.search));
+    }
+    if (url.hostname === '127.0.0.1' && (url.port === '8765' || url.port === '8766')) {
+      // rates-malformed: 200 with a non-JSON body — genuinely malformed, must be rejected.
+      if (activeScenario === 'rates-malformed') {
+        return new Response('<html>worker error page (fixture)</html>', {
+          status: 200,
+          headers: { 'content-type': 'text/html' },
+        });
+      }
+      return json(ratesPayload(url.pathname));
+    }
     if (url.hostname === 'financialmodelingprep.com') {
       if (url.pathname.includes('treasury-rates')) return json([{ date: '2029-01-15', month1: 4.4, month3: 4.42, month6: 4.39, year1: 4.31, year2: 4.25, year5: 4.36, year10: 4.55, year30: 4.7 }]);
       if (url.pathname.includes('quote')) return json([{ symbol: 'SPY', price: 500, change: 2.5, changesPercentage: 0.5 }]);
@@ -216,10 +283,70 @@ function installFetchBoundary() {
 
 export function installProviderBoundaryFixtures(scenario) {
   if (process.env.NODE_ENV !== 'test') throw new Error('Provider fixtures require NODE_ENV=test');
-  if (scenario !== 'success') throw new Error(`Unsupported E2E fixture scenario: ${scenario}`);
+  setFixtureScenario(scenario);
   process.env.FINNHUB_API_KEY ||= 'deterministic-e2e-fixture';
   process.env.SAHMK_API_KEY ||= 'deterministic-e2e-fixture';
   process.env.FMP_API_KEY ||= 'deterministic-e2e-fixture';
   installEquityBoundary();
   installFetchBoundary();
+}
+
+/** Dummy billing key used ONLY to flip the gate check in test mode.
+ *  Never a real secret: no Stripe network call is made for gate checks
+ *  (requestHasAccess reads the local entitlements map, which stays empty).
+ *  Captured at module import so disable restores the exact prior environment.
+ */
+const DETERMINISTIC_BILLING_KEY = 'deterministic-e2e-fixture-no-network';
+const ORIGINAL_BILLING_KEY = 'STRIPE_SECRET_KEY' in process.env ? process.env.STRIPE_SECRET_KEY : null;
+
+/**
+ * Test-only scenario switch route. Registered exclusively when provider
+ * fixtures are installed (NODE_ENV=test + E2E_FIXTURE_SCENARIO); production
+ * never mounts it, and no production path imports this module.
+ *
+ * POST /api/__test/fixtures/scenario { scenario, billingEnabled?, clearCache?, expire? }
+ * - scenario: one of FIXTURE_SCENARIOS (400 otherwise).
+ * - billingEnabled: true enables the desk gate with a dummy test key;
+ *   false/absent restores the pre-test billing environment.
+ * - clearCache (default true): reset upstream caches, Deribit client state,
+ *   and provider circuits. Stale-serve tests pass false and expire keys.
+ * - expire: { cacheKey: ageMs } — backdate entries so the next read treats
+ *   them as expired and serves stale (or fails closed past the stale window).
+ */
+export async function registerFixtureScenarioRoute(fastify) {
+  const { clearCacheForTests, ageCacheEntryForTests } = await import('../../api/upstreamCache.js');
+  const { resetDeribitClientState } = await import('../providers/deribit/client.js');
+  const { resetProviderCircuitsForTests } = await import('../../api/providerCircuitBreaker.js');
+  fastify.post('/api/__test/fixtures/scenario', async (request, reply) => {
+    const body = (request.body ?? {}) || {};
+    const scenario = String(body.scenario ?? 'success');
+    try {
+      setFixtureScenario(scenario);
+    } catch {
+      reply.code(400);
+      return { error: 'unknown-fixture-scenario', scenario, supported: FIXTURE_SCENARIOS };
+    }
+    if (body.billingEnabled === true) {
+      process.env.STRIPE_SECRET_KEY = DETERMINISTIC_BILLING_KEY;
+    } else if (ORIGINAL_BILLING_KEY == null) {
+      delete process.env.STRIPE_SECRET_KEY;
+    } else {
+      process.env.STRIPE_SECRET_KEY = ORIGINAL_BILLING_KEY;
+    }
+    if (body.clearCache !== false) {
+      clearCacheForTests();
+      resetDeribitClientState();
+      resetProviderCircuitsForTests();
+    }
+    const expired = [];
+    for (const [key, ageMs] of Object.entries(body.expire ?? {})) {
+      if (ageCacheEntryForTests(key, Number(ageMs))) expired.push(key);
+    }
+    return {
+      scenario: getFixtureScenario(),
+      billingEnabled: process.env.STRIPE_SECRET_KEY === DETERMINISTIC_BILLING_KEY,
+      cleared: body.clearCache !== false,
+      expired,
+    };
+  });
 }

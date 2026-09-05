@@ -10,6 +10,12 @@ async function main() {
   }
   const { buildServer } = await import('./server/app.js');
   const fastify = await buildServer();
+  if (fixtureScenario) {
+    // Test-only scenario switch (failure-state gates). Mounted exclusively
+    // in fixture mode; production never registers /api/__test/*.
+    const { registerFixtureScenarioRoute } = await import('./server/testing/providerBoundaryFixtures.js');
+    await registerFixtureScenarioRoute(fastify);
+  }
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
   console.log(`Server running at http://localhost:${PORT}`);
 }

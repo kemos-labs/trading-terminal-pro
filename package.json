@@ -27,6 +27,7 @@
     "test:integration": "NODE_ENV=test vitest run server/routes/restoredRoutes.test.js server/routes/v1.test.js server/quota.test.js api/upstreamCache.test.js server/providers/freeCrypto/client.test.js server/providers/entitlements.test.js && NODE_ENV=test vitest run server/providers/deribit/quota.integration.test.js",
     "test:e2e:mocked": "npx playwright test --reporter=line",
     "test:e2e:real-server": "npm run build && npx playwright test --config=playwright.real-server.config.ts",
+    "test:e2e:failure-states": "npm run build && npx playwright test --config=playwright.failure-states.config.ts",
     "smoke:api": "bash scripts/smoke-api.sh",
     "test:visual": "npx playwright test --config=playwright.visual.config.ts",
     "mcp": "node mcp/mcp-server.js"

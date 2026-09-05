@@ -188,8 +188,11 @@ function main() {
   const parsedHeads = new Set();
   const sidecarHeadCounts = new Map();
   for (const file of files) {
-    const m = /^real-([0-9a-f]+)-([a-z]+)-([a-z0-9]+)-(.+)\.png$/.exec(file);
-    if (m) parsedHeads.add(m[1]);
+    // Viewport-anchored parse: scenario names may themselves contain dashes
+    // (home-partial, crypto-down, …), so match the known viewport token.
+    const m = /^(real|fail)-([0-9a-f]+)-(.+)-(desktop|laptop|tablet|mobile)-(.+)\.png$/.exec(file);
+    const gate = m ? m[1] : null;
+    if (m) parsedHeads.add(m[2]);
     const sidecarPath = join(shotDir, `${file}.json`);
     let sidecar = null;
     if (existsSync(sidecarPath)) {
@@ -205,7 +208,9 @@ function main() {
     const { stats, reason } = pngStats(join(shotDir, file));
     shots.push({
       file,
-      parsed: m ? { head: m[1], scenario: m[2], viewport: m[3], workflow: m[4] } : null,
+      parsed: m
+        ? { gate, head: m[2], scenario: m[3], viewport: m[4], workflow: m[5] }
+        : null,
       sidecar,
       pixelStats: stats,
       pixelStatsReason: reason,

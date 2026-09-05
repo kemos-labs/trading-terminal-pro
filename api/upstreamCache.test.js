@@ -12,6 +12,7 @@ import {
   getOrFetch,
   peek,
   setCache,
+  ageCacheEntryForTests,
   cacheStats,
   budgetAllows,
   recordBudget,
@@ -22,6 +23,21 @@ import {
 } from './upstreamCache.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+describe('upstreamCache TTL registry (containment)', () => {
+  it('SAHMK_BOARD_MS is defined, finite, and positive (ksaFeeds freshness depends on it)', () => {
+    expect(Number.isFinite(TTL.SAHMK_BOARD_MS)).toBe(true);
+    expect(TTL.SAHMK_BOARD_MS).toBeGreaterThan(0);
+  });
+
+  it('ageCacheEntryForTests backdates entries and reports presence', async () => {
+    await getOrFetch('ttl-probe:key', 60_000, async () => ({ v: 1 }));
+    expect(ageCacheEntryForTests('ttl-probe:key', 120_000)).toBe(true);
+    expect(ageCacheEntryForTests('ttl-probe:missing', 120_000)).toBe(false);
+    const hit = peek('ttl-probe:key');
+    expect(Date.now() - hit.timestamp).toBeGreaterThanOrEqual(119_000);
+  });
+});
 
 describe('upstreamCache', () => {
   it('accepts only the documented provider-error code vocabulary', () => {

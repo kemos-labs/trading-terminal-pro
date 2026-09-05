@@ -1,4 +1,15 @@
 /**
+ * Test-only: backdate a cache entry so the next read treats it as expired.
+ * Enables deterministic stale-serve tests without wall-clock travel.
+ * Called only from the test-only fixture scenario route (NODE_ENV=test).
+ */
+export function ageCacheEntryForTests(key, ageMs) {
+  const entry = store.get(key);
+  if (entry) entry.timestamp = Date.now() - ageMs;
+  return Boolean(entry);
+}
+
+/**
  * Shared in-process cache for upstream market data.
  * Many browser users → one cached snapshot; background warmer fills keys.
  * Railway (or any single Node process) is the sole owner of free-tier API keys.
@@ -349,6 +360,8 @@ export const TTL = {
   /** Massive/Polygon-style prev bar — daily is enough */
   MASSIVE_PREV_MS: 60 * 60_000,
   DESK_STATUS_MS: 30_000,
+  /** SAHMK board pack — shared 30m TTL (referenced by ksaFeeds freshness/budget paths; must stay defined). */
+  SAHMK_BOARD_MS: 30 * 60_000,
 };
 
 /** FlashAlpha free ≈ 5/day — soft budget for levels only */

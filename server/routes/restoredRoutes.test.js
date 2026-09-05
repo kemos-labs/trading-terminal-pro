@@ -577,6 +577,38 @@ describe('restored routes (Phase 1 parity)', () => {
     expect(second.json().cache).toMatchObject({ state: 'fresh', hit: true, stale: false, coalesced: false });
   });
 
+  it('home briefing freshnessState is live only when all desks are up, partial on any outage', async () => {
+    const healthyFetch = async (input) => {
+      const url = String(input);
+      if (url.includes('/api/finnhub/quote')) return new Response(JSON.stringify({ price: 500, change_pct: 0.5, as_of: new Date().toISOString() }), { status: 200 });
+      if (url.includes('/api/rates/summary')) return new Response(JSON.stringify({ sofr: 4.5, effr: 4.3, usy2: 4.2, usy10: 4.5, spread_2s10s: 0.3, as_of: new Date().toISOString() }), { status: 200 });
+      if (url.includes('/api/deribit/market/BTC')) return new Response(JSON.stringify({ instruments: [{ kind: 'perp', markPrice: 60010, funding8h: 0.00005 }], fetchedAt: Date.now() }), { status: 200 });
+      if (url.includes('/api/free-crypto/market/BTC')) return new Response(JSON.stringify({ venues: [{ venue: 'Binance Futures', mark: 60010 }] }), { status: 200 });
+      if (url.includes('/api/ksa/board')) return new Response(JSON.stringify({ configured: true, tasi: { index_value: 12150 } }), { status: 200 });
+      return new Response(JSON.stringify({ available: false, reason: 'upstream_error' }), { status: 502 });
+    };
+    global.fetch = vi.fn(healthyFetch);
+    const healthy = await app.inject('/api/home/briefing?symbol=HEALTHY');
+    expect(healthy.statusCode).toBe(200);
+    expect(healthy.json().desks.equities.available).toBe(true);
+    expect(healthy.json().desks.rates.available).toBe(true);
+    expect(healthy.json().desks.crypto.available).toBe(true);
+    expect(healthy.json().desks.ksa.available).toBe(true);
+    expect(healthy.json().freshness).toMatchObject({ live: true, state: 'live' });
+
+    // One desk down (KSA board unconfigured) -> partial, never live.
+    global.fetch = vi.fn(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/ksa/board')) return new Response(JSON.stringify({ configured: false }), { status: 200 });
+      return healthyFetch(input);
+    });
+    const partial = await app.inject('/api/home/briefing?symbol=PARTIAL');
+    expect(partial.statusCode).toBe(200);
+    expect(partial.json().desks.ksa.available).toBe(false);
+    expect(partial.json().desks.equities.available).toBe(true);
+    expect(partial.json().freshness).toMatchObject({ live: false, state: 'partial' });
+  });
+
   it('home briefing coalesces joined requests and expires malformed stale snapshots', async () => {
     let malformed = false;
     let gate = null;

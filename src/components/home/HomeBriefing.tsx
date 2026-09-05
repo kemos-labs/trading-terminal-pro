@@ -26,6 +26,9 @@ interface Briefing {
   };
   fromCache?: boolean;
   ageMs?: number;
+  stale?: boolean;
+  /** Server-derived aggregate — the single truthful derivation. Display only, never recompute client-side. */
+  freshness?: { live: boolean; state: 'live' | 'partial' | 'stale' | 'unavailable' };
   cacheStatus?: { entries?: number | null; budgets?: Record<string, unknown> | null };
 }
 
@@ -125,6 +128,11 @@ function signedTone(v: number | null | undefined): 'up' | 'down' | undefined {
 
 export function HomeBriefing() {
   const symbol = useTerminalStore((s) => s.symbol);
+  // Terminal live-chain state, for agreement with the briefing snapshot:
+  // the Vol/Positioning desks consume the client chain, not this snapshot.
+  const chainAvailable = useTerminalStore((s) => s.chainAvailable);
+  const chainAttempted = useTerminalStore((s) => s.chainAttempted);
+  const chainUsed = useTerminalStore((s) => s.chainUsed);
   const [state, setState] = useState<FetchState>({ data: null, error: null, loading: true });
 
   useEffect(() => {
@@ -145,6 +153,28 @@ export function HomeBriefing() {
   const b = state.data;
   const d = b?.desks;
 
+  // Aggregate Feeds chip — displayed from the server derivation only.
+  // Partial is never labelled Live or OK; stale is never Live.
+  const aggState = b?.stale ? 'stale' : (b?.freshness?.state ?? null);
+  const aggLabel =
+    aggState === 'live' ? 'Live' :
+    aggState === 'partial' ? 'Partial' :
+    aggState === 'stale' ? 'Stale' :
+    aggState === 'unavailable' ? 'Unavailable' : null;
+  const aggTone =
+    aggState === 'live' ? 'bg-up' :
+    aggState === 'partial' || aggState === 'stale' ? 'bg-amber' : 'bg-down/70';
+
+  // Agreement between the briefing snapshot (server) and the terminal live
+  // chain (client, consumed by Vol/Positioning): surface disagreement instead
+  // of letting two badges contradict each other. Unattempted chain has no
+  // verdict — only a known-down chain disagrees.
+  const chainKnownDown = chainAttempted && !chainAvailable;
+  const chainKnownUp = chainAvailable && chainUsed !== 'none';
+  const eqSnapshotOk = !!d?.equities.available;
+  const chainDisagreeDown = eqSnapshotOk && chainKnownDown;
+  const chainDisagreeUp = !eqSnapshotOk && chainKnownUp;
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-3" data-testid="home-briefing">
       {/* Compact header: title + session + freshness */}
@@ -161,6 +191,16 @@ export function HomeBriefing() {
       {/* Provider / quota health strip */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 pb-1.5 font-mono text-type-2xs text-muted-foreground" data-testid="home-provider-strip">
         <span className="font-bold uppercase tracking-wider text-foreground/80">Feeds</span>
+        {aggLabel ? (
+          <span
+            className="flex items-center gap-1 font-bold uppercase tracking-wider text-foreground"
+            data-testid="home-feeds-aggregate"
+            title={`Server aggregate${b?.stale ? ' (stale snapshot)' : ''}: ${b?.sources?.length ?? 0} sources · fetch age ${b?.ageMs != null ? `${Math.round(b.ageMs / 1000)}s` : '—'}`}
+          >
+            <span className={cn('h-1.5 w-1.5 rounded-full', aggTone)} aria-hidden />
+            {aggLabel}
+          </span>
+        ) : null}
         {d ? (
           <>
             <span className="flex items-center gap-1">
@@ -198,19 +238,38 @@ export function HomeBriefing() {
                 tone={signedTone(d.equities.changePct)}
               />
               <Row k="ATM IV" v="—" title-="opens with Vol desk" />
+              {chainDisagreeDown ? (
+                <p className="pt-1 text-amber" data-testid="home-chain-disagree">
+                  Snapshot fresh · terminal chain down — Vol desk opens fail-closed.
+                </p>
+              ) : null}
             </>
           ) : (
-            <p className="text-muted-foreground" title={d?.equities.note ?? undefined}>
-              Equity quote unavailable — Vol desk opens fail-closed.
-            </p>
+            <>
+              <p className="text-muted-foreground" title={d?.equities.note ?? undefined}>
+                Equity quote unavailable — Vol desk opens fail-closed.
+              </p>
+              {chainDisagreeUp ? (
+                <p className="pt-1 text-amber" data-testid="home-chain-disagree">
+                  Snapshot unavailable · terminal chain live — desk may still open.
+                </p>
+              ) : null}
+            </>
           )}
         </DeskCell>
 
         <DeskCell label="Positioning" provider="derivatives" available={!!d?.equities.available} asOf={d?.equities.asOf ?? null} testId="home-cell-positioning">
           {d?.equities.available ? (
-            <p className="text-muted-foreground">
-              GEX / DEX profiles build from the live chain — open Flow (POS).
-            </p>
+            <>
+              <p className="text-muted-foreground">
+                GEX / DEX profiles build from the live chain — open Flow (POS).
+              </p>
+              {chainDisagreeDown ? (
+                <p className="pt-1 text-amber" data-testid="home-chain-disagree-pos">
+                  Snapshot fresh · terminal chain down — profiles unavailable now.
+                </p>
+              ) : null}
+            </>
           ) : (
             <p className="text-muted-foreground">Needs a live option chain — unavailable now.</p>
           )}
@@ -248,8 +307,10 @@ export function HomeBriefing() {
         </DeskCell>
       </div>
 
-      {/* KSA + launcher row */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 lg:grid-cols-3">
+      {/* KSA + launcher row — content-sized (no flex-1 stretch): stretched
+          launcher cells were the desktop dead space. Page background, not
+          empty bordered cells, fills the remaining viewport. */}
+      <div className="grid min-h-0 grid-cols-1 gap-2 lg:grid-cols-3">
         <DeskCell label="KSA (Tadawul)" provider={d?.ksa.provider ?? '—'} available={!!d?.ksa.available} degraded={!!d?.ksa.available} asOf={d?.ksa.asOf ?? null} testId="home-cell-ksa">
           {d?.ksa.available ? (
             <>

@@ -30,7 +30,7 @@ This file is the reset-safe checkpoint for `/home/kalde/trading-terminal-pro-reb
 
 ## Current checkpoint
 
-- Implementation HEAD: `8d58ef3` (fix(chain): bound the whole snapshot build).
+- Implementation HEAD: `ee3dc4f` (fix(vol): chunk failures retry).
 - Checkpoint commit: the docs commit carrying this update (see `git log --oneline`; it touches only RECOVERY_MEMORY.md).
 - Recovery worktree is clean at this checkpoint.
 - Owner checkout was last verified clean at `/home/kalde/trading-terminal-pro`.

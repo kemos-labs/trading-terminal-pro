@@ -298,11 +298,9 @@ export function TerminalLayout() {
         uiDensity === 'readable' ? 'density-readable' : 'density-dense',
       )}
     >
-      {activeTab !== 'crypto' && (
-        <TerminalHeader onOpenShortcuts={() => setShortcutsOpen((o) => !o)} />
-      )}
-      {/* Optional watchlist strip — only when not inside the dedicated Crypto shell. */}
-      {activeTab !== 'crypto' && quoteStripOn && (
+      <TerminalHeader onOpenShortcuts={() => setShortcutsOpen((o) => !o)} />
+      {/* Optional watchlist strip — part of the global shell on every desk, including Crypto. */}
+      {quoteStripOn && (
         <div
           id="shell-quote-strip"
           className="shrink-0 border-b border-border bg-card/80 px-1"
@@ -312,16 +310,14 @@ export function TerminalLayout() {
       )}
       {!quoteStripOn && <div id="shell-quote-strip" className="sr-only" aria-hidden />}
 
-      {activeTab !== 'crypto' && (
-        <FunctionMenuBar
+      <FunctionMenuBar
           focusToken={cmdFocusToken}
           onHelp={() => setShortcutsOpen(true)}
           onWatchlistFocus={() => {
             document.getElementById('shell-quote-strip')?.scrollIntoView({ block: 'nearest' });
           }}
           onOpenDisplay={toggleDisplayStrip}
-        />
-      )}
+      />
       {/* Vol honesty strip only on option desks — not Rates/Crypto/Academy (VIX ≠ rates). */}
       {(activeTab === 'vol' || activeTab === 'positioning' || activeTab === 'desk') && (
         <div className="shrink-0 border-b border-border/60">

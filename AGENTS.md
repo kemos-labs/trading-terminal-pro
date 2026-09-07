@@ -6,15 +6,14 @@ These rules apply to every file and every agent working in this repository. The 
 
 For the active recovery branch, also read `plans/full-application-rebuild-recovery.md`. The master specification wins; a later audited correction in the recovery plan wins over an older contradictory recovery note.
 
-## Current recovery authority
+## Current recovery authority — user update 2026-09-07
 
-- Owner checkout: `/home/kalde/trading-terminal-pro` on `master`. Do not edit it.
-- Recovery worktree: `/home/kalde/trading-terminal-pro-rebuild`.
-- Recovery branch: `codex/full-application-rebuild`.
-- Rollback/diff baseline: `e6753aeafb57369137d0afea6c5364bcb1b6fc3f`.
-- Audited continuation baseline: `81d457ab36b4d9520148a07ed504301f62d7f782`.
-- Continue the existing worktree. Do not create another branch, reset it, cherry-pick the tranche again, or implement on `master`.
-- Before editing, run `git status --porcelain`, `git rev-parse HEAD`, and `git -C /home/kalde/trading-terminal-pro status --porcelain`. Preserve all unrelated changes.
+- Astra GPT-6 medium owns orchestration, architecture, review and acceptance in Codex. Verified free Pi models do coding and bulk analysis under supervised Orca dispatches. These current roles supersede Sol/Luna references below.
+- Target one active app folder: `/home/kalde/trading-terminal-pro`. Until safe consolidation is reviewed, implementation is `/home/kalde/trading-terminal-pro/trading-terminal-pro-rebuild` on `codex/full-application-rebuild`.
+- The user explicitly authorized consolidation and updating these instructions. Preserve the original master history and all user changes/ignored assets; no blind reset, deletion or additional app copy.
+- One coding writer per checkout; no nested delegation, paid/default fallback or worker commits. Actual rate-limit failures may trigger verified-free fallback only after the preceding attempt settles and its partial changes are reviewed.
+- Read `RECOVERY_MEMORY.md`; verify Git HEAD/status before each tranche. Existing quantitative, security, capability-preservation and promotion rules below remain mandatory.
+- Historical documents are requirements evidence; current direct user instructions outrank stale path, role and workflow instructions.
 
 ## Scope and execution honesty
 
@@ -126,8 +125,8 @@ The final verdict remains FAIL/recovery-in-progress until every mandatory gate a
 ## Reset continuity and execution roles
 
 1. `RECOVERY_MEMORY.md` is the single current checkpoint for this recovery. Read it completely after `AGENTS.md`, the master specification, the recovery plan, and `docs/recovery-evidence/`, before resuming implementation.
-2. The primary GPT-5.6 Sol agent owns orchestration, plan changes, domain/security review, evidence review, commits, and final verdicts.
-3. Delegate bounded coding and command-execution tranches to GPT-5.6 Luna at medium reasoning when that model is available. Luna executors do not declare completion, weaken gates, edit the owner checkout, or commit unless the primary agent explicitly assigns that exact action.
-4. The primary agent reviews every Luna diff and test claim independently before committing. Executor output is a lead, never evidence by itself.
+2. The primary Astra GPT-6 medium agent owns orchestration, plan changes, domain/security review, evidence review, commits, and final verdicts.
+3. Delegate bounded coding and command-execution tranches to verified free frontier Pi models at supported medium reasoning. Executors do not declare completion, weaken gates, edit the owner checkout, or commit unless the primary agent explicitly assigns that exact action.
+4. The primary agent reviews every worker diff and test claim independently before committing. Executor output is a lead, never evidence by itself.
 5. After every committed concern, and before any expected reset or handoff, update `RECOVERY_MEMORY.md` with HEAD, clean/dirty state, completed concern, exact verification, current in-progress files, next command, and remaining C0-C8 blockers. Include that update in the concern commit when practical; otherwise commit it as a small documentation checkpoint.
 6. On resume, do not recreate the branch or repeat completed tranches. Verify the recorded state with Git, inspect any dirty diff, then continue from the recorded exact next action.

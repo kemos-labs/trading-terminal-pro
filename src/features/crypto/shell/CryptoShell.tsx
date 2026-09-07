@@ -65,8 +65,9 @@ export function CryptoShell() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2" data-testid="crypto-v2-shell">
-      {/* Global strip: asset/venue/freshness */}
-      <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-card px-3 py-2" role="banner" aria-label="Market context">
+      {/* Crypto asset/venue context strip: a labelled region, not a second page banner.
+          The single page banner lives in the global TerminalHeader above. */}
+      <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-card px-3 py-2" role="region" aria-label="Crypto market context">
         <span className="font-mono text-xs font-bold uppercase tracking-wider">CRYPTO</span>
         <span className="h-4 w-px bg-border" aria-hidden />
         <span className="font-mono text-xs">{asset} · {venue}</span>

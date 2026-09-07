@@ -1,3 +1,16 @@
+## Current checkpoint — 2026-09-07 Astra review
+
+This entry supersedes stale roles/paths below. Recovery remains IN PROGRESS.
+Baseline before current concern: c1d6717cffc5381bd7e58231555ef18ec99d7170.
+User requests Astra GPT-6 medium orchestration with verified-free Pi coding workers, tested fallback, one active root folder and restored capabilities. AGENTS.md updated accordingly.
+
+Crypto navigation concern: Muse1.3 worker changed only TerminalLayout.tsx and CryptoShell.tsx. Astra inspected diff, independently passed type-check and secret scan, verified global Home/account controls in six Crypto workflows at 1440x900, inspected actual screenshot, and verified mouse plus keyboard Home exit. At 390x844 navigation remains reachable but existing header/menu clipping is a follow-up; this is not full responsive acceptance. No math/provider change. Other product and C0-C8 gates remain open.
+
+Next: finish free-runner review and tests; safely consolidate nested recovery checkout to /home/kalde/trading-terminal-pro preserving master history, untracked handoff, ignored assets and rollback. No app writer currently authorized beyond completed shell patch. Active planning and runner workers write only the Codex work directory.
+Orca run run_d6eb6f29da47. Detailed reset state lives in /home/kalde/Documents/Codex/2026-09-07/80-building-chain-surface-apis-down/outputs/ORCHESTRATION_CHECKPOINT.md. Verify live state before any resumed dispatch.
+
+---
+
 # Full-application recovery continuity memory
 
 Updated: 2026-09-05T08:00:00Z

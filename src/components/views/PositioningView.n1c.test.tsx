@@ -177,14 +177,17 @@ describe('PositioningView N1c position-by-strike', () => {
     // Keyboard path: the row is focusable and the detail region is tabbable.
     expect(row.tagName.toLowerCase()).toBe('button');
     expect(detail.getAttribute('tabindex')).toBe('0');
-    // No leaked NaN/Infinity values anywhere in the panel. The provenance
-    // disclaimer names NaN as banned, so it is excluded from this scan.
+    // No leaked NaN/Infinity values anywhere in the panel — including the
+    // provenance disclaimer itself. The browser-level failure-state gate scans
+    // body text for /\b(?:NaN|Infinity)\b/, so prose that spells those tokens
+    // (even to ban them) fails the visual gate while rendering no bad number.
     const nodes = Array.from(p.querySelectorAll('[data-testid^="pbs-"]'));
     const offenders = nodes
-      .filter((n) => n.getAttribute('data-testid') !== 'pbs-provenance')
       .filter((n) => /NaN|Infinity/.test(n.textContent ?? ''))
       .map((n) => n.getAttribute('data-testid'));
     expect(offenders).toEqual([]);
+    const provenance = within(p).getByTestId('pbs-provenance');
+    expect(provenance.textContent).toMatch(/never zero, non-finite, or synthetic/);
   });
 
   it('PBS rows are native buttons without invalid listitem role, wrapped in listitem', () => {

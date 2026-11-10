@@ -797,7 +797,7 @@ function PositionByStrikeSection({
       >
         $GEX = Derived signed Greek × OI proxy (dealer-sign model){weight !== 'oi' ? ` — ${weight} (scenario)` : ''} · Contracts = Observed chain OI /
         contracts, selected expiry only · units {unitsLabel} · as of {asOf} · scoped {expiryLabel} ·
-        not verified dealer inventory · missing renders —/Unavailable (never 0, NaN, or synthetic).
+        not verified dealer inventory · missing renders —/Unavailable (never zero, non-finite, or synthetic).
       </p>
     </div>
   );

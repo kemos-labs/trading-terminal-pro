@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTerminalStore } from '../../store/terminalStore';
-import { LAUNCHPAD_CODES, openFunction, resolveFunctionId } from '../../config/functionRegistry';
+import { LaunchpadGrid } from '../terminal/LaunchpadGrid';
 import { cn } from '../../lib/utils';
 
 /**
@@ -274,8 +274,12 @@ export function HomeBriefing() {
         )}
       </div>
 
-      {/* Desk snapshot grid */}
-      <div className="grid min-h-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+      {/* Desk snapshot grid — from md up the grid is a flex-1 row set, so the
+          cards share the leftover column height instead of leaving one black
+          band under the stack. Below md the cells stay content-sized (the
+          stacked column already fills the phone viewport) and the column
+          scrolls, so nothing is compressed or overlapped at 390x844. */}
+      <div className="grid grid-cols-1 gap-2 md:flex-1 md:auto-rows-fr md:grid-cols-2 xl:grid-cols-4" data-testid="home-desk-grid">
         <DeskCell label="Volatility" provider={d?.equities.provider ?? '—'} available={!!d?.equities.available} stale={eqStale} asOf={d?.equities.asOf ?? null} testId="home-cell-vol">
           {d?.equities.available ? (
             <>
@@ -364,10 +368,10 @@ export function HomeBriefing() {
         </DeskCell>
       </div>
 
-      {/* KSA + launcher row — content-sized: stretched launcher cells were
-          the desktop dead space. The freshness ledger below fills the
-          remaining viewport with real provenance instead. */}
-      <div className="grid min-h-0 grid-cols-1 gap-2 lg:grid-cols-3">
+      {/* KSA + launcher row — content-sized (shrink-0): stretched launcher
+          cells were the desktop dead space, so the launcher keeps its natural
+          height and the grid/ledger rows above and below take the slack. */}
+      <div className="grid shrink-0 grid-cols-1 gap-2 lg:grid-cols-3">
         <DeskCell label="KSA (Tadawul)" provider={d?.ksa.provider ?? '—'} available={!!d?.ksa.available} degraded={!!d?.ksa.available && !ksaStale} stale={ksaStale} asOf={d?.ksa.asOf ?? null} testId="home-cell-ksa">
           {d?.ksa.available ? (
             <>
@@ -384,40 +388,15 @@ export function HomeBriefing() {
           )}
         </DeskCell>
 
-        <div className="lg:col-span-2" data-testid="launchpad-grid">
-          <div className="flex h-full flex-col rounded border border-border bg-black/40">
-            <div className="flex items-center justify-between border-b border-border/60 px-2 py-0.5 font-mono text-type-2xs">
-              <span>
-                <span className="font-bold tracking-wider text-amber-500/90">LPAD</span>
-                <span className="ml-1.5 text-muted-foreground">function codes</span>
-              </span>
-              <span className="text-muted-foreground">Ctrl/Cmd+K</span>
-            </div>
-            <div className="grid flex-1 auto-rows-fr grid-cols-3 gap-px bg-border/80 p-px sm:grid-cols-4 md:grid-cols-7">
-              {LAUNCHPAD_CODES.map((code) => {
-                const desc = resolveFunctionId(code);
-                if (!desc) return null;
-                return (
-                  <button
-                    key={code}
-                    type="button"
-                    onClick={() => openFunction(code)}
-                    title={desc.label}
-                    className="bg-black/60 px-1.5 py-1 text-left font-mono transition-colors hover:bg-secondary/80"
-                  >
-                    <div className="text-type-xs font-semibold tracking-wide text-foreground">{code}</div>
-                    <div className="truncate text-type-2xs text-muted-foreground">{desc.label}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+        <div className="lg:col-span-2">
+          <LaunchpadGrid className="h-full" />
         </div>
       </div>
 
       {/* Freshness ledger — per-desk provenance from the already-fetched
-          snapshot (zero new requests). Fills the desktop viewport with real
-          event times and ages instead of dead space. */}
+          snapshot (zero new requests). Shares the leftover height with the
+          desk grid; its rows stretch, so the panel ends on real provenance
+          instead of an empty bordered box. */}
       <FreshnessLedger briefing={b} loading={state.loading} error={state.error} />
     </div>
   );
@@ -466,7 +445,7 @@ function FreshnessLedger({
     <section
       data-testid="home-freshness-ledger"
       aria-label="Freshness ledger"
-      className="rounded border border-border bg-black/40"
+      className="flex min-h-[180px] flex-1 flex-col rounded border border-border bg-black/40"
     >
       <header className="flex items-center justify-between border-b border-border/60 px-2 py-1 font-mono text-type-2xs">
         <span className="font-bold uppercase tracking-wider text-foreground/80">Freshness ledger</span>
@@ -475,8 +454,8 @@ function FreshnessLedger({
         </span>
       </header>
       {d ? (
-        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Freshness ledger rows">
-          <table className="w-full font-mono text-type-2xs">
+        <div className="flex-1 overflow-x-auto" tabIndex={0} role="region" aria-label="Freshness ledger rows">
+          <table className="h-full w-full font-mono text-type-2xs">
             <thead>
               <tr className="text-left text-muted-foreground">
                 <th className="px-2 py-1 font-normal">Desk</th>
@@ -488,12 +467,12 @@ function FreshnessLedger({
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.desk} className="border-t border-border/40">
-                  <td className="px-2 py-1 text-foreground">{r.desk}</td>
-                  <td className="px-2 py-1 text-muted-foreground">{r.provider}</td>
-                  <td className="px-2 py-1 tabular-nums text-muted-foreground">{fmtEventTime(r.event)}</td>
-                  <td className="px-2 py-1 tabular-nums text-muted-foreground">{fmtAge(r.event, nowMs)}</td>
-                  <td className="px-2 py-1">
+                <tr key={r.desk} className="border-t border-border/40 hover:bg-white/[0.02]">
+                  <td className="px-2 py-1.5 text-foreground">{r.desk}</td>
+                  <td className="px-2 py-1.5 text-muted-foreground">{r.provider}</td>
+                  <td className="px-2 py-1.5 tabular-nums text-muted-foreground">{fmtEventTime(r.event)}</td>
+                  <td className="px-2 py-1.5 tabular-nums text-muted-foreground">{fmtAge(r.event, nowMs)}</td>
+                  <td className="px-2 py-1.5">
                     <span className="flex items-center gap-1.5 uppercase tracking-wider">
                       <span className={cn('h-1.5 w-1.5 rounded-full', LEDGER_DOT[r.state])} aria-hidden />
                       {r.state}
@@ -505,9 +484,9 @@ function FreshnessLedger({
           </table>
         </div>
       ) : (
-        <p className="px-2 py-1.5 font-mono text-type-2xs text-muted-foreground">
+        <div className="flex flex-1 items-center justify-center p-4 font-mono text-type-2xs text-muted-foreground">
           {error ? `ledger unavailable: ${error}` : loading ? 'loading ledger…' : 'ledger unavailable — no snapshot'}
-        </p>
+        </div>
       )}
     </section>
   );

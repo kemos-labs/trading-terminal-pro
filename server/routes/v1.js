@@ -14,6 +14,8 @@ import {
   getDeribitFundingSnapshotResult,
 } from './deribitMarket.js';
 import { registerV1AnalyticsRoutes } from './v1Analytics.js';
+import { registerV1ExposureGridRoutes } from './v1ExposureGrid.js';
+import { registerV1WorkbenchRoutes } from './v1Workbench.js';
 import { sanitizeProviderErrorCode } from '../../api/upstreamCache.js';
 import {
   assertContract,
@@ -184,6 +186,8 @@ function cacheEnvelope(result) {
 
 export function registerV1Routes(fastify) {
   registerV1AnalyticsRoutes(fastify, { sendContract, sendError, baseEnvelope, coverage });
+  registerV1ExposureGridRoutes(fastify, { sendContract, sendError, baseEnvelope, coverage });
+  registerV1WorkbenchRoutes(fastify, { sendContract, sendError, baseEnvelope, coverage });
   fastify.get('/api/v1/system/health', async (request, reply) => {
     const now = Date.now();
     const providerModes = providerEntitlements();

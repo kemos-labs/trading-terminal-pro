@@ -36,6 +36,7 @@ export interface DataProvenance {
   fetchedAtMs: number;
   kind: FreshnessKind;
   label?: string;
+  sourceKind?: FreshnessKind;
 }
 
 export type StoreProvenance = {
@@ -57,6 +58,8 @@ export const EMPTY_PROVENANCE: StoreProvenance = {
 /**
  * Classify age with optional hysteresis when leaving LIVE:
  * stay LIVE until age > delayedMs * leaveLiveFactor (default 1.2).
+ * Provider freshness is a constraint: local age may downgrade but never upgrade
+ * delayed/stale/expired/down/unknown to live. Delayed may still age to stale/expired.
  */
 export function classifyDomainFreshness(
   asOfMs: number | null | undefined,
@@ -67,22 +70,57 @@ export function classifyDomainFreshness(
     previousKind?: FreshnessKind;
     leaveLiveFactor?: number;
     nowMs?: number;
+    delayed?: boolean;
+    sourceKind?: FreshnessKind;
+    sourceFreshness?: FreshnessKind;
   },
 ): FreshnessKind {
   if (opts?.down) return 'down';
   if (opts?.demo) return 'demo';
-  if (asOfMs == null || !Number.isFinite(asOfMs) || asOfMs <= 0) return 'unknown';
+  const rawSource = opts?.sourceKind ?? opts?.sourceFreshness ?? (opts?.delayed ? 'delayed' : undefined);
+  const sourceKind = rawSource as FreshnessKind | undefined;
+  // Unknown observation time is unknown, not live — never substitute fetch time.
+  if (asOfMs == null || !Number.isFinite(asOfMs) || asOfMs <= 0) {
+    // If source explicitly says live but time unknown, still unknown (conservative)
+    if (sourceKind && sourceKind !== 'live') return sourceKind;
+    return 'unknown';
+  }
 
   const now = opts?.nowMs ?? Date.now();
   const age = Math.max(0, now - asOfMs);
   const t = FRESHNESS_THRESHOLDS[domain];
-  const leaveLive = (opts?.leaveLiveFactor ?? 1.2) * t.delayedMs;
 
-  if (opts?.previousKind === 'live' && age <= leaveLive) return 'live';
-  if (age < t.delayedMs) return 'live';
-  if (age < t.staleMs) return 'delayed';
-  if (age < t.expiredMs) return 'stale';
-  return 'expired';
+  // Base age-derived kind without hysteresis
+  let ageKind: FreshnessKind;
+  if (age < t.delayedMs) ageKind = 'live';
+  else if (age < t.staleMs) ageKind = 'delayed';
+  else if (age < t.expiredMs) ageKind = 'stale';
+  else ageKind = 'expired';
+
+  // Apply source constraint: worst of source vs age (allow natural aging downgrade)
+  let kind: FreshnessKind = ageKind;
+  if (sourceKind) {
+    const valid: FreshnessKind[] = ['live', 'delayed', 'stale', 'expired', 'demo', 'down', 'unknown'];
+    const s: FreshnessKind = valid.includes(sourceKind) ? (sourceKind as FreshnessKind) : 'unknown';
+    if (s !== 'live') {
+      kind = worstFreshnessKind(s, ageKind);
+    }
+  }
+
+  // Hysteresis must not override provider downgrade: only when source allows live
+  const sourceAllowsLive = !sourceKind || sourceKind === 'live';
+  if (sourceAllowsLive && opts?.previousKind === 'live' && kind !== 'live') {
+    const leaveLive = (opts?.leaveLiveFactor ?? 1.2) * t.delayedMs;
+    if (age <= leaveLive) {
+      // Still hysteresis live only if not constrained by source downgrade
+      return 'live';
+    }
+  }
+  // If source constrained to delayed/stale/etc, hysteresis cannot promote back to live
+  if (!sourceAllowsLive && kind !== 'live' && opts?.previousKind === 'live') {
+    // keep clamped kind (delayed/stale...), do not return live
+  }
+  return kind;
 }
 
 /** Build a provenance record for store / StatusBar. */
@@ -90,13 +128,16 @@ export function makeProvenance(
   domain: FreshnessDomain,
   source: string,
   asOfMs: number | null,
-  opts?: { demo?: boolean; down?: boolean; label?: string; fetchedAtMs?: number; previousKind?: FreshnessKind },
+  opts?: { demo?: boolean; down?: boolean; label?: string; fetchedAtMs?: number; previousKind?: FreshnessKind; delayed?: boolean; sourceKind?: FreshnessKind; sourceFreshness?: FreshnessKind },
 ): DataProvenance {
   const fetchedAtMs = opts?.fetchedAtMs ?? Date.now();
+  const sourceKind = opts?.sourceKind ?? opts?.sourceFreshness ?? (opts?.delayed ? 'delayed' : undefined);
   const kind = classifyDomainFreshness(asOfMs, domain, {
     demo: opts?.demo,
     down: opts?.down,
     previousKind: opts?.previousKind,
+    delayed: opts?.delayed,
+    sourceKind: sourceKind as FreshnessKind | undefined,
   });
   return {
     domain,
@@ -105,6 +146,7 @@ export function makeProvenance(
     fetchedAtMs,
     kind,
     label: opts?.label,
+    sourceKind: sourceKind as FreshnessKind | undefined,
   };
 }
 
@@ -116,13 +158,15 @@ export function kindFromProvenance(
   previousKind: FreshnessKind | undefined,
   asOfMs: number | null | undefined,
   domain: FreshnessDomain,
-  opts?: { demo?: boolean; down?: boolean; nowMs?: number },
+  opts?: { demo?: boolean; down?: boolean; nowMs?: number; delayed?: boolean; sourceKind?: FreshnessKind; sourceFreshness?: FreshnessKind },
 ): FreshnessKind {
   return classifyDomainFreshness(asOfMs, domain, {
     demo: opts?.demo,
     down: opts?.down,
     previousKind,
     nowMs: opts?.nowMs,
+    delayed: opts?.delayed,
+    sourceKind: (opts?.sourceKind ?? opts?.sourceFreshness) as FreshnessKind | undefined,
   });
 }
 

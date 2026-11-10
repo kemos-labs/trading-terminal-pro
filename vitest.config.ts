@@ -21,7 +21,19 @@ export default defineConfig({
     'process.env.NODE_ENV': JSON.stringify(TEST_NODE_ENV),
   },
   test: {
-    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**', 'playwright-report/**', 'test-results/**', '.opencode/**'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/e2e/**',
+      'playwright-report/**',
+      'test-results/**',
+      '.opencode/**',
+      // node:test files are not vitest suites. vitest collects them (the default
+      // include glob matches *.test.mjs), finds no test suite, and fails the file.
+      // They run via their own node:test entrypoint, e.g.
+      //   npm run test:bundle-check  →  node --test scripts/build-exposure-grid-bundle.check.test.mjs
+      'scripts/**/*.check.test.mjs',
+    ],
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

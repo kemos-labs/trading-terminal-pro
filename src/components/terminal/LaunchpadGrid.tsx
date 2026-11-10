@@ -25,7 +25,7 @@ export function LaunchpadGrid({ className }: { className?: string }) {
   return (
     <div
       data-testid="launchpad-grid"
-      className={cn('rounded border border-border bg-black/40', className)}
+      className={cn('flex flex-col rounded border border-border bg-black/40', className)}
     >
       <div className="flex items-center justify-between border-b border-border/60 px-2 py-0.5 font-mono text-type-2xs">
         <span>
@@ -34,7 +34,7 @@ export function LaunchpadGrid({ className }: { className?: string }) {
         </span>
         <span className="text-muted-foreground">Ctrl/Cmd+K</span>
       </div>
-      <div className="grid grid-cols-3 gap-px bg-border/80 sm:grid-cols-4 md:grid-cols-7">
+      <div className="grid flex-1 auto-rows-fr grid-cols-3 gap-px bg-border/80 p-px sm:grid-cols-4 md:grid-cols-7">
         {items.map((it) => (
           <button
             key={it.code}

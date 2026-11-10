@@ -62,6 +62,9 @@ export const FIXTURE_SCENARIOS = [
   'crypto-down', // Deribit 503s, free venues succeed (independent fallback)
   'sahmk-down', // SAHMK 503s (Home partial + KSA stale/error paths)
   'ksa-entitlement', // success fixtures; billing gate enabled by the route
+  'vol-stale', // stale-matrix composition: equity chain throws, last-good served stale
+  'rates-stale', // rates-mode-funding stale: worker /rates/summary 503s, last-good served stale
+  'pos-stale', // pos-sub-chain stale: equity chain throws, last-good served stale
 ];
 
 let activeScenario = 'success';
@@ -95,6 +98,11 @@ function installEquityBoundary() {
       if (activeScenario === 'trade-loading') {
         // Slow boundary (route timeouts are 30-90s): UI must show loading first.
         void wait(TRADE_LOADING_DELAY_MS).then(() => callback(null, JSON.stringify(optionChain(symbol)), ''));
+        return;
+      }
+      if (activeScenario === 'vol-stale' || activeScenario === 'pos-stale') {
+        // Stale-matrix: upstream throws so an expired cache entry is served stale.
+        callback(new Error(`equity upstream unavailable (fixture ${activeScenario})`), '', 'fixture stale error');
         return;
       }
       callback(null, JSON.stringify(optionChain(symbol)), '');
@@ -272,6 +280,12 @@ function installFetchBoundary() {
           status: 200,
           headers: { 'content-type': 'text/html' },
         });
+      }
+      // rates-stale: ONLY /rates/summary 503s so the expired
+      // `macrovol:/rates/summary` entry is served stale; every other worker
+      // path still succeeds, so the funding view stays populated.
+      if (activeScenario === 'rates-stale' && url.pathname.endsWith('/rates/summary')) {
+        return new Response('rates worker unavailable (fixture rates-stale)', { status: 503 });
       }
       return json(ratesPayload(url.pathname));
     }

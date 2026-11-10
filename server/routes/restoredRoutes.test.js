@@ -17,6 +17,22 @@ import { resetDeribitClientState } from '../providers/deribit/client.js';
 import { resetProviderCircuitsForTests } from '../../api/providerCircuitBreaker.js';
 
 const REAL_FETCH = global.fetch;
+
+/**
+ * Deterministic provider key for the Finnhub route tests.
+ * CI has no FINNHUB_API_KEY and no .env, so deskFeeds.finnhubKey() throws
+ * no_api_key (503) before any budget/cache/stale branch can run. Pinning a
+ * fixture key per test makes the route behaviour identical with or without a
+ * real key in the environment; the outer afterEach clears it again. Import
+ * time/environment VALUES in the app read process.env per request, so setting
+ * it inside the test body (after buildServer) is effective and keeps every
+ * other test in the "no key" CI state.
+ */
+const FINNHUB_FIXTURE_KEY = 'test-fixture-key';
+
+function useFinnhubFixtureKey() {
+  process.env.FINNHUB_API_KEY = FINNHUB_FIXTURE_KEY;
+}
 let runtimeDesk;
 let runtimeEquity;
 
@@ -96,6 +112,8 @@ describe('restored routes (Phase 1 parity)', () => {
     delete process.env.ALPHAVANTAGE_API_KEY;
     delete process.env.RAPIDAPI_KEY;
     delete process.env.X_RAPIDAPI_KEY;
+    // Never leak the Finnhub fixture key into another test (CI parity).
+    delete process.env.FINNHUB_API_KEY;
     global.fetch = REAL_FETCH;
     resetProviderCircuitsForTests();
     if (app) await app.close();
@@ -305,6 +323,7 @@ describe('restored routes (Phase 1 parity)', () => {
   });
 
   it('finnhub routes return normalized upstream data through the shared cache', async () => {
+    useFinnhubFixtureKey();
     global.fetch = vi.fn(async (input) => {
       const url = String(input);
       if (url.includes('/quote?')) {
@@ -352,6 +371,7 @@ describe('restored routes (Phase 1 parity)', () => {
   });
 
   it('Finnhub recommendation serves stale metadata on provider failure and rejects malformed payloads', async () => {
+    useFinnhubFixtureKey();
     vi.useFakeTimers({ now: new Date('2026-09-02T00:00:00Z') });
     let fail = false;
     global.fetch = vi.fn(async (input) => {
@@ -386,6 +406,7 @@ describe('restored routes (Phase 1 parity)', () => {
   });
 
   it('Finnhub news preserves partial coverage and fails closed for exhausted or totally failed providers', async () => {
+    useFinnhubFixtureKey();
     let mode = 'success';
     let calls = 0;
     global.fetch = vi.fn(async (input) => {
@@ -424,6 +445,7 @@ describe('restored routes (Phase 1 parity)', () => {
   });
 
   it('Finnhub exhaustion is typed, makes no call, and redacts HTTP bodies', async () => {
+    useFinnhubFixtureKey();
     clearCacheForTests();
     runtimeDesk.__testHooks.clearBudgetsForTests();
     const fetchSpy = vi.fn(async () => new Response('{"secret":"provider payload"}', { status: 503 }));
@@ -450,11 +472,15 @@ describe('restored routes (Phase 1 parity)', () => {
       expect(res.statusCode).toBe(503);
       expect(res.json().error).toBe('no_api_key');
     } finally {
-      process.env.FINNHUB_API_KEY = saved;
+      // Assigning `undefined` would stringify to "undefined" (a truthy fake key),
+      // so restore via delete when the key was originally absent.
+      if (saved === undefined) delete process.env.FINNHUB_API_KEY;
+      else process.env.FINNHUB_API_KEY = saved;
     }
   });
 
   it('finnhub quote joins concurrent clients and serves bounded stale data before expiry', async () => {
+    useFinnhubFixtureKey();
     let release;
     let gate = new Promise((resolve) => { release = resolve; });
     let fail = false;

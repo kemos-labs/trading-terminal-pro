@@ -68,7 +68,7 @@ Do not expect live chains/rates from a Vercel-only deploy without a separate Nod
 - **MacroVol** — FRED / NY Fed / rates risk (`macrovol-api` on `:8765`)
 - Fail-closed fallbacks may mark surfaces synthetic in provenance chips — never presented as a user-selectable “demo mode”
 
-**UI system** (see `UI_UX_PLAN.md`, `DESIGN.md`)
+**UI system** (see `DESIGN.md`)
 - Density dense/readable (**D**), desk section jump **[** **]**, domain LIVE/DELAYED/STALE freshness (separate from MODE LIVE)
 - Virtualized chain & STIR boards, CSV export, imply drawer, collapsible Rates sections
 
@@ -140,7 +140,7 @@ Optional OPRA skeleton (server only, off by default): `OPRA_ENABLED`, `OPRA_VEND
 
 That is the only public production URL (Railway full stack). Health check: `/api/health` should return `{"status":"ok",...}`. The shell boots into a short briefing, then the Vol desk.
 
-Repo: [github.com/xxxova2/volaterm](https://github.com/xxxova2/volaterm)
+Repo: [github.com/kemos-labs/trading-terminal-pro](https://github.com/kemos-labs/trading-terminal-pro)
 
 ## Deployment
 

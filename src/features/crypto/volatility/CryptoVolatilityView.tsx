@@ -1,6 +1,17 @@
-import { useEffect, useState } from 'react';
+import { Component, type ReactNode, useEffect, useState, lazy, Suspense } from 'react';
 import { fetchDeribitMarket, type DeribitMarketBundle, type NormalizedTicker } from '../../../api/deribit';
 import { forwardVol } from '../../../lib/math/carry/forwardVol';
+import { useCryptoAsset } from '../shell/CryptoShell';
+import { deribitBundleToSurfaceGrid } from './cryptoSurfaceAdapter';
+
+const IvSurface3D = lazy(() => import('../../../components/charts/IvSurface3D'));
+
+class Crypto3dErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error) { console.error('[Crypto3dErrorBoundary]', error); }
+  render() { return this.state.hasError ? this.props.fallback : this.props.children; }
+}
 
 interface TermPoint { expiryMs: number; atmIv: number | null; dte: number; hasQuote: boolean; }
 
@@ -22,14 +33,21 @@ function atmIvAtExpiry(tickers: NormalizedTicker[], expiryMs: number, spot: numb
 }
 
 export function CryptoVolatilityView() {
+  const { validatedAsset, isUnsupported, rawAsset, validatedVenue, isUnsupportedVenue, rawVenue } = useCryptoAsset();
   const [bundle, setBundle] = useState<DeribitMarketBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showModel, setShowModel] = useState(false);
   const [stale, setStale] = useState(false);
+  const [open3d, setOpen3d] = useState(false);
 
   useEffect(() => {
+    if (isUnsupportedVenue || !validatedVenue) return;
+    if (isUnsupported || !validatedAsset) return;
     let cancelled = false;
-    fetchDeribitMarket('BTC').then(res => {
+    setBundle(null);
+    setError(null);
+    setStale(false);
+    fetchDeribitMarket(validatedAsset).then(res => {
       if (cancelled) return;
       if (!res) {
         setError('Deribit volatility snapshot unavailable');
@@ -40,7 +58,27 @@ export function CryptoVolatilityView() {
       setStale(Date.now() - res.fetchedAt > 60_000);
     }).catch(e => { if(!cancelled) setError(String(e.message)); });
     return () => { cancelled = true; };
-  }, []);
+  }, [validatedAsset, isUnsupported, validatedVenue, isUnsupportedVenue]);
+
+  if (isUnsupportedVenue) {
+    return (
+      <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 font-mono text-xs" role="alert" data-testid="vol-venue-unsupported">
+        <div className="font-bold">Venue unavailable</div>
+        <div className="mt-1 text-muted-foreground">Unsupported venue &quot;{rawVenue}&quot; — supported: deribit. No data fetched.</div>
+        <div className="mt-2 text-[10px] text-muted-foreground">Update the venue query to deribit.</div>
+      </div>
+    );
+  }
+
+  if (isUnsupported) {
+    return (
+      <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 font-mono text-xs" role="alert" data-testid="vol-unsupported">
+        <div className="font-bold">Asset unavailable</div>
+        <div className="mt-1 text-muted-foreground">Unsupported asset &quot;{rawAsset}&quot; — supported: BTC, ETH. No data fetched.</div>
+        <div className="mt-2 text-[10px] text-muted-foreground">Update the asset query to BTC or ETH.</div>
+      </div>
+    );
+  }
 
   if (error) return (
     <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
@@ -85,7 +123,8 @@ export function CryptoVolatilityView() {
   return (
     <div className="space-y-4" data-testid="volatility-workstation">
       <div className="flex items-center gap-2 font-mono text-xs">
-        <span className="rounded bg-muted px-2 py-1">Venue: deribit</span>
+        <span className="rounded bg-muted px-2 py-1" data-testid="vol-asset-badge">{bundle.currency} · deribit</span>
+        <span className="rounded bg-muted px-2 py-1">Source: Deribit</span>
         <span className="rounded bg-muted px-2 py-1">As of: {new Date(bundle.fetchedAt).toISOString().slice(11, 19)}Z</span>
         <span className="rounded bg-muted px-2 py-1">Coverage {Math.round((bundle.coverage ?? 0) * 100)}% ({term.length} expiries)</span>
         {stale ? (
@@ -125,6 +164,80 @@ export function CryptoVolatilityView() {
         </div>
       )}
 
+      <div className="rounded border p-3" data-testid="crypto-3d-section">
+        <div className="flex items-center justify-between">
+          <h3 className="font-mono text-xs font-bold uppercase">CRYPTO 3D SURFACE · observed nodes</h3>
+          <button
+            type="button"
+            data-testid="open-3d-crypto-surface"
+            onClick={() => setOpen3d(v => !v)}
+            aria-pressed={open3d}
+            className="rounded border px-2 py-1 font-mono text-xs hover:bg-muted"
+          >
+            {open3d ? 'Close 3D' : 'Open 3D'}
+          </button>
+        </div>
+        <p className="mt-1 font-mono text-[10px] text-muted-foreground">Observed mark IV nodes only (decimal IV ×100 for display). Missing cells stay holes. No model mesh — observed data only.</p>
+        {open3d && (() => {
+          const surface = deribitBundleToSurfaceGrid(bundle);
+          if (!surface) {
+            return (
+              <div className="mt-3 rounded border border-dashed p-4 text-center font-mono text-xs" data-testid="crypto-3d-unavailable">
+                <div className="font-bold">3D unavailable — insufficient surface</div>
+                <div className="mt-1 text-muted-foreground">Need ≥2 expiries × ≥2 strikes with observed mark IV and a valid spot. Current data has no renderable surface.</div>
+                {/* Accessible fallback: same observed data shape as adapter (active expiries only) */}
+                <div className="mt-3 max-h-40 overflow-auto rounded bg-muted p-2 text-left text-[10px]">
+                  <table className="w-full" aria-label="Observed IV fallback table">
+                    <thead><tr className="text-left"><th className="pr-2">Expiry</th><th className="pr-2">DTE</th><th className="pr-2">Strike</th><th className="pr-2">Mark IV</th></tr></thead>
+                    <tbody>
+                      {bundle.instruments.filter(t => t.markIv != null && Number.isFinite(t.markIv) && t.expiryMs != null && activeExpiryMs(t.expiryMs, now)).slice(0, 12).map(t => (
+                        <tr key={t.instrument}><td className="pr-2">{t.expiryMs != null ? new Date(t.expiryMs).toISOString().slice(0,10) : '—'}</td><td className="pr-2">{t.expiryMs != null ? `${Math.round((t.expiryMs - now)/864e5)}d` : '—'}</td><td className="pr-2">{t.strike}</td><td>{fmtIv(t.markIv)}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div className="mt-3" data-testid="crypto-3d-container">
+              <div className="rounded border bg-black/40 p-1" style={{ height: 360 }}>
+                <Crypto3dErrorBoundary
+                  fallback={
+                    <div className="flex h-full flex-col items-center justify-center gap-2 p-2" data-testid="crypto-3d-error-fallback">
+                      <div className="font-mono text-xs font-bold">3D engine unavailable — observed data below</div>
+                      <div className="max-h-40 w-full overflow-auto rounded bg-muted p-2 text-left font-mono text-[10px]">
+                        <table className="w-full" aria-label="Observed IV fallback table">
+                          <thead><tr className="text-left"><th className="pr-2">Expiry</th><th className="pr-2">DTE</th><th className="pr-2">Strike</th><th className="pr-2">Mark IV</th></tr></thead>
+                          <tbody>
+                            {bundle.instruments.filter(t => t.markIv != null && Number.isFinite(t.markIv) && t.expiryMs != null && activeExpiryMs(t.expiryMs, now)).slice(0, 12).map(t => (
+                              <tr key={t.instrument}><td className="pr-2">{t.expiryMs != null ? new Date(t.expiryMs).toISOString().slice(0,10) : '—'}</td><td className="pr-2">{t.expiryMs != null ? `${Math.round((t.expiryMs - now)/864e5)}d` : '—'}</td><td className="pr-2">{t.strike}</td><td>{fmtIv(t.markIv)}</td></tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  }
+                >
+                  <Suspense fallback={<div className="flex h-full items-center justify-center font-mono text-xs text-muted-foreground">Loading 3D engine…</div>}>
+                    <IvSurface3D
+                      grid={surface.grid}
+                      spot={surface.spot}
+                      sviFits={[]}
+                      showModel={false}
+                      solid={true}
+                      xMode="strike"
+                      viewPreset="home"
+                    />
+                  </Suspense>
+                </Crypto3dErrorBoundary>
+              </div>
+              <div className="mt-2 font-mono text-[10px] text-muted-foreground">Spot {surface.spot.toFixed(2)} · {surface.grid.expiries.length} expiries × {surface.grid.strikes.length} strikes · IV % = decimal ×100 · Source: Deribit</div>
+            </div>
+          );
+        })()}
+      </div>
+
       <div className="rounded border p-3">
         <h3 className="font-mono text-xs font-bold uppercase">Observed Quote Matrix</h3>
         <p className="mt-1 font-mono text-[10px] text-muted-foreground">Bid/ask/mark IV separated; mark not executable. Missing cells stay null.</p>
@@ -133,7 +246,7 @@ export function CryptoVolatilityView() {
             <table className="w-full" aria-label="Observed option quote matrix, strike by IV layer">
               <thead>
                 <tr className="text-left">
-                  <th scope="col" className="pr-2">Strike</th><th scope="col" className="pr-2">Bid IV</th><th scope="col" className="pr-2">Ask IV</th><th scope="col" className="pr-2">Mark IV</th><th scope="col">OI (BTC)</th>
+                  <th scope="col" className="pr-2">Strike</th><th scope="col" className="pr-2">Bid IV</th><th scope="col" className="pr-2">Ask IV</th><th scope="col" className="pr-2">Mark IV</th><th scope="col">OI ({bundle.currency})</th>
                 </tr>
               </thead>
               <tbody>

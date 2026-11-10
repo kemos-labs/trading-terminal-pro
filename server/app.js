@@ -405,7 +405,7 @@ export async function buildServer({ onRoute } = {}) {
 
   // Static
   try {
-    await fastify.register(fastifyStatic, { root: join(__dirname, '../dist'), wildcard: false, maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0, immutable: true });
+    await fastify.register(fastifyStatic, { root: join(__dirname, '../dist'), wildcard: true, maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0, immutable: true });
   } catch (err) { console.error('static register failed', err); }
 
   fastify.setNotFoundHandler((request, reply) => {

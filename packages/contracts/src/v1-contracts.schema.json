@@ -41,17 +41,49 @@
     "cacheState": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["state", "hit", "ageMs", "stale", "coalesced", "providerError"],
+      "required": [
+        "state",
+        "hit",
+        "ageMs",
+        "stale",
+        "coalesced",
+        "providerError"
+      ],
       "properties": {
-        "state": { "type": "string", "enum": ["fresh", "miss", "stale", "unavailable"] },
-        "hit": { "type": "boolean" },
-        "ageMs": { "type": ["integer", "null"], "minimum": 0 },
-        "stale": { "type": "boolean" },
-        "coalesced": { "type": "boolean" },
+        "state": {
+          "type": "string",
+          "enum": [
+            "fresh",
+            "miss",
+            "stale",
+            "unavailable"
+          ]
+        },
+        "hit": {
+          "type": "boolean"
+        },
+        "ageMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "stale": {
+          "type": "boolean"
+        },
+        "coalesced": {
+          "type": "boolean"
+        },
         "providerError": {
           "anyOf": [
-            { "type": "null" },
-            { "type": "string", "pattern": "^(rate_limited|timeout|http_error|provider_unavailable|invalid_payload|not_allowlisted|insufficient_coverage|upstream-error|http-[45][0-9]{2})$" }
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^(rate_limited|timeout|http_error|provider_unavailable|invalid_payload|not_allowlisted|insufficient_coverage|upstream-error|http-[45][0-9]{2})$"
+            }
           ]
         }
       }
@@ -403,7 +435,10 @@
           "minimum": 0
         },
         "volumeUsd": {
-          "type": ["number", "null"],
+          "type": [
+            "number",
+            "null"
+          ],
           "minimum": 0
         },
         "openInterest": {
@@ -911,107 +946,955 @@
     "surfaceNode": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["expiry", "strike", "right", "bidIv", "askIv", "venueMarkIv"],
+      "required": [
+        "expiry",
+        "strike",
+        "right",
+        "bidIv",
+        "askIv",
+        "venueMarkIv"
+      ],
       "properties": {
-        "expiry": { "type": "string", "format": "date" },
-        "strike": { "type": "number", "exclusiveMinimum": 0 },
-        "right": { "type": "string", "enum": ["call", "put"] },
-        "bidIv": { "type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 10 },
-        "askIv": { "type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 10 },
-        "venueMarkIv": { "type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 10 }
+        "expiry": {
+          "type": "string",
+          "format": "date"
+        },
+        "strike": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "right": {
+          "type": "string",
+          "enum": [
+            "call",
+            "put"
+          ]
+        },
+        "bidIv": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 10
+        },
+        "askIv": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 10
+        },
+        "venueMarkIv": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 10
+        }
       }
     },
     "volatilitySurfaceData": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["symbol", "spot", "axes", "observedNodes", "modelLayer", "observedCount"],
+      "required": [
+        "symbol",
+        "spot",
+        "axes",
+        "observedNodes",
+        "modelLayer",
+        "observedCount"
+      ],
       "properties": {
-        "symbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,11}$" },
-        "spot": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+        },
+        "spot": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
         "axes": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["x", "y", "z"],
+          "required": [
+            "x",
+            "y",
+            "z"
+          ],
           "properties": {
-            "x": { "const": "strike" },
-            "y": { "const": "expiry" },
-            "z": { "const": "decimal-volatility" }
+            "x": {
+              "const": "strike"
+            },
+            "y": {
+              "const": "expiry"
+            },
+            "z": {
+              "const": "decimal-volatility"
+            }
           }
         },
-        "observedNodes": { "type": "array", "maxItems": 5000, "items": { "$ref": "#/$defs/surfaceNode" } },
+        "observedNodes": {
+          "type": "array",
+          "maxItems": 5000,
+          "items": {
+            "$ref": "#/$defs/surfaceNode"
+          }
+        },
         "modelLayer": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["status", "name", "calibratedAt", "nodes"],
+          "required": [
+            "status",
+            "name",
+            "calibratedAt",
+            "nodes"
+          ],
           "properties": {
-            "status": { "const": "unavailable" },
-            "name": { "type": "null" },
-            "calibratedAt": { "type": "null" },
-            "nodes": { "type": "array", "maxItems": 0 }
+            "status": {
+              "const": "unavailable"
+            },
+            "name": {
+              "type": "null"
+            },
+            "calibratedAt": {
+              "type": "null"
+            },
+            "nodes": {
+              "type": "array",
+              "maxItems": 0
+            }
           }
         },
-        "observedCount": { "type": "integer", "minimum": 0 }
+        "observedCount": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "greekPoint": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["expiry", "strike", "right", "iv", "ivBasis", "delta", "gamma", "vega", "theta", "vanna", "charm"],
+      "required": [
+        "expiry",
+        "strike",
+        "right",
+        "iv",
+        "ivBasis",
+        "delta",
+        "gamma",
+        "vega",
+        "theta",
+        "vanna",
+        "charm"
+      ],
       "properties": {
-        "expiry": { "type": "string", "format": "date" },
-        "strike": { "type": "number", "exclusiveMinimum": 0 },
-        "right": { "type": "string", "enum": ["call", "put"] },
-        "iv": { "type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 10 },
-        "ivBasis": { "type": "string", "enum": ["venue-mark", "unavailable"] },
-        "delta": { "type": ["number", "null"], "minimum": -1, "maximum": 1 },
-        "gamma": { "type": ["number", "null"], "minimum": 0 },
-        "vega": { "type": ["number", "null"], "minimum": 0 },
-        "theta": { "type": ["number", "null"] },
-        "vanna": { "type": ["number", "null"] },
-        "charm": { "type": ["number", "null"] }
+        "expiry": {
+          "type": "string",
+          "format": "date"
+        },
+        "strike": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "right": {
+          "type": "string",
+          "enum": [
+            "call",
+            "put"
+          ]
+        },
+        "iv": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 10
+        },
+        "ivBasis": {
+          "type": "string",
+          "enum": [
+            "venue-mark",
+            "unavailable"
+          ]
+        },
+        "delta": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": -1,
+          "maximum": 1
+        },
+        "gamma": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "vega": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "theta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "vanna": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "charm": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
       }
     },
     "greeksData": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["symbol", "spot", "model", "riskFreeRate", "carryRate", "points", "computedCount"],
+      "required": [
+        "symbol",
+        "spot",
+        "model",
+        "riskFreeRate",
+        "carryRate",
+        "points",
+        "computedCount"
+      ],
       "properties": {
-        "symbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,11}$" },
-        "spot": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-        "model": { "const": "Black-Scholes-Merton" },
-        "riskFreeRate": { "type": ["number", "null"], "minimum": -0.25, "maximum": 1 },
-        "carryRate": { "type": ["number", "null"], "minimum": -0.25, "maximum": 1 },
-        "points": { "type": "array", "maxItems": 5000, "items": { "$ref": "#/$defs/greekPoint" } },
-        "computedCount": { "type": "integer", "minimum": 0 }
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+        },
+        "spot": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "model": {
+          "const": "Black-Scholes-Merton"
+        },
+        "riskFreeRate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": -0.25,
+          "maximum": 1
+        },
+        "carryRate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": -0.25,
+          "maximum": 1
+        },
+        "points": {
+          "type": "array",
+          "maxItems": 5000,
+          "items": {
+            "$ref": "#/$defs/greekPoint"
+          }
+        },
+        "computedCount": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "positioningPoint": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["expiry", "strike", "right", "openInterest", "oiState", "gex1PctUsd", "dexUsd", "vannaUsdPerUnitVol", "charmUsdPerDay"],
+      "required": [
+        "expiry",
+        "strike",
+        "right",
+        "openInterest",
+        "oiState",
+        "gex1PctUsd",
+        "dexUsd",
+        "vannaUsdPerUnitVol",
+        "charmUsdPerDay"
+      ],
       "properties": {
-        "expiry": { "type": "string", "format": "date" },
-        "strike": { "type": "number", "exclusiveMinimum": 0 },
-        "right": { "type": "string", "enum": ["call", "put"] },
-        "openInterest": { "type": ["number", "null"], "minimum": 0 },
-        "oiState": { "type": "string", "enum": ["observed", "missing"] },
-        "gex1PctUsd": { "type": ["number", "null"] },
-        "dexUsd": { "type": ["number", "null"] },
-        "vannaUsdPerUnitVol": { "type": ["number", "null"] },
-        "charmUsdPerDay": { "type": ["number", "null"] }
+        "expiry": {
+          "type": "string",
+          "format": "date"
+        },
+        "strike": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "right": {
+          "type": "string",
+          "enum": [
+            "call",
+            "put"
+          ]
+        },
+        "openInterest": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "oiState": {
+          "type": "string",
+          "enum": [
+            "observed",
+            "missing"
+          ]
+        },
+        "gex1PctUsd": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "dexUsd": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "vannaUsdPerUnitVol": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "charmUsdPerDay": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
       }
     },
     "positioningData": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["symbol", "spot", "signModel", "contractMultiplier", "points", "computedCount"],
+      "required": [
+        "symbol",
+        "spot",
+        "signModel",
+        "contractMultiplier",
+        "points",
+        "computedCount"
+      ],
       "properties": {
-        "symbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,11}$" },
-        "spot": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-        "signModel": { "const": "customer-long-oi-proxy" },
-        "contractMultiplier": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-        "points": { "type": "array", "maxItems": 5000, "items": { "$ref": "#/$defs/positioningPoint" } },
-        "computedCount": { "type": "integer", "minimum": 0 }
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+        },
+        "spot": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "signModel": {
+          "const": "signed-greek-oi-proxy",
+          "description": "Explicit mixed per-metric signed-Greek OI convention: GEX applies +gamma for calls and -gamma for puts; DEX/Vanna/Charm apply the signed model Greek with no right multiplier. Not customer-long across all metrics; not observed dealer inventory."
+        },
+        "contractMultiplier": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "points": {
+          "type": "array",
+          "maxItems": 5000,
+          "items": {
+            "$ref": "#/$defs/positioningPoint"
+          }
+        },
+        "computedCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "forwardVolMatrixLeg": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "REF06 expiry clock: equity date-only expiries map to 20:00:00.000Z on the supplied date solely as a model-time approximation (ref06-equity-date-20utc-v1; not observed/settlement/cutoff; no venue/DST/holiday adjustment); crypto date labels derive from provider expiryMs (ref06-crypto-provider-instant-v1). DTE is fractional elapsed time from envelope asOf to the applicable instant divided by 86,400,000 ms; T=DTE/365, unrounded.",
+      "required": [
+        "expiry",
+        "dte",
+        "T",
+        "atmIv",
+        "atmStrike",
+        "quoteCount"
+      ],
+      "properties": {
+        "expiry": {
+          "type": "string",
+          "format": "date",
+          "description": "UTC date label only. Equity: upstream expiry date label, not an observed instant (DTE uses the 20:00 UTC model instant ref06-equity-date-20utc-v1). Crypto: UTC date label derived from provider expiryMs."
+        },
+        "dte": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Fractional elapsed calendar days from envelope asOf to the applicable expiry instant (equity: model 20:00 UTC instant; crypto: provider expiryMs), divided by 86,400,000 ms. Unrounded; null when expired/nonfinite/missing."
+        },
+        "T": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "description": "Year fraction T=DTE/365."
+        },
+        "atmIv": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 3,
+          "description": "Nearest-to-spot ATM IV leg input. Provenance follows ivBasis; provider IV is not claimed to be solved midpoint IV."
+        },
+        "atmStrike": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "quoteCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "forwardVolMatrixCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Forward-vol cell conditional on the applicable expiry instants (equity: model 20:00 UTC instants; crypto: provider expiryMs). Negative forward variance (any) is null; exact zero with distinct increasing DTE may be 0.",
+      "required": [
+        "startIndex",
+        "endIndex",
+        "startExpiry",
+        "endExpiry",
+        "startDte",
+        "endDte",
+        "startT",
+        "endT",
+        "startAtmIv",
+        "endAtmIv",
+        "startAtmStrike",
+        "endAtmStrike",
+        "value",
+        "structural",
+        "reason"
+      ],
+      "properties": {
+        "startIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "startExpiry": {
+          "type": "string",
+          "format": "date",
+          "description": "Start-leg UTC date label (equity: not an observed instant; crypto: derived from provider expiryMs)."
+        },
+        "endExpiry": {
+          "type": "string",
+          "format": "date",
+          "description": "End-leg UTC date label (equity: not an observed instant; crypto: derived from provider expiryMs)."
+        },
+        "startDte": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Start-leg DTE: fractional elapsed time from envelope asOf to the applicable start instant divided by 86,400,000 ms, unrounded."
+        },
+        "endDte": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "End-leg DTE: fractional elapsed time from envelope asOf to the applicable end instant divided by 86,400,000 ms, unrounded."
+        },
+        "startT": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "description": "Start-leg year fraction startDte/365."
+        },
+        "endT": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "description": "End-leg year fraction endDte/365."
+        },
+        "startAtmIv": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 3
+        },
+        "endAtmIv": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 3
+        },
+        "startAtmStrike": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "endAtmStrike": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Forward volatility from total variance. Equity: conditional on model 20:00 UTC instants (ref06-equity-date-20utc-v1). Crypto: uses provider expiryMs (ref06-crypto-provider-instant-v1). Null when expired/invalid/missing, negative variance, or out of range; never NaN/Infinity."
+        },
+        "structural": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "structural",
+            "expired/nonfinite DTE",
+            "non-increasing DTE",
+            "ATM leg missing",
+            "variance invalid/negative",
+            "forward out of range",
+            null
+          ]
+        }
+      }
+    },
+    "forwardVolMatrixData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbol",
+        "spot",
+        "origin",
+        "yearFraction",
+        "formula",
+        "units",
+        "ivBasis",
+        "expiries",
+        "cells",
+        "computedCount",
+        "capped",
+        "totalLegs"
+      ],
+      "properties": {
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+        },
+        "spot": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "origin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label",
+            "note"
+          ],
+          "properties": {
+            "label": {
+              "const": "SPOT"
+            },
+            "note": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "yearFraction": {
+          "const": "DTE/365 calendar"
+        },
+        "formula": {
+          "const": "fwdVol = sqrt((sigma2^2*T2 - sigma1^2*T1)/(T2-T1))"
+        },
+        "units": {
+          "const": "decimal-volatility (annualized; displayed %)"
+        },
+        "ivBasis": {
+          "type": "string",
+          "enum": [
+            "derived-solved-mid",
+            "observed-mark"
+          ],
+          "description": "ATM IV basis as currently labelled (equity derived-solved-mid, crypto observed-mark). Provider IV is not claimed to be solved midpoint IV until independently evidenced."
+        },
+        "expiries": {
+          "type": "array",
+          "maxItems": 24,
+          "items": {
+            "$ref": "#/$defs/forwardVolMatrixLeg"
+          }
+        },
+        "cells": {
+          "type": "array",
+          "maxItems": 576,
+          "items": {
+            "$ref": "#/$defs/forwardVolMatrixCell"
+          }
+        },
+        "computedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "capped": {
+          "type": "boolean"
+        },
+        "totalLegs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "exposureGridCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "included",
+        "excludedExpired",
+        "missing",
+        "reasons"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "included": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excludedExpired": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "missing-expiry",
+              "expired",
+              "unsupported-model",
+              "missing-iv",
+              "missing-rates",
+              "invalid-spot-strike",
+              "missing-oi",
+              "invalid-multiplier",
+              "non-finite-exposure-overflow"
+            ]
+          }
+        }
+      }
+    },
+    "exposureGridData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbol",
+        "metric",
+        "units",
+        "prices",
+        "timesMs",
+        "cells",
+        "totals",
+        "methodology",
+        "quoteBasis",
+        "scenario",
+        "rowSelection",
+        "gridCells",
+        "multiplierBasis",
+        "positionBasisAt",
+        "snapshotSource",
+        "ivBasis"
+      ],
+      "properties": {
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+        },
+        "metric": {
+          "enum": [
+            "gex",
+            "charm",
+            "dex"
+          ]
+        },
+        "units": {
+          "type": "string"
+        },
+        "prices": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 150,
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "timesMs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 150,
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "cells": {
+          "type": "array",
+          "maxItems": 150,
+          "items": {
+            "type": "array",
+            "maxItems": 150,
+            "items": {
+              "$ref": "#/$defs/exposureGridCell"
+            }
+          }
+        },
+        "totals": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "included",
+            "excludedExpired",
+            "missing"
+          ],
+          "properties": {
+            "included": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "excludedExpired": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "missing": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "methodology": {
+          "type": "object"
+        },
+        "quoteBasis": {
+          "enum": [
+            "observed-snapshot",
+            "observed-snapshot+scenario-overrides"
+          ]
+        },
+        "scenario": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "riskFreeRate": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": -0.25,
+              "maximum": 1
+            },
+            "carryRate": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": -0.25,
+              "maximum": 1
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "const": "spot-european"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "multiplier": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0,
+              "maximum": 100000
+            },
+            "expiryOverrides": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "rowSelection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "totalContracts",
+            "eligibleContracts",
+            "usedContracts",
+            "omittedContracts",
+            "ineligibleContracts",
+            "maxRows",
+            "truncated",
+            "selection",
+            "truncationReason"
+          ],
+          "properties": {
+            "totalContracts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "eligibleContracts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "usedContracts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "omittedContracts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ineligibleContracts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "maxRows": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "selection": {
+              "type": "string"
+            },
+            "truncationReason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "gridCells": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "computed",
+            "total"
+          ],
+          "properties": {
+            "computed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "multiplierBasis": {
+          "type": "string"
+        },
+        "positionBasisAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "snapshotSource": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ivBasis": {
+          "type": "string"
+        }
       }
     },
     "healthResponse": {
@@ -1061,20 +1944,77 @@
     },
     "volatilitySurfaceResponse": {
       "allOf": [
-        { "$ref": "#/$defs/baseEnvelope" },
-        { "type": "object", "properties": { "data": { "$ref": "#/$defs/volatilitySurfaceData" } } }
+        {
+          "$ref": "#/$defs/baseEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/volatilitySurfaceData"
+            }
+          }
+        }
       ]
     },
     "greeksResponse": {
       "allOf": [
-        { "$ref": "#/$defs/baseEnvelope" },
-        { "type": "object", "properties": { "data": { "$ref": "#/$defs/greeksData" } } }
+        {
+          "$ref": "#/$defs/baseEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/greeksData"
+            }
+          }
+        }
       ]
     },
     "positioningResponse": {
       "allOf": [
-        { "$ref": "#/$defs/baseEnvelope" },
-        { "type": "object", "properties": { "data": { "$ref": "#/$defs/positioningData" } } }
+        {
+          "$ref": "#/$defs/baseEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/positioningData"
+            }
+          }
+        }
+      ]
+    },
+    "forwardVolMatrixResponse": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/forwardVolMatrixData"
+            }
+          }
+        }
+      ]
+    },
+    "exposureGridResponse": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/exposureGridData"
+            }
+          }
+        }
       ]
     },
     "cryptoMarketResponse": {
@@ -1233,23 +2173,67 @@
         "quota": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["scope", "persistent", "healthy", "providers"],
+          "required": [
+            "scope",
+            "persistent",
+            "healthy",
+            "providers"
+          ],
           "properties": {
-            "scope": { "type": "string", "enum": ["persistent-file-single-process", "process-local"] },
-            "persistent": { "type": "boolean" },
-            "healthy": { "type": "boolean" },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "persistent-file-single-process",
+                "process-local"
+              ]
+            },
+            "persistent": {
+              "type": "boolean"
+            },
+            "healthy": {
+              "type": "boolean"
+            },
             "providers": {
               "type": "array",
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["provider", "period", "used", "cap", "remaining"],
+                "required": [
+                  "provider",
+                  "period",
+                  "used",
+                  "cap",
+                  "remaining"
+                ],
                 "properties": {
-                  "provider": { "type": "string", "enum": ["fmp", "alphavantage", "finnhub", "tradingview"] },
-                  "period": { "type": "string", "enum": ["day", "month"] },
-                  "used": { "type": "integer", "minimum": 0 },
-                  "cap": { "type": "integer", "minimum": 1 },
-                  "remaining": { "type": "integer", "minimum": 0 }
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "fmp",
+                      "alphavantage",
+                      "finnhub",
+                      "tradingview"
+                    ]
+                  },
+                  "period": {
+                    "type": "string",
+                    "enum": [
+                      "day",
+                      "month"
+                    ]
+                  },
+                  "used": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cap": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "remaining": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
                 }
               }
             }
@@ -1262,27 +2246,62 @@
           "uniqueItems": true,
           "allOf": [
             {
-              "contains": { "type": "object", "properties": { "provider": { "const": "deribit" } } },
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "const": "deribit"
+                  }
+                }
+              },
               "minContains": 1,
               "maxContains": 1
             },
             {
-              "contains": { "type": "object", "properties": { "provider": { "const": "binance-futures" } } },
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "const": "binance-futures"
+                  }
+                }
+              },
               "minContains": 1,
               "maxContains": 1
             },
             {
-              "contains": { "type": "object", "properties": { "provider": { "const": "bybit-linear" } } },
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "const": "bybit-linear"
+                  }
+                }
+              },
               "minContains": 1,
               "maxContains": 1
             },
             {
-              "contains": { "type": "object", "properties": { "provider": { "const": "bybit-options" } } },
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "const": "bybit-options"
+                  }
+                }
+              },
               "minContains": 1,
               "maxContains": 1
             },
             {
-              "contains": { "type": "object", "properties": { "provider": { "const": "okx-options" } } },
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "const": "okx-options"
+                  }
+                }
+              },
               "minContains": 1,
               "maxContains": 1
             }
@@ -1290,13 +2309,43 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["provider", "status", "failures", "cooldownRemainingMs", "probeInFlight"],
+            "required": [
+              "provider",
+              "status",
+              "failures",
+              "cooldownRemainingMs",
+              "probeInFlight"
+            ],
             "properties": {
-              "provider": { "type": "string", "enum": ["deribit", "binance-futures", "bybit-linear", "bybit-options", "okx-options"] },
-              "status": { "type": "string", "enum": ["closed", "open", "half-open"] },
-              "failures": { "type": "integer", "minimum": 0 },
-              "cooldownRemainingMs": { "type": "integer", "minimum": 0 },
-              "probeInFlight": { "type": "boolean" }
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "deribit",
+                  "binance-futures",
+                  "bybit-linear",
+                  "bybit-options",
+                  "okx-options"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "closed",
+                  "open",
+                  "half-open"
+                ]
+              },
+              "failures": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cooldownRemainingMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "probeInFlight": {
+                "type": "boolean"
+              }
             }
           }
         }
@@ -1647,6 +2696,212 @@
         }
       ]
     },
+    "policyScenarioFixingPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One fixing-line point. observedValue is caller-supplied observed SOFR (percent-100); scenarioValue after the last observed fixing is scenario, never observed. Missing values are null (Unavailable), never zero-filled.",
+      "required": [
+        "date",
+        "observedValue",
+        "scenarioValue",
+        "cumulativeStepBps",
+        "provenance"
+      ],
+      "properties": {
+        "date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "observedValue": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Observed SOFR fixing in percent-100; null when no fixing was supplied for this date."
+        },
+        "scenarioValue": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Scenario fixing in percent-100: observed where supplied, otherwise last-observed plus cumulative steps (scenario, never observed)."
+        },
+        "cumulativeStepBps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Cumulative meeting steps effective on or before this date, in basis points."
+        },
+        "provenance": {
+          "type": "string",
+          "enum": [
+            "observed",
+            "scenario"
+          ]
+        }
+      }
+    },
+    "policyScenarioWindowRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One predicted-vs-current contract row over an explicit caller-supplied window. predictedRate is scenario (Actual/360 publication-interval compounding); currentRate is observed only with explicit source/date; missing stays null (Unavailable). Rates are percent-100; differenceBps is basis points.",
+      "required": [
+        "windowStart",
+        "windowEnd",
+        "currentRate",
+        "currentSource",
+        "currentDate",
+        "currentProvenance",
+        "predictedRate",
+        "predictedProvenance",
+        "differenceBps",
+        "status",
+        "warnings"
+      ],
+      "properties": {
+        "windowStart": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "windowEnd": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "currentRate": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "currentSource": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "currentDate": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "currentProvenance": {
+          "type": "string"
+        },
+        "predictedRate": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "predictedProvenance": {
+          "type": "string"
+        },
+        "differenceBps": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "unavailable"
+          ]
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "policyScenarioData": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "REF-08/N3c policy-scenario result: observed fixing inputs kept separate from derived scenario outputs. stepBps inputs are explicit scenario decisions, never inferred midpoints; target bounds are display metadata; spread stays null when omitted.",
+      "required": [
+        "fixingLine",
+        "sr3",
+        "sr1",
+        "policySpreadBps",
+        "policySpreadProvenance",
+        "lastObservedDate"
+      ],
+      "properties": {
+        "fixingLine": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/policyScenarioFixingPoint"
+          }
+        },
+        "sr3": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/policyScenarioWindowRow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sr1": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/policyScenarioWindowRow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policySpreadBps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Optional explicit SOFR/policy spread override in basis points; null when omitted."
+        },
+        "policySpreadProvenance": {
+          "type": "string"
+        },
+        "lastObservedDate": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        }
+      }
+    },
+    "policyScenarioResponse": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/policyScenarioData"
+            }
+          }
+        }
+      ]
+    },
     "datedFutureBasis": {
       "type": "object",
       "additionalProperties": false,
@@ -1785,7 +3040,10 @@
       ],
       "properties": {
         "notional": {
-          "type": ["number", "null"]
+          "type": [
+            "number",
+            "null"
+          ]
         },
         "count": {
           "type": "integer",
@@ -1796,15 +3054,44 @@
     "flowExpiryDistribution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["expiry", "calls", "puts", "buy", "sell", "block", "rfq"],
+      "required": [
+        "expiry",
+        "calls",
+        "puts",
+        "buy",
+        "sell",
+        "block",
+        "rfq"
+      ],
       "properties": {
-        "expiry": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
-        "calls": { "type": "integer", "minimum": 0 },
-        "puts": { "type": "integer", "minimum": 0 },
-        "buy": { "type": "integer", "minimum": 0 },
-        "sell": { "type": "integer", "minimum": 0 },
-        "block": { "type": "integer", "minimum": 0 },
-        "rfq": { "type": "integer", "minimum": 0 }
+        "expiry": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "puts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "buy": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sell": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "block": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rfq": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "cryptoFlowData": {
@@ -1878,7 +3165,9 @@
         },
         "expiryDistribution": {
           "type": "array",
-          "items": { "$ref": "#/$defs/flowExpiryDistribution" }
+          "items": {
+            "$ref": "#/$defs/flowExpiryDistribution"
+          }
         },
         "count": {
           "type": "integer",
@@ -2000,6 +3289,393 @@
           ]
         }
       }
+    },
+    "exposureWorkbenchProfileRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strike",
+        "value",
+        "unit",
+        "basis"
+      ],
+      "properties": {
+        "strike": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "unit": {
+          "type": "string"
+        },
+        "basis": {
+          "type": "string"
+        },
+        "contracts": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "contractsCall": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "contractsPut": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "callGex": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "putGex": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "exposureCalendarBlock": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "dates",
+        "instantsMs",
+        "instants",
+        "clock",
+        "prices",
+        "cells",
+        "current",
+        "peak",
+        "domain",
+        "colorSemantics",
+        "snapshotIdentity",
+        "budget"
+      ],
+      "properties": {
+        "dates": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 150,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          }
+        },
+        "instantsMs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 150,
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "instants": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 150,
+          "items": {
+            "type": "string"
+          }
+        },
+        "clock": {
+          "type": "string",
+          "pattern": "^[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?$"
+        },
+        "prices": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/exposureGridCell"
+            }
+          }
+        },
+        "current": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "spot",
+            "instantMs",
+            "instant",
+            "value",
+            "unit",
+            "reasons"
+          ],
+          "properties": {
+            "spot": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "instantMs": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "instant": {
+              "type": "string"
+            },
+            "value": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "unit": {
+              "type": "string"
+            },
+            "reasons": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "peak": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "price",
+            "date",
+            "instantMs",
+            "instant"
+          ],
+          "properties": {
+            "value": {
+              "type": "number"
+            },
+            "price": {
+              "type": "number"
+            },
+            "date": {
+              "type": "string"
+            },
+            "instantMs": {
+              "type": "number"
+            },
+            "instant": {
+              "type": "string"
+            }
+          }
+        },
+        "domain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "min",
+            "max",
+            "symmetricAuto"
+          ],
+          "properties": {
+            "min": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "max": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "symmetricAuto": {
+              "type": "boolean"
+            }
+          }
+        },
+        "colorSemantics": {
+          "type": "string"
+        },
+        "snapshotIdentity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "budget": {
+          "type": "object"
+        }
+      }
+    },
+    "workbenchLinkGroup": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "symbol": {
+          "type": "boolean"
+        },
+        "expiry": {
+          "type": "boolean"
+        },
+        "time": {
+          "type": "boolean"
+        },
+        "priceRange": {
+          "type": "boolean"
+        }
+      }
+    },
+    "workbenchProfileUnits": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "exposureWorkbenchData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbol",
+        "frameId",
+        "referenceTimeMs",
+        "spotRef",
+        "gex",
+        "dex",
+        "charm",
+        "profile",
+        "profileBasis",
+        "quoteBasis",
+        "scenario",
+        "rowSelection",
+        "gridCells",
+        "multiplierBasis",
+        "positionBasisAt",
+        "snapshotSource",
+        "ivBasis"
+      ],
+      "properties": {
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9.-]{0,11}$"
+        },
+        "frameId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "referenceTimeMs": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "spotRef": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gex": {
+          "$ref": "#/$defs/exposureGridData"
+        },
+        "dex": {
+          "$ref": "#/$defs/exposureGridData"
+        },
+        "charm": {
+          "$ref": "#/$defs/exposureGridData"
+        },
+        "profile": {
+          "type": "array",
+          "maxItems": 60,
+          "items": {
+            "$ref": "#/$defs/exposureWorkbenchProfileRow"
+          }
+        },
+        "profileBasis": {
+          "type": "string"
+        },
+        "quoteBasis": {
+          "enum": [
+            "observed-snapshot",
+            "observed-snapshot+scenario-overrides"
+          ]
+        },
+        "scenario": {
+          "type": "object"
+        },
+        "rowSelection": {
+          "type": "object"
+        },
+        "gridCells": {
+          "type": "object"
+        },
+        "multiplierBasis": {
+          "type": "string"
+        },
+        "positionBasisAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "snapshotSource": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ivBasis": {
+          "type": "string"
+        },
+        "calendar": {
+          "$ref": "#/$defs/exposureCalendarBlock"
+        },
+        "linkGroup": {
+          "$ref": "#/$defs/workbenchLinkGroup"
+        },
+        "profileUnits": {
+          "$ref": "#/$defs/workbenchProfileUnits"
+        }
+      }
+    },
+    "exposureWorkbenchResponse": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/exposureWorkbenchData"
+            }
+          }
+        }
+      ]
     }
   }
 }

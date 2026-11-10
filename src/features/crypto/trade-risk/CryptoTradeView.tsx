@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { fetchDeribitMarket, type DeribitMarketBundle, type NormalizedTicker } from '../../../api/deribit';
+import { useCryptoAsset } from '../shell/CryptoShell';
 import { ChainTable, type ChainRow } from '../../../components/charts/ChainTable';
 import { priceEuropeanBlack76 } from '../../../lib/math/black76';
 import { greeksEuropean } from '../../../lib/math/greeks';
 import { yearFractionAct365 } from '../../../lib/math/units';
 
 export function CryptoTradeView() {
+  const { validatedAsset, isUnsupported, rawAsset, validatedVenue, isUnsupportedVenue, rawVenue } = useCryptoAsset();
   const [bundle, setBundle] = useState<DeribitMarketBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [legs, setLegs] = useState<{ strike: number; side: 'call' | 'put'; qty: number }[]>([]);
@@ -14,14 +16,37 @@ export function CryptoTradeView() {
   const [expiryIdx, setExpiryIdx] = useState(0);
 
   useEffect(() => {
+    if (isUnsupportedVenue || !validatedVenue) return;
+    if (isUnsupported || !validatedAsset) return;
     let cancelled = false;
-    fetchDeribitMarket('BTC').then(r => {
+    setBundle(null);
+    setError(null);
+    setStale(false);
+    fetchDeribitMarket(validatedAsset).then(r => {
       if (cancelled) return;
       setBundle(r);
       setStale(Date.now() - r.fetchedAt > 60_000);
     }).catch((e: Error) => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
-  }, []);
+  }, [validatedAsset, isUnsupported, validatedVenue, isUnsupportedVenue]);
+
+  if (isUnsupportedVenue) {
+    return (
+      <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 font-mono text-xs" role="alert" data-testid="trade-venue-unsupported">
+        <div className="font-bold">Venue unavailable</div>
+        <div className="mt-1 text-muted-foreground">Unsupported venue &quot;{rawVenue}&quot; — supported: deribit. No data fetched.</div>
+      </div>
+    );
+  }
+
+  if (isUnsupported) {
+    return (
+      <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 font-mono text-xs" role="alert" data-testid="trade-unsupported">
+        <div className="font-bold">Asset unavailable</div>
+        <div className="mt-1 text-muted-foreground">Unsupported asset &quot;{rawAsset}&quot; — supported: BTC, ETH. No data fetched.</div>
+      </div>
+    );
+  }
 
   if (error) return (
     <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
@@ -117,7 +142,7 @@ export function CryptoTradeView() {
           <span>· T={T.toFixed(4)} (ACT/365F)</span>
         </span>
         <span className="rounded bg-muted px-2 py-1">Forward {forward.toFixed(1)} (venue perp mark)</span>
-        <span className="rounded bg-muted px-2 py-1">Premium in BTC (inverse, coin-settled)</span>
+        <span className="rounded bg-muted px-2 py-1">Premium in {bundle.currency} (inverse, coin-settled)</span>
         {stale
           ? <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">Stale</span>
           : <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-400" title={`Deribit snapshot ${new Date(bundle.fetchedAt).toISOString()}`}>Observed</span>}
@@ -148,10 +173,10 @@ export function CryptoTradeView() {
           <div className="mt-3 rounded border border-dashed p-2 text-[10px] text-muted-foreground" data-testid="trade-model-layer">
             <div className="font-bold text-foreground">Model layer — not executable</div>
             <div>Black-76 @ venue forward, observed mark IV, zero discount (no rate feed wired; r=0 assumption, labelled).</div>
-            <div className="mt-1">Leg premium total: {legs.length === 0 ? '—' : legsPriced ? `${totalPremium.toFixed(4)} BTC` : 'unavailable (leg lacks observed IV)'}</div>
+            <div className="mt-1">Leg premium total: {legs.length === 0 ? '—' : legsPriced ? `${totalPremium.toFixed(4)} ${bundle.currency}` : 'unavailable (leg lacks observed IV)'}</div>
             {legs.length > 0 && (
               <div className="mt-2" data-testid="trade-leg-greeks">
-                <div className="font-bold text-foreground/80">Combo Greeks (per 1 BTC, model layer)</div>
+                <div className="font-bold text-foreground/80">Combo Greeks (per 1 {bundle.currency}, model layer)</div>
                 <table className="mt-1 w-full" aria-label="Combo greeks per leg, model layer">
                   <thead><tr className="text-left"><th className="pr-2">Leg</th><th className="pr-2 text-right">Δ</th><th className="pr-2 text-right">Γ</th><th className="pr-2 text-right">ν (per 1 vol pt)</th><th className="text-right">θ/day</th></tr></thead>
                   <tbody>

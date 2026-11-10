@@ -3,6 +3,7 @@ import {
   classifyDomainFreshness,
   classifyFreshnessFromIso,
   FRESHNESS_THRESHOLDS,
+  kindFromProvenance,
   makeProvenance,
   worstFreshnessKind,
 } from './freshness';
@@ -75,8 +76,83 @@ describe('makeProvenance', () => {
   });
 });
 
-describe('worstFreshnessKind', () => {
-  it('returns min rank (down < expired < stale < delayed < unknown < live)', () => {
+describe('delayed provenance constraint', () => {
+  const now = 1_700_000_000_000;
+  it('delayed source with fresh fetch (age 0) remains delayed even when previousKind=live', () => {
+    const kind = classifyDomainFreshness(now, 'chain', { nowMs: now, previousKind: 'live', sourceKind: 'delayed' });
+    expect(kind).toBe('delayed');
+  });
+  it('delayed never upgrades to live via hysteresis but can age to stale/expired', () => {
+    const t = FRESHNESS_THRESHOLDS.chain;
+    // Fresh -> delayed
+    expect(classifyDomainFreshness(now, 'chain', { nowMs: now, sourceKind: 'delayed' })).toBe('delayed');
+    // Aged past staleMs -> stale (natural downgrade allowed)
+    expect(classifyDomainFreshness(now - t.staleMs - 1000, 'chain', { nowMs: now, sourceKind: 'delayed' })).toBe('stale');
+    // Aged past expiredMs -> expired
+    expect(classifyDomainFreshness(now - t.expiredMs - 1000, 'chain', { nowMs: now, sourceKind: 'delayed' })).toBe('expired');
+  });
+  it('stale/expired/down/unknown never upgrade to live even with fresh fetch', () => {
+    for (const src of ['stale', 'expired', 'down', 'unknown'] as const) {
+      const k = classifyDomainFreshness(now, 'chain', { nowMs: now, sourceKind: src, previousKind: 'live' });
+      expect(k).not.toBe('live');
+      expect(k).toBe(src === 'down' ? 'down' : src);
+    }
+  });
+  it('malformed sourceKind degrades to unknown, not live', () => {
+    const k = classifyDomainFreshness(now, 'chain', { nowMs: now, sourceKind: 'bogus' as never });
+    expect(k).toBe('unknown');
+  });
+  it('unknown observation time stays unknown even with source live', () => {
+    expect(classifyDomainFreshness(null, 'chain', { nowMs: now, sourceKind: 'live' })).toBe('unknown');
+    expect(classifyDomainFreshness(null, 'chain', { nowMs: now, sourceKind: 'delayed' })).toBe('delayed');
+  });
+});
+
+describe('kindFromProvenance header recompute (D1 sourceKind threading)', () => {
+  const now = 1_700_000_000_000;
+  it('delayed provenance with fresh asOf (age 0) and previousKind delayed stays delayed, not live', () => {
+    // Header path: previousKind=stored kind, asOfMs=fresh server asOf, sourceKind threaded via opts.
+    expect(
+      kindFromProvenance('delayed', now, 'chain', {
+        demo: false,
+        down: false,
+        nowMs: now,
+        sourceKind: 'delayed',
+      }),
+    ).toBe('delayed');
+    expect(
+      kindFromProvenance('delayed', now, 'spot', {
+        demo: false,
+        down: false,
+        nowMs: now,
+        sourceKind: 'delayed',
+      }),
+    ).toBe('delayed');
+  });
+});
+
+describe('kindFromProvenance header recompute', () => {
+  const now = 1_700_000_000_000;
+  it('delayed snapshot with fresh asOf and previousKind delayed stays delayed only when sourceKind is threaded', () => {
+    const freshAsOf = now; // age 0
+    const withSource = kindFromProvenance('delayed', freshAsOf, 'chain', {
+      nowMs: now,
+      sourceKind: 'delayed',
+    });
+    expect(withSource).toBe('delayed');
+    const withoutSource = kindFromProvenance('delayed', freshAsOf, 'chain', { nowMs: now });
+    expect(withoutSource).toBe('live');
+    expect(kindFromProvenance('live', freshAsOf, 'spot', { nowMs: now, sourceKind: 'delayed' })).toBe('delayed');
+  });
+  it('summary worstFreshnessKind stays delayed when chain is delayed', () => {
+    const now2 = 1_700_000_000_000;
+    const spotKind = kindFromProvenance('delayed', now2, 'spot', { nowMs: now2, sourceKind: 'delayed' });
+    const chainKind = kindFromProvenance('delayed', now2, 'chain', { nowMs: now2, sourceKind: 'delayed' });
+    expect(worstFreshnessKind(spotKind, chainKind)).toBe('delayed');
+  });
+});
+
+describe('worstFreshnessKind', () => {  it('returns min rank (down < expired < stale < delayed < unknown < live)', () => {
     expect(worstFreshnessKind('live', 'delayed')).toBe('delayed');
     expect(worstFreshnessKind('live', 'stale', 'delayed')).toBe('stale');
     expect(worstFreshnessKind('unknown', 'live')).toBe('unknown');

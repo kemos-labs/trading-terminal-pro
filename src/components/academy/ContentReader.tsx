@@ -74,6 +74,26 @@ export function ContentReader({
 
   const mins = content ? estimateMinutes(content) : null;
 
+  /**
+   * Keep native region scrolling: stop scroll-key propagation so the global
+   * terminal shortcut layer (`useKeyboardShortcuts` ArrowDown preventDefault +
+   * board-focus move) does not swallow keys while focus is in the essay body.
+   * No preventDefault here — the browser performs the scroll natively.
+   */
+  const onRegionKeyDown = (e: React.KeyboardEvent) => {
+    if (
+      e.key === 'ArrowDown' ||
+      e.key === 'ArrowUp' ||
+      e.key === 'PageDown' ||
+      e.key === 'PageUp' ||
+      e.key === 'Home' ||
+      e.key === 'End' ||
+      e.key === ' '
+    ) {
+      e.stopPropagation();
+    }
+  };
+
   return (
     <div
       className="academy-type academy-publication academy-post-page"
@@ -92,7 +112,7 @@ export function ContentReader({
         </div>
       </div>
 
-      <div className="academy-post-scroll">
+      <div className="academy-post-scroll" tabIndex={0} role="region" aria-label={title ? `${title} — essay body` : 'Essay body'} onKeyDown={onRegionKeyDown}>
         <div className="academy-col academy-post-header-block">
           {(sectionLabel || level) && (
             <p className="academy-kicker academy-kicker-accent">

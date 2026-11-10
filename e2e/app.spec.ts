@@ -308,8 +308,13 @@ for (const vp of VIEWPORTS) {
         // Workflow-specific content assertion — wait longer for lazy views and desk switching
         await expect(page.locator('body')).toContainText(desk.expectText, { timeout: 10000 });
         // Stable testId when defined — exact element must be visible (no try/catch)
+        // KSA owns exactly one `ksa-view`; assert single match instead of masking duplicates.
         if (desk.testId) {
-          await expect(page.getByTestId(desk.testId).first()).toBeVisible({ timeout: 8000 });
+          if (desk.id === 'ksa') {
+            await expect(page.getByTestId(desk.testId)).toHaveCount(1, { timeout: 8000 });
+          } else {
+            await expect(page.getByTestId(desk.testId).first()).toBeVisible({ timeout: 8000 });
+          }
         }
         // Overflow 0
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -458,7 +463,11 @@ test.describe('app accessibility', () => {
       // Wait for workflow-specific content to ensure lazy view has loaded (not fallback)
       await expect(page.locator('body')).toContainText(desk.expectText, { timeout: 8000 });
       if (desk.testId) {
-        await expect(page.getByTestId(desk.testId).first()).toBeVisible({ timeout: 8000 });
+        if (desk.id === 'ksa') {
+          await expect(page.getByTestId(desk.testId)).toHaveCount(1, { timeout: 8000 });
+        } else {
+          await expect(page.getByTestId(desk.testId).first()).toBeVisible({ timeout: 8000 });
+        }
       }
       // Ensure loading fallback is gone
       await expect(page.getByText('Loading view…')).toHaveCount(0, { timeout: 2000 });

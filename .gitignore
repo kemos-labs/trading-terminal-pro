@@ -1,41 +1,65 @@
+# Dependencies
 node_modules/
+.pnpm-store/
+
+# Build output
 dist/
 .vite/
+*.tsbuildinfo
+
+# Local env / secrets (never commit)
 .env
+.env.*
+!.env.example
 *.pyc
 __pycache__/
-venv/
-.tanstack/
-.bun/
-*.log
-.kimchi/
-.commandcode/
-*.tsbuildinfo
-*.md~
-screenshot.mjs
-cfg.json
-.vercel
-.env*
+
+# Local data / runtime state
 .data/
+.cache/
 
-# Brainstorm / visual companion session artifacts
-.superpowers/
-.worktrees/
-
-# Rust port experiment (build artifacts + local only)
-server-rs/
-
-# Local agent tooling — never track
+# Local agent tooling (never tracked; see docs/engineering if needed)
 .agents/
 .claude/
-.hermes/
-.junie/
-.pi/
+.codex/
+.opencode/
+.commandcode/
+.gemini/
+.kilo/
+.kimchi/
 .qwen/
 .vibe/
+.junie/
+.pi/
+.hermes/
+.cursor/
+.superpowers/
+.worktrees/
 skills-lock.json
+
+# Scratch / delegation workspace output
+work/
+tools/
+trading-agent/
+outputs/
+tmp/
+
+# Local reference material
+refrence pics for upgrade/
+
+# Python venvs
+venv/
+.venv/
 
 # Playwright
 /playwright-report/
 /test-results/
 /e2e/screenshots/
+/e2e/.capture-run.json
+
+# Deploy / platform local state
+.vercel/
+.cfg.json
+screenshot.mjs
+*.log
+*.md~

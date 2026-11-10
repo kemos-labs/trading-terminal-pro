@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchDeribitMarket, type DeribitMarketBundle, type NormalizedTicker } from '../../../api/deribit';
+import { useCryptoAsset } from '../shell/CryptoShell';
 import { HeatmapEngine, type HeatmapCellData, type HeatmapAxisKey } from '../../../components/charts/HeatmapEngine';
 import { aggregateExposure, type PositionRow } from '../../../lib/math/positioning/exposure';
 import { greeksEuropean } from '../../../lib/math/greeks';
@@ -15,20 +16,26 @@ const METRIC_META: Record<CryptoMetric, { label: string; unit: string }> = {
 };
 
 export function CryptoPositioningView() {
+  const { validatedAsset, isUnsupported, rawAsset, validatedVenue, isUnsupportedVenue, rawVenue } = useCryptoAsset();
   const [bundle, setBundle] = useState<DeribitMarketBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
   const [metric, setMetric] = useState<CryptoMetric>('gex');
 
   useEffect(() => {
+    if (isUnsupportedVenue || !validatedVenue) return;
+    if (isUnsupported || !validatedAsset) return;
     let cancelled = false;
-    fetchDeribitMarket('BTC').then(r => {
+    setBundle(null);
+    setError(null);
+    setStale(false);
+    fetchDeribitMarket(validatedAsset).then(r => {
       if (cancelled) return;
       setBundle(r);
       setStale(Date.now() - r.fetchedAt > 60_000);
     }).catch((e: Error) => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
-  }, []);
+  }, [validatedAsset, isUnsupported, validatedVenue, isUnsupportedVenue]);
 
 
 
@@ -91,7 +98,7 @@ export function CryptoPositioningView() {
       return {
         value: sum,
         sides: cells.map((c) => c.optionType).join('+'),
-        coverage: `OI ${cells.reduce((s, c) => s + (c.openInterest ?? 0), 0).toFixed(2)} BTC`,
+        coverage: `OI ${cells.reduce((s, c) => s + (c.openInterest ?? 0), 0).toFixed(2)} ${bundle?.currency ?? '—'}`,
         source: 'deribit (observed) · OI-weighted',
         asOf: bundle?.fetchedAt ?? null,
         assumption: 'Sign model: calls +1 / puts −1 · OI proxy, not dealer inventory',
@@ -111,6 +118,24 @@ export function CryptoPositioningView() {
 
   const computableCount = matrixCells.flat().filter((c) => c.value != null).length;
   const matrixTotal = matrixRows.length * matrixCols.length;
+
+  if (isUnsupportedVenue) {
+    return (
+      <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 font-mono text-xs" role="alert" data-testid="positioning-venue-unsupported">
+        <div className="font-bold">Venue unavailable</div>
+        <div className="mt-1 text-muted-foreground">Unsupported venue &quot;{rawVenue}&quot; — supported: deribit. No data fetched.</div>
+      </div>
+    );
+  }
+
+  if (isUnsupported) {
+    return (
+      <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 font-mono text-xs" role="alert" data-testid="positioning-unsupported">
+        <div className="font-bold">Asset unavailable</div>
+        <div className="mt-1 text-muted-foreground">Unsupported asset &quot;{rawAsset}&quot; — supported: BTC, ETH. No data fetched.</div>
+      </div>
+    );
+  }
 
   if (error) return (
     <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
@@ -143,7 +168,7 @@ export function CryptoPositioningView() {
           Exposure proxy — not dealer book
         </span>
         <span className="rounded bg-muted px-2 py-1" title="Calls +1 / Puts −1 applied to OI-weighted greeks">Sign model: Calls + / Puts − (naive)</span>
-        <span className="rounded bg-muted px-2 py-1" title="GEX units: sign · gamma · OI(BTC) · S² · 0.01 = USD per 1% spot move">GEX: USD per 1% move</span>
+        <span className="rounded bg-muted px-2 py-1" title={`GEX units: sign · gamma · OI(${bundle?.currency ?? '—'}) · S² · 0.01 = USD per 1% spot move`}>GEX: USD per 1% move</span>
         <span className="rounded bg-muted px-2 py-1" title="Greeks from canonical Black-Scholes greeksEuropean at observed mark IV, ACT/365 expiry">
           Greeks: Black-Scholes @ observed mark IV
         </span>
@@ -207,7 +232,7 @@ export function CryptoPositioningView() {
         </div>
       </div>
       <div className="rounded border p-2 font-mono text-[10px] text-muted-foreground">
-        GEX = sign · gamma · OI(BTC) · S² · 0.01. Gamma from canonical greeksEuropean at observed mark IV, ACT/365 expiry, venue index spot. Rows tradable: {tradableCount}/{rows.length}. Missing OI or IV stays null — distinct from zero.
+        GEX = sign · gamma · OI({bundle?.currency ?? '—'}) · S² · 0.01. Gamma from canonical greeksEuropean at observed mark IV, ACT/365 expiry, venue index spot. Rows tradable: {tradableCount}/{rows.length}. Missing OI or IV stays null — distinct from zero.
       </div>
     </div>
   );

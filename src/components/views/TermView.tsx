@@ -17,7 +17,7 @@ import { fmtPct, fmtSignedPct } from '../../lib/format';
 import { DiagnosticsStrip } from './DiagnosticsStrip';
 import { realizedVolCloseToClose, volRiskPremium } from '../../lib/options/analytics';
 import { yearFractionFromSlice } from '../../lib/options/time';
-import { DeskChartFrame, deskChartChrome, deskAxisLabel } from '../desk/DeskChart';
+import { DeskChartFrame, deskChartChrome } from '../desk/DeskChart';
 import { PrintStrip } from '../desk/PrintStrip';
 import { DESK_SERIES } from '../desk/seriesGrammar';
 
@@ -150,23 +150,23 @@ export function TermView() {
 
         <DeskChartFrame xTitle="DTE (√ scale)" yTitle="ATM IV %" className="min-h-0 flex-1">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={chrome.margin}>
+            <AreaChart data={chartData} margin={{ ...chrome.margin, top: 28, bottom: 8, left: 16 }}>
               <CartesianGrid {...chrome.grid} />
               <XAxis
                 dataKey="dteSqrt"
                 tick={chrome.tick}
                 tickLine={false}
                 stroke={chrome.axisLine}
+                tickMargin={6}
                 tickFormatter={(v: number) => `${(v * v).toFixed(0)}d`}
-                label={deskAxisLabel('DTE (√ scale)')}
               />
               <YAxis
                 tick={chrome.tick}
                 tickLine={false}
                 stroke={chrome.axisLine}
+                width={52}
                 tickFormatter={(v: number) => `${v.toFixed(1)}%`}
                 domain={['auto', 'auto']}
-                label={deskAxisLabel('ATM IV %', 'insideLeft')}
               />
               <Tooltip
                 contentStyle={chrome.tooltipStyle}
@@ -181,7 +181,9 @@ export function TermView() {
                 }}
               />
               <Legend
-                wrapperStyle={{ fontSize: 10, fontFamily: 'JetBrains Mono' }}
+                verticalAlign="top"
+                align="right"
+                wrapperStyle={{ fontSize: 10, fontFamily: 'JetBrains Mono', paddingBottom: 8 }}
                 formatter={(v) => (v === 'hv' ? 'HV (c2c)' : 'ATM IV')}
               />
               <defs>

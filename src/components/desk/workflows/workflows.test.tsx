@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StructureWorkflow } from './StructureWorkflow';
 import { PnlWorkflow } from './PnlWorkflow';
 import { HedgeWorkflow } from './HedgeWorkflow';
@@ -64,6 +64,37 @@ describe('Trade workflows — behavior (not export existence)', () => {
     expect(screen.getAllByText(/Obs: Unavailable/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Model:/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Observed midpoint.*Model price/)).toBeNull();
+  });
+
+  it('Structure primary charts expose plotted-point hooks with the full profile (no silent empty axes)', () => {
+    useTerminalStore.setState({ snapshot: snap, symbol: 'SPY' });
+    render(<StructureWorkflow />);
+    // Content side of the loading guard: workflow root and entry transparency
+    // render once the chain settles (the guard itself lives in renderDeskView
+    // and is intentionally untouched by this chart-geometry tranche).
+    expect(screen.getByTestId('trade-structure-workflow')).toBeInTheDocument();
+    expect(screen.getByTestId('structure-entry-transparency')).toBeInTheDocument();
+    // spotGrid(snapshot.spot, 0.15, 61): both primaries plot the full profile.
+    const pnl = screen.getByTestId('structure-chart-pnl');
+    const greeks = screen.getByTestId('structure-chart-greeks');
+    expect(Number(pnl.getAttribute('data-chart-points'))).toBe(61);
+    expect(Number(greeks.getAttribute('data-chart-points'))).toBe(61);
+    // Scenario sim exposes its band length honestly: finite, never fabricated
+    // (0 only when the sim itself is unavailable, not a substituted zero).
+    // Non-empty sim data additionally requires the rendered chart contract:
+    // a definite-height viewport (numeric ResponsiveContainer height, pinned
+    // here via the jsdom mock's fixed frame) so a height="100%" flex
+    // collapse cannot regress silently — real-server geometry (h>100,
+    // finite SVG paths) is asserted by the wave probe, not jsdom.
+    const sim = screen.getByTestId('structure-chart-sim');
+    const simPoints = Number(sim.getAttribute('data-chart-points'));
+    expect(Number.isFinite(simPoints)).toBe(true);
+    expect(simPoints).toBeGreaterThan(0);
+    const simViewport = within(sim).getByTestId('recharts-viewport-mock');
+    // Pinned definite-height contract: the sim ResponsiveContainer must carry
+    // a numeric pixel height (220). A revert to height="100%" renders via
+    // the mock default (400px) and fails here before reaching a browser.
+    expect(simViewport.style.height).toBe('220px');
   });
 
   it('renders PnL controls and changes the observed option side', () => {

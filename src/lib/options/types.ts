@@ -125,6 +125,8 @@ export interface VolSnapshot {
   dividendYield: number;
   timestamp: number;
   expiries: ExpirySlice[];
+  /** Server-declared freshness (e.g. delayed) — never recomputed to live locally */
+  sourceFreshness?: string | null;
   /** How the surface was built (live chain vs synthetic fallback). */
   surfaceSource?: 'live' | 'synthetic';
   /**

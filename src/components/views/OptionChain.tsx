@@ -123,6 +123,23 @@ export function OptionChain() {
   const chainUsed = useTerminalStore((s) => s.chainUsed);
   const chainAvailable = useTerminalStore((s) => s.chainAvailable);
   const loading = useTerminalStore((s) => s.loading);
+  /**
+   * Existing chain cache truth only: store `provenance.chain` (server
+   * `freshness` via `sourceFreshness` + snapshot age). Separate from numeric
+   * snapshot fields; never the Session-GEX 96h wall-clock rule, never a frozen
+   * fixture timestamp, never dealer-exposure inference. `expired` is stale-or-
+   * worse with rows present, so it shows the same Stale pill; down/unknown/
+   * delayed/absent show no pill (fail-closed, not stale).
+   */
+  const chainProv = useTerminalStore((s) => s.provenance.chain);
+  const chainStale = chainProv?.kind === 'stale' || chainProv?.kind === 'expired';
+  const chainStaleTitle = (() => {
+    const parts = [`chain data ${chainProv?.kind ?? 'stale'}`];
+    if (chainProv?.asOfMs != null && Number.isFinite(chainProv.asOfMs)) {
+      parts.push(`age ${Math.max(0, Math.round((Date.now() - chainProv.asOfMs) / 1000))}s`);
+    }
+    return parts.join(' \u00b7 ');
+  })();
 
   if (rows.length === 0) {
     return (
@@ -147,6 +164,24 @@ export function OptionChain() {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-end border-b border-border/50 px-2 py-0.5">
+        {chainStale && (
+          <span className="mr-auto flex items-center gap-1.5">
+            <span
+              data-testid="chain-stale"
+              role="status"
+              title={chainStaleTitle}
+              className="rounded border border-warn/40 bg-warn/10 px-1.5 py-0.5 font-mono text-type-2xs text-warn"
+            >
+              Stale
+            </span>
+            <span
+              data-testid="chain-stale-scope"
+              className="font-mono text-type-2xs text-muted-foreground"
+            >
+              chain only · spot keeps own badge
+            </span>
+          </span>
+        )}
         <ExportCsvButton
           filename={`chain-${selectedExpiry ?? 'front'}`}
           headers={['strike', 'callIV', 'callDelta', 'callBid', 'callAsk', 'callOI', 'callVol', 'putVol', 'putOI', 'putBid', 'putAsk', 'putDelta', 'putIV']}

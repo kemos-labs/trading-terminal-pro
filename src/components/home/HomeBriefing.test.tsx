@@ -214,16 +214,55 @@ describe('HomeBriefing freshness ledger (P1-16)', () => {
   it('labels a Deribit-down free-fallback crypto cell honestly (never unavailable)', async () => {    mockBriefing(briefing({
       crypto: {
         available: false, provider: 'deribit', indexPrice: null, funding8h: null, optionCount: null, asOf: null,
-        freeFallback: { available: true, reason: 'partial', provider: 'binance+bybit', asOf: 1788300000000 },
+        freeFallback: { available: true, reason: 'partial', provider: 'binance+bybit', asOf: Date.now() - 5000 },
       },
     }, { freshness: { live: false, state: 'partial' } }));
     render(<HomeBriefing />);
     await waitFor(() => expect(screen.getByTestId('home-cell-crypto')).toBeInTheDocument());
     const cell = screen.getByTestId('home-cell-crypto');
-    expect(cell.textContent ?? '').toMatch(/free fallback/);
+    expect(cell.textContent ?? '').toMatch(/free fallback/i);
     // Header state is the verdict: free provider, never an unavailable badge.
     const header = cell.querySelector('header')?.textContent ?? '';
     expect(header).toMatch(/free fallback/);
     expect(header).not.toMatch(/unavailable/);
+  });
+
+  it('keeps stacked grid sections non-shrinking inside the scrolling root (390x844 overlap guard)', async () => {
+    mockBriefing(briefing({}));
+    render(<HomeBriefing />);
+    await waitFor(() => expect(screen.getByTestId('home-briefing')).toBeInTheDocument());
+    const root = screen.getByTestId('home-briefing');
+    // Root stays the scroll container.
+    expect(root.className).toMatch(/min-h-0/);
+    expect(root.className).toMatch(/overflow-y-auto/);
+    // Desk grid keeps its content height on the stacked phone layout (no
+    // min-h-0 shrink, and the leftover-height growth is scoped to md and up,
+    // where the card row is the widest block).
+    const deskGrid = screen.getByTestId('home-cell-vol').parentElement;
+    expect(deskGrid?.className).not.toMatch(/min-h-0/);
+    expect(deskGrid?.className).not.toMatch(/(^|\s)flex-1(\s|$)/);
+    expect(deskGrid?.className).toMatch(/md:flex-1/);
+    // KSA + launcher wrapper retains content height.
+    const ksaRow = screen.getByTestId('home-cell-ksa').parentElement;
+    expect(ksaRow?.className).toMatch(/shrink-0/);
+    expect(ksaRow?.className).not.toMatch(/min-h-0/);
+  });
+
+  it('spends the leftover desktop height on ledger rows, not an empty bordered box', async () => {
+    mockBriefing(briefing({}));
+    render(<HomeBriefing />);
+    await waitFor(() => expect(screen.getByTestId('home-freshness-ledger')).toBeInTheDocument());
+    const ledger = screen.getByTestId('home-freshness-ledger');
+    expect(ledger.className).toContain('flex-1');
+    expect(ledger.className).toContain('min-h-[180px]');
+    // The row region and its table fill the frame, so the slack becomes row
+    // height instead of empty space under the last ledger row.
+    const region = ledger.querySelector('[role="region"]') as HTMLElement;
+    expect(region.className).toContain('flex-1');
+    expect((region.querySelector('table') as HTMLElement).className).toContain('h-full');
+    // Snapshot provenance is stated once, in the page header — the ledger adds
+    // no duplicated chrome.
+    expect(screen.getByTestId('home-briefing').textContent).toMatch(/one shared snapshot, no per-widget polling/);
+    expect(ledger.textContent).not.toMatch(/zero client polling/);
   });
 });

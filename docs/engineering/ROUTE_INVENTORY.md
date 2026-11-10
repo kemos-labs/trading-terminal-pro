@@ -1,81 +1,49 @@
-# Runtime route inventory
+# Route Inventory — Phase 1 Baseline
 
-Generated deterministically by `node scripts/route-parity.mjs --write` from Fastify's `onRoute` hook after all plugins are ready.
+Generated: 2026-09-13T19:45:35Z
 
-- Runtime path patterns: **62**
-- Non-HEAD/OPTIONS operations: **63**
-- Frontend route declarations checked: **38**
-- Unregistered `/api` and `/docs` requests fail with JSON 404 responses.
+Source scan: server.js, server/app.js, api/authRoutes.js, api/stripeBilling.js, server/routes/deribitMarket.js, api/health.js, api/ksaFeeds.js, api/deskFeeds.js, api/_shared.js plus api/** (excluding tests).
+Total routes: 27
 
-| Method | Runtime path | Classification |
-|---|---|---|
-| GET | `/api/alphavantage/quote` | public server-proxied |
-| POST | `/api/auth/login` | credential-public |
-| POST | `/api/auth/logout` | authenticated |
-| GET | `/api/auth/me` | authenticated |
-| POST | `/api/auth/register` | credential-public |
-| POST | `/api/auth/reset-confirm` | credential-public |
-| POST | `/api/auth/reset-request` | credential-public |
-| POST | `/api/billing/checkout-session` | authenticated / entitlement |
-| GET | `/api/billing/config` | authenticated / entitlement |
-| GET | `/api/billing/gate` | authenticated / entitlement |
-| POST | `/api/billing/portal-session` | authenticated / entitlement |
-| GET | `/api/billing/status` | authenticated / entitlement |
-| GET | `/api/boot/briefing` | deprecated compatibility adapter; migrate to `/api/home/briefing` |
-| GET | `/api/cache/status` | health / operations |
-| GET | `/api/deribit/funding-history` | public server-proxied |
-| GET | `/api/deribit/index/:name` | public server-proxied |
-| GET | `/api/deribit/instruments` | public server-proxied |
-| GET | `/api/deribit/market/:currency` | public server-proxied |
-| GET | `/api/deribit/trades/:currency` | public server-proxied |
-| GET | `/api/desk/pack` | public server-proxied |
-| GET | `/api/finnhub/earnings` | public server-proxied |
-| GET | `/api/finnhub/economic-calendar` | public server-proxied |
-| GET | `/api/finnhub/news` | public server-proxied |
-| GET | `/api/finnhub/peers` | public server-proxied |
-| GET | `/api/finnhub/quote` | public server-proxied |
-| GET | `/api/finnhub/recommendation` | public server-proxied |
-| GET | `/api/flashalpha/exposure/:type/:symbol` | public server-proxied |
-| GET | `/api/fmp/stable/*` | public server-proxied |
-| GET | `/api/free-crypto/market/:currency` | public server-proxied |
-| GET | `/api/health` | health / operations |
-| GET | `/api/history/spy` | public server-proxied |
-| GET | `/api/home/briefing` | public server-proxied |
-| GET | `/api/ksa/board` | conditionally entitled |
-| GET | `/api/ksa/quote/:symbol` | conditionally entitled |
-| GET | `/api/ksa/session` | conditionally entitled |
-| GET | `/api/macrovol/*` | public server-proxied |
-| POST | `/api/macrovol/*` | public server-proxied |
-| GET | `/api/openapi.json` | public server-proxied |
-| GET | `/api/opra/chain/:symbol` | public server-proxied |
-| GET | `/api/opra/status` | public server-proxied |
-| GET | `/api/options/:symbol` | public server-proxied |
-| GET | `/api/stream/quote/:symbol` | public server-proxied |
-| POST | `/api/stripe/webhook` | webhook |
-| GET | `/api/tradingview/snapshot` | public server-proxied |
-| GET | `/api/v1/academy/index` | public server-proxied |
-| GET | `/api/v1/crypto/carry/:currency` | public server-proxied |
-| GET | `/api/v1/crypto/flow/:currency` | public server-proxied |
-| GET | `/api/v1/ksa/board` | public server-proxied |
-| GET | `/api/v1/market/crypto/:currency` | public server-proxied |
-| GET | `/api/v1/market/crypto/:currency/funding` | public server-proxied |
-| GET | `/api/v1/market/crypto/:currency/trades` | public server-proxied |
-| GET | `/api/v1/market/options/:symbol` | public server-proxied |
-| GET | `/api/v1/provider/status` | public server-proxied |
-| GET | `/api/v1/rates/stir` | public server-proxied |
-| GET | `/api/v1/rates/term-structure` | public server-proxied |
-| GET | `/api/v1/system/health` | public server-proxied |
-| GET | `/api/v1/workflows` | public server-proxied |
-| GET | `/api/venues/options/:currency` | public server-proxied |
-| GET | `/api/workflows` | public server-proxied |
-| GET | `/api/yf/history/:symbol` | public server-proxied |
-| GET | `/api/yf/info/:symbol` | public server-proxied |
-| GET | `/docs/*` | static allowlist |
-| GET | `/docs/index.json` | static allowlist |
+Classification: `public` | `credential-public` | `authenticated` | `entitled` | `webhook` | `health` | `static`. Default: unregistered paths → 404 via `setNotFoundHandler` (assets/api get JSON 404, else SPA fallback). Rate-limit classes are enforced via @fastify/rate-limit keyGenerator with ipv6Subnet=64.
 
-## Gate semantics
+| Method | Path | File | Classification | Rate-limit class | Notes |
+|---|---|---|---|---|
+| POST | `/api/auth/login` | `api/authRoutes.js:43` | credential-public | global (600/min) but route-specific override may apply | per-route 10/min + global |
+| POST | `/api/auth/logout` | `api/authRoutes.js:54` | authenticated | global (600/min) but route-specific override may apply |  |
+| GET | `/api/auth/me` | `api/authRoutes.js:64` | authenticated | global (600/min) but route-specific override may apply |  |
+| POST | `/api/auth/register` | `api/authRoutes.js:31` | credential-public | global (600/min) but route-specific override may apply | per-route 10/min + global |
+| POST | `/api/auth/reset-confirm` | `api/authRoutes.js:91` | credential-public | global (600/min) but route-specific override may apply | per-route 10/min + global |
+| POST | `/api/auth/reset-request` | `api/authRoutes.js:83` | credential-public | global (600/min) but route-specific override may apply | per-route 10/min + global |
+| POST | `/api/billing/checkout-session` | `api/stripeBilling.js:267` | authenticated | global (600/min) but route-specific override may apply |  |
+| GET | `/api/billing/config` | `api/stripeBilling.js:256` | authenticated | global (600/min) but route-specific override may apply |  |
+| GET | `/api/billing/gate` | `api/stripeBilling.js:253` | authenticated | global (600/min) but route-specific override may apply |  |
+| POST | `/api/billing/portal-session` | `api/stripeBilling.js:319` | authenticated | global (600/min) but route-specific override may apply |  |
+| GET | `/api/billing/status` | `api/stripeBilling.js:350` | authenticated | global (600/min) but route-specific override may apply |  |
+| GET | `/api/boot/briefing` | `server/app.js:240` | public (health) | global (600/min) but route-specific override may apply |  |
+| GET | `/api/cache/status` | `server/app.js:378` | public (market data) | global (600/min) but route-specific override may apply |  |
+| GET | `/api/deribit/funding-history` | `server/routes/deribitMarket.js:338` | public (market data) | upstream (120/min) |  |
+| GET | `/api/deribit/index/:name` | `server/routes/deribitMarket.js:308` | public (market data) | upstream (120/min) |  |
+| GET | `/api/deribit/instruments` | `server/routes/deribitMarket.js:272` | public (market data) | upstream (120/min) |  |
+| GET | `/api/deribit/market/:currency` | `server/routes/deribitMarket.js:256` | public (market data) | upstream (120/min) |  |
+| GET | `/api/deribit/trades/:currency` | `server/routes/deribitMarket.js:288` | public (market data) | upstream (120/min) |  |
+| GET | `/api/flashalpha/exposure/:type/:symbol` | `server/app.js:121` | public (market data) | upstream (120/min) |  |
+| GET | `/api/fmp/stable/*` | `server/app.js:89` | public (market data) | upstream (120/min) |  |
+| GET | `/api/health` | `server/app.js:377` | public (health) | global (600/min) but route-specific override may apply |  |
+| GET | `/api/ksa/board` | `server/app.js:154` | entitled (ksa desk) | upstream (120/min) |  |
+| GET | `/api/ksa/quote/:symbol` | `server/app.js:164` | entitled (ksa desk) | upstream (120/min) |  |
+| GET | `/api/ksa/session` | `server/app.js:174` | entitled (ksa desk) | upstream (120/min) |  |
+| GET | `/api/opra/chain/:symbol` | `server/app.js:302` | public (market data) | global (600/min) but route-specific override may apply |  |
+| GET | `/api/opra/status` | `server/app.js:296` | public (market data) | global (600/min) but route-specific override may apply |  |
+| POST | `/api/stripe/webhook` | `api/stripeBilling.js:493` | webhook | global (600/min) but route-specific override may apply | rateLimit:false, RAW body scoped to child context |
 
-- Backend inventory is runtime-discovered; this document is not a route authority.
-- Frontend literal/template network calls are parsed with the TypeScript AST.
-- A dynamic URL must declare its finite expected route patterns in an adjacent `route-parity:` annotation, each of which is matched against the runtime table.
-- Route existence does not prove response-contract completeness; OpenAPI/schema validation is a separate gate.
+## Policy summary
+
+- **Static**: `fastifyStatic` serves `dist/` (wildcard:false) + `/docs/*` allowlist (academy only). Assets under `/assets/` and `/` are allowListed from rate-limit.
+- **Health**: `/api/health*` and `/api/boot/briefing` are public but rate-limited as global.
+- **Auth**: credential endpoints are 10/min per-route; session cookie `vt_session` is HttpOnly, SameSite=Lax, Secure in prod.
+- **Entitled**: `/api/ksa/*` require active subscription when billing configured; cache-control `private, no-store`.
+- **Webhook**: `/api/stripe/webhook` uses encapsulated RAW body parser; signature verified via STRIPE_WEBHOOK_SECRET; replay/idempotency via Stripe event id.
+- **Market data**: all `/api/fmp/*`, `/api/finnhub/*`, `/api/deribit/*`, `/api/macrovol/*` are server-proxied; provider keys never reach browser.
+- **SSE**: `/api/stream/quote/:symbol` uses hijacked text/event-stream; slow-client handling is Phase 8 scope.
+- **Schemas**: per-route JSON Schema validation is P1 follow-up (currently params/query/body bounds via manual validateSymbol etc; response allowlisting incremental).

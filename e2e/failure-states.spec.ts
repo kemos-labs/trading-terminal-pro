@@ -7,10 +7,10 @@
  * production never mounts /api/__test/*). No page.route() interception:
  * every byte the browser renders traverses real routes.
  *
- * Nine steps cover the seven required scenarios across all eight desks:
+ * Thirteen steps cover the seven required scenarios across all eight desks:
  * home-partial, vol-empty, pos-empty, trade-loading, rates-malformed,
- * crypto-partial, crypto-down, ksa-stale, ksa-entitlement, academy-empty.
- * (Vol + Positioning share the client chain, so chain-empty asserts both.)
+ * crypto-partial, crypto-down, ksa-stale, ksa-entitlement, vol-stale, rates-stale, pos-stale, academy-empty.
+ * (Vol + Positioning share the client chain, so chain-empty asserts both; vol-stale proves stale matrix.)
  *
  * This gate is representative, NOT the full C6 matrix: it does not cover
  * every workflow × scenario combination. That matrix remains scheduled.
@@ -18,7 +18,7 @@
  * Fixture success here is deterministic state evidence, never live evidence.
  */
 import { test, expect } from '@playwright/test';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import AxeBuilder from '@axe-core/playwright';
 
@@ -26,6 +26,22 @@ const FULL_HEAD = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' 
 const EVIDENCE_HEAD = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
 const EVIDENCE_DIR = new URL('./screenshots/', import.meta.url);
 mkdirSync(EVIDENCE_DIR, { recursive: true });
+
+// Run/source identity stamped at capture time (never retrofitted).
+// e2e/.capture-run.json is written by `npm run capture:identity` BEFORE the
+// gate runs; the post-capture CLI (scripts/verify-capture-evidence.mjs)
+// requires every new sidecar to carry this exact runId/sourceDigest.
+function loadCaptureIdentity(): { runId: string | null; sourceDigest: string | null } {
+  try {
+    const raw = readFileSync(new URL('./.capture-run.json', import.meta.url), 'utf8');
+    const parsed = JSON.parse(raw) as { runId?: unknown; sourceDigest?: unknown };
+    if (typeof parsed.runId === 'string' && typeof parsed.sourceDigest === 'string') {
+      return { runId: parsed.runId, sourceDigest: parsed.sourceDigest };
+    }
+  } catch { /* no pre-capture identity: sidecars omit run identity and the post-capture gate fails closed */ }
+  return { runId: null, sourceDigest: null };
+}
+const CAPTURE_IDENTITY = loadCaptureIdentity();
 
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
@@ -122,6 +138,9 @@ async function captureShot(options: CaptureOptions) {
         screenshot: shotName,
         commit: FULL_HEAD,
         commitShort: EVIDENCE_HEAD,
+        ...(CAPTURE_IDENTITY.runId && CAPTURE_IDENTITY.sourceDigest
+          ? { runId: CAPTURE_IDENTITY.runId, sourceDigest: CAPTURE_IDENTITY.sourceDigest }
+          : {}),
         workflow,
         desk,
         scenario,
@@ -414,6 +433,148 @@ for (const viewport of VIEWPORTS) {
       await setScenario(request, { scenario: 'success' });
     });
 
+    // 11. Vol — stale serve: warm the canonical chain fresh, fail upstream, expire that exact entry.
+    // Transition proof is API-level (cache.state/ageMs on the same v1 route the
+    // UI reads). The skew "Stale" badge is NOT transition evidence: fixture event
+    // time is frozen (FIXED_NOW 2026-09-01) so the 96h snapshot-age rule marks even
+    // the warm render stale. Likewise the envelope `freshness` field derives from
+    // that frozen asOf and reads 'stale' on warm too — only `cache` (wall-clock
+    // server metadata) proves the fresh→stale transition.
+    await test.step('vol-stale', async () => {
+      beginStep(ctx);
+      await setScenario(request, { scenario: 'success' });
+      const warm = await request.get('/api/v1/market/options/SPY');
+      expect(warm.status()).toBe(200);
+      const warmed = await warm.json().catch(() => null);
+      expect(Array.isArray(warmed?.data?.quotes) && warmed.data.quotes.length > 0).toBe(true);
+      expect(warmed?.cache?.stale).toBe(false);
+      expect(warmed?.cache?.ageMs).toBeLessThan(120_000);
+      await setScenario(request, {
+        scenario: 'vol-stale',
+        clearCache: false,
+        expire: { 'options:SPY:full': 300_000 },
+      });
+      await page.goto('/?desk=vol&sec=vol-sub-surface', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByTestId('vol-structure-view')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('vol-surface-matrix')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('No live surface')).toHaveCount(0);
+      const probe = await request.get('/api/v1/market/options/SPY');
+      expect(probe.status()).toBe(200);
+      const probed = await probe.json().catch(() => null);
+      expect(probed?.cache?.stale).toBe(true);
+      expect(probed?.cache?.state).toBe('stale');
+      expect(probed?.cache?.ageMs).toBeGreaterThan(200_000);
+      expect(probed?.cache?.ageMs).toBeLessThan(600_000);
+      expect(Array.isArray(probed?.data?.quotes) && probed.data.quotes.length > 0).toBe(true);
+      expect(probed?.data?.quotes.length).toBe(warmed?.data?.quotes.length);
+      await captureShot({
+        ...base,
+        desk: 'volatility',
+        workflow: 'vol-sub-surface',
+        scenario: 'vol-stale',
+        deepLink: '/?desk=vol&sec=vol-sub-surface',
+        providerState: 'canonical v1 chain warmed fresh (cache.stale=false), then equity 503 with options:SPY:full backdated 300s; last-good chain served stale (cache.state=stale, ageMs bounded 200-600s); envelope asOf is frozen fixture event time, not transition evidence',
+        eventTime: probed?.asOf ?? null,
+        fetchTime: probed?.fetchedAt ?? new Date().toISOString(),
+      });
+      await setScenario(request, { scenario: 'success' });
+    });
+
+    // 12. Rates — stale serve: warm the summary fresh, fail the worker summary path, expire that exact entry.
+    // Transition proof is API-level (cache.state/ageMs on the same macrovol route the
+    // funding view reads) plus the workflow-specific pill: RatesPanel renders
+    // `rates-stale` ONLY when `cache.stale === true` (strict server envelope;
+    // frozen FRED `as_of` never implies stale). Only /rates/summary 503s under
+    // rates-stale, so plumbing/curve/basis stay live and numerics stay populated.
+    await test.step('rates-stale', async () => {
+      beginStep(ctx);
+      await setScenario(request, { scenario: 'success' });
+      const warm = await request.get('/api/macrovol/rates/summary');
+      expect(warm.status()).toBe(200);
+      const warmed = await warm.json().catch(() => null);
+      expect(warmed?.sofr).toBe(4.53);
+      expect(warmed?.effr).toBe(4.32);
+      expect(warmed?.cache?.stale).toBe(false);
+      await setScenario(request, {
+        scenario: 'rates-stale',
+        clearCache: false,
+        expire: { 'macrovol:/rates/summary': 300_000 },
+      });
+      await page.goto('/?desk=rates&sec=rates-mode-funding', { waitUntil: 'domcontentloaded' });
+      // .first(): the shell wrapper duplicates the rates-view testid by design.
+      await expect(page.getByTestId('rates-view').first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('rates-stale')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('Rates API unavailable')).toHaveCount(0);
+      const probe = await request.get('/api/macrovol/rates/summary');
+      expect(probe.status()).toBe(200);
+      const probed = await probe.json().catch(() => null);
+      expect(probed?.cache?.stale).toBe(true);
+      expect(probed?.cache?.state).toBe('stale');
+      expect(probed?.cache?.ageMs).toBeGreaterThan(200_000);
+      expect(probed?.cache?.ageMs).toBeLessThan(600_000);
+      expect(probed?.sofr).toBe(4.53);
+      expect(probed?.effr).toBe(4.32);
+      await captureShot({
+        ...base,
+        desk: 'rates',
+        workflow: 'rates-mode-funding',
+        scenario: 'rates-stale',
+        deepLink: '/?desk=rates&sec=rates-mode-funding',
+        providerState: 'rates summary warmed fresh (cache.stale=false), then worker /rates/summary 503 with macrovol:/rates/summary backdated 300s; last-good summary served stale (cache.state=stale, ageMs bounded 200-600s); other worker paths stay live',
+        eventTime: probed?.as_of ?? null,
+        fetchTime: new Date().toISOString(),
+      });
+      await setScenario(request, { scenario: 'success' });
+    });
+
+    // 13. Positioning — stale chain serve: warm the canonical chain fresh, fail upstream, expire that exact entry.
+    // Transition proof is API-level (cache.state/ageMs on the same v1 route the
+    // positioning chain reads, quotes.length preserved). The `chain-stale` pill
+    // derives from existing chain provenance stale/expired state with rows
+    // present; the empty path (`No live option chain`) stays pill-free. The pill
+    // itself is NOT transition evidence: fixture event time is frozen
+    // (FIXED_NOW 2026-09-01) so envelope `freshness` reads stale on warm too —
+    // only `cache` (wall-clock server metadata) proves the fresh→stale transition.
+    await test.step('pos-stale', async () => {
+      beginStep(ctx);
+      await setScenario(request, { scenario: 'success' });
+      const warm = await request.get('/api/v1/market/options/SPY');
+      expect(warm.status()).toBe(200);
+      const warmed = await warm.json().catch(() => null);
+      expect(Array.isArray(warmed?.data?.quotes) && warmed.data.quotes.length > 0).toBe(true);
+      expect(warmed?.cache?.stale).toBe(false);
+      expect(warmed?.cache?.ageMs).toBeLessThan(120_000);
+      await setScenario(request, {
+        scenario: 'pos-stale',
+        clearCache: false,
+        expire: { 'options:SPY:full': 300_000 },
+      });
+      await page.goto('/?desk=positioning&sec=pos-sub-chain', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByTestId('positioning-view').first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('chain-stale')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('No live option chain')).toHaveCount(0);
+      const probe = await request.get('/api/v1/market/options/SPY');
+      expect(probe.status()).toBe(200);
+      const probed = await probe.json().catch(() => null);
+      expect(probed?.cache?.stale).toBe(true);
+      expect(probed?.cache?.state).toBe('stale');
+      expect(probed?.cache?.ageMs).toBeGreaterThan(200_000);
+      expect(probed?.cache?.ageMs).toBeLessThan(600_000);
+      expect(Array.isArray(probed?.data?.quotes) && probed.data.quotes.length > 0).toBe(true);
+      expect(probed?.data?.quotes.length).toBe(warmed?.data?.quotes.length);
+      await captureShot({
+        ...base,
+        desk: 'positioning',
+        workflow: 'pos-sub-chain',
+        scenario: 'pos-stale',
+        deepLink: '/?desk=positioning&sec=pos-sub-chain',
+        providerState: 'canonical v1 chain warmed fresh (cache.stale=false), then equity 503 with options:SPY:full backdated 300s; last-good chain served stale (cache.state=stale, ageMs bounded 200-600s); envelope asOf is frozen fixture event time, not transition evidence',
+        eventTime: probed?.asOf ?? null,
+        fetchTime: probed?.fetchedAt ?? new Date().toISOString(),
+      });
+      await setScenario(request, { scenario: 'success' });
+    });
+
     // 10. Academy — empty search is an honest empty state, not breakage.
     await test.step('academy-empty', async () => {
       beginStep(ctx);
@@ -431,6 +592,13 @@ for (const viewport of VIEWPORTS) {
         scenario: 'academy-empty',
         deepLink: '/?desk=academy&sec=academy-sub-options',
         providerState: 'local docs index healthy; query matches zero essays client-side',
+        // Narrow teardown-race allowlist (academy-empty only): the dev
+        // webServer can tear down its chunked response mid-stream on this final
+        // step, surfacing as `net::ERR_INCOMPLETE_CHUNKED_ENCODING`. Observed
+        // intermittently at 1280x800 with axe 0 / overflow 0 / `No essays yet.`
+        // rendered. Scoped here only; externalFailedRequests, pageErrors, Axe,
+        // overflow, nonfinite, and every other console error stay strict.
+        allowConsole: [/^Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING/],
         eventTime: null,
         fetchTime: new Date().toISOString(),
       });

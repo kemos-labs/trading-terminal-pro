@@ -6,7 +6,7 @@
 | **Author** | _TBD_ |
 | **Date** | 2026-07-11 |
 | **Status** | Accepted for implementation (Tier A first) — rev 4, user decisions 2026-07-11 |
-| **Workspace** | `/home/kalde/trading-terminal-pro` |
+| **Workspace** | `the repository root` |
 | **Product** | VOLATERM — Options Trading Terminal |
 | **Live** | https://volaterm-production-f082.up.railway.app |
 | **Related** | `DESIGN.md` (as-built architecture), `UI_UX_PLAN.md` (Phases A–H shipped), `UPSCALE_PLAN.md`, `UPGRADE_PLAN.md` |
@@ -769,8 +769,8 @@ flowchart LR
 
 ## References
 
-- As-built: `/home/kalde/trading-terminal-pro/DESIGN.md`
-- UI phases: `/home/kalde/trading-terminal-pro/UI_UX_PLAN.md`
+- As-built: `the repository root/DESIGN.md`
+- UI phases: `the repository root/UI_UX_PLAN.md`
 - Shell: `src/components/layout/TerminalLayout.tsx`, `SidePanel.tsx`
 - Tabs: `src/components/terminal/tabs.ts`; types: `src/lib/options/types.ts` (`ActiveTab`)
 - Section nav: `src/config/deskNav.ts`

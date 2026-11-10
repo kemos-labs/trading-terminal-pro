@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, codex/full-application-rebuild]
   pull_request:
 
 jobs:
@@ -27,9 +27,33 @@ jobs:
         # Unit tests only — coverage package optional; missing @vitest/coverage-v8 was
         # failing every push while type-check + lint already passed.
         run: npm test -- --run
+      - name: Verify exposure-grid bundle freshness
+        # Read-only in-memory rebuild compared against checked-in bytes; runs
+        # BEFORE generation so a stale bundle fails instead of being silently
+        # regenerated. Rejects mtime/git-diff gates (untracked passes diff).
+        run: npm run check:bundle
       - name: Build
         # Same as Docker/Railway: tsc -b && vite build (black-screen guard = assets built)
         run: npm run build
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+      - name: Write capture run identity (pre-capture source digest)
+        run: npm run capture:identity
+      - name: Representative failure-state captures
+        run: npx playwright test --config=playwright.failure-states.config.ts
+      - name: Verify required capture evidence (post-capture gate)
+        # Always runs so a capture failure still reports missing-artifact detail,
+        # but never swallows the capture exit: the job fails if either step fails.
+        if: always()
+        run: npm run verify:capture
+      - name: Upload capture evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capture-evidence
+          path: |
+            e2e/screenshots/
+            e2e/.capture-run.json
       - name: Audit (high+ only, non-blocking)
         run: npm audit --audit-level=high || true
       - name: Python dependency audit (hashed lock)
@@ -37,4 +61,5 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install --disable-pip-version-check pip-audit
-      - run: pip-audit --disable-pip --no-deps --strict -r macrovol-api/requirements.lock
+      - run: pip-audit --disable-pip --no-deps --strict -r services/rates-worker/requirements.lock
+

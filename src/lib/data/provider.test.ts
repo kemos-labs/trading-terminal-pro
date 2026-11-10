@@ -117,6 +117,38 @@ describe('LiveProvider auto chain source', () => {
     expect(provider.lastChainSource).toBe('fmp');
     expect(snap!.spot).toBe(500);
   });
+
+  it('auto: yfinance chain request is issued without awaiting optional spot (concurrency ordering)', async () => {
+    const callOrder: string[] = [];
+    let resolveFmp: (v: unknown) => void = () => {};
+    const fmpDeferred = new Promise<unknown>((res) => { resolveFmp = res as never; });
+    const fmpSpy = vi.spyOn(fmpClient, 'fmpGet').mockImplementation(async () => {
+      callOrder.push('fmpGet');
+      await fmpDeferred;
+      return { json: null, cached: false, stale: false } as never;
+    });
+    const yfSpy = vi.spyOn(yahoo, 'fetchYahooSnapshot').mockImplementation(async () => {
+      callOrder.push('fetchYahooSnapshot');
+      const raw = yfChain();
+      const { buildYahooSnapshot } = await import('../options/yahoo');
+      return buildYahooSnapshot({ symbol: 'SPY', spot: SPOT, expirations: [EXPIRY], quotes: raw.quotes as never, timestamp: Date.now() }, 0.05, 0, { maxExpiries: 12 });
+    });
+    const p = provider.getSnapshot('SPY', { chainMode: 'auto' });
+    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 10));
+    // yfinance chain must have been kicked off before FMP spot resolves
+    expect(yfSpy).toHaveBeenCalled();
+    expect(callOrder).toContain('fetchYahooSnapshot');
+    // Unblock provider so test can finish cleanly (chain already built, spot adoption will read null)
+    resolveFmp(null);
+    // Also unblock secondary YF fallbacks inside spotPromise (history/info) if needed
+    vi.spyOn(await import('../data/yfinanceClient'), 'fetchYfHistory').mockResolvedValueOnce(null as never);
+    const snap = await p;
+    expect(snap).not.toBeNull();
+    fmpSpy.mockRestore();
+    yfSpy.mockRestore();
+    vi.restoreAllMocks();
+  });
 });
 
 describe('DataProvider seam (PR-07)', () => {

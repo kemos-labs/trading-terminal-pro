@@ -4,7 +4,8 @@ export function forwardVol(sigma1: number, T1: number, sigma2: number, T2: numbe
   const var1 = sigma1 * sigma1 * T1;
   const var2 = sigma2 * sigma2 * T2;
   const fwdVar = var2 - var1;
-  if (fwdVar < -1e-12) return null;
-  if (fwdVar < 0) return 0;
+  // REF-06: any negative forward variance (including tiny negatives) is
+  // unavailable, never a clamped zero. Exact zero with distinct T may be 0.
+  if (fwdVar < 0) return null;
   return Math.sqrt(fwdVar / (T2 - T1));
 }

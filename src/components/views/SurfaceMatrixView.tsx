@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useTerminalStore } from '../../store/terminalStore';
 import { Panel } from '../terminal/Panel';
+import { selectStrikeWindow, spotStatus } from '../../lib/quant/strikeWindow';
 import { HeatmapEngine, type HeatmapCellData, type HeatmapAxisKey } from '../charts/HeatmapEngine';
 import { DeskModeBar } from '../terminal/DeskModeBar';
 import { EmptyState } from '../common/EmptyState';
@@ -29,7 +30,8 @@ export function SurfaceMatrixView() {
     const expiries = snapshot.expiries.slice(0, 8);
     const strikeSet = new Set<number>();
     for (const e of expiries) for (const q of [...e.calls, ...e.puts]) strikeSet.add(q.strike);
-    const strikes = [...strikeSet].sort((a, b) => a - b).filter((k) => Math.abs(k - snapshot.spot) / snapshot.spot < 0.18).slice(0, 40);
+    const allStrikes = [...strikeSet].sort((a, b) => a - b);
+    const strikes = selectStrikeWindow(allStrikes, snapshot.spot, 40, 0.18);
     const values: HeatmapCellData[][] = expiries.map((e) => {
       const T = Math.max(1e-9, e.dte / 365);
       const F = (e as unknown as { forward?: number }).forward ?? snapshot.spot * Math.exp((snapshot.riskFreeRate - snapshot.dividendYield) * T);
@@ -62,12 +64,22 @@ export function SurfaceMatrixView() {
     if (!Number.isFinite(min)) { min = 0; max = 40; }
     const rows: HeatmapAxisKey[] = expiries.map((e) => ({ key: e.expiry, label: `${e.dte}d`, num: e.dte }));
     const cols: HeatmapAxisKey[] = strikes.map((k) => ({ key: String(k), label: k >= 1000 ? String(Math.round(k)) : k.toFixed(0), num: k }));
-    // Spot reference column.
-    let nearest = strikes[0] ?? 0;
-    for (const k of strikes) if (Math.abs(k - snapshot.spot) < Math.abs(nearest - snapshot.spot)) nearest = k;
+    const { offscreen } = spotStatus(snapshot.spot, strikes);
+    const spot = snapshot.spot;
+    const hasSpot = spot != null && Number.isFinite(spot) && spot > 0;
+    // When in range, use true numeric interpolation; when offscreen/unavailable, omit line and show separate status
+    const spotRef: { colKey: string; label: string } | null = null; // legacy fallback not used; kept for compat
+    const drawSpotValue = hasSpot && !offscreen ? spot : null;
+    const drawSpotLabel = hasSpot && !offscreen ? `SPOT ${spot.toFixed(0)}` : null;
+    const spotBanner = !hasSpot ? `SPOT unavailable` : offscreen ? `SPOT ${spot.toFixed(0)} — offscreen` : null;
     return {
       rows, cols, cells: values,
-      spotRef: { colKey: String(nearest), label: `SPOT ${snapshot.spot.toFixed(0)}` },
+      spotRef,
+      spotOffscreen: offscreen,
+      spotValue: hasSpot ? spot : null,
+      drawSpotValue,
+      drawSpotLabel,
+      spotBanner,
       min, max,
     };
   }, [snapshot, side]);
@@ -119,9 +131,14 @@ export function SurfaceMatrixView() {
               units="%"
               metricLabel="IV"
               spotRef={grid.spotRef}
+              spotValue={grid.drawSpotValue}
+              spotLabel={grid.drawSpotLabel}
               caption="IV surface matrix (IV % by strike and expiry)"
               emptyMessage="No IV observations in window — cells stay unavailable."
             />
+            {grid.spotBanner && (
+              <div className="font-mono text-type-2xs text-amber" data-testid="spot-offscreen-banner">{grid.spotBanner}</div>
+            )}
           </div>
           <div className="flex items-center justify-between border-t border-border pt-2">
             <div>

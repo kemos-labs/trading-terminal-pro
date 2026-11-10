@@ -192,46 +192,32 @@ export class LiveProvider implements DataProvider {
       // Fall through: synthetic crypto smile + any available spot
     }
 
-    // Real spot: FMP first, then yfinance (critical for BTC-USD / crypto).
+    // Chain-critical spot: concurrent optional fetch — never block chain on spot/profile/history.
     let spot: number | null = ctx.spot ?? null;
-    let spotSource: 'fmp' | 'yfinance' | 'deribit' | 'synthetic' = 'synthetic';
-
-    if (spot == null) {
-      const fmpSym = under?.label === 'BTC' || under?.label === 'ETH'
-        ? under.spotSymbol.replace('-', '') // FMP sometimes uses BTCUSD
-        : symbol;
-      const quoteRes = await fmpGet(`quote?symbol=${encodeURIComponent(fmpSym)}`, { ttl: 12_000 });
-      if (quoteRes.json) {
-        const arr = quoteRes.json as FmpQuote[];
-        if (arr.length > 0 && isFinite(arr[0]!.price) && arr[0]!.price > 0) {
-          spot = arr[0]!.price;
-          spotSource = 'fmp';
-          this.lastSpotFetchedAt = Date.now();
+    let spotSource: 'fmp' | 'yfinance' | 'deribit' | 'synthetic' = ctx.spot != null ? 'fmp' : 'synthetic';
+    if (ctx.spot != null) this.lastSpotFetchedAt = Date.now();
+    const spotPromise: Promise<{ price: number; source: 'fmp' | 'yfinance' } | null> = (async () => {
+      if (ctx.spot != null) return null;
+      const fmpSym = under?.label === 'BTC' || under?.label === 'ETH' ? under.spotSymbol.replace('-', '') : symbol;
+      try {
+        const quoteRes = await fmpGet(`quote?symbol=${encodeURIComponent(fmpSym)}`, { ttl: 12_000 });
+        if (quoteRes.json) {
+          const arr = quoteRes.json as FmpQuote[];
+          if (arr.length > 0 && isFinite(arr[0]!.price) && arr[0]!.price > 0) return { price: arr[0]!.price, source: 'fmp' as const };
         }
-      }
-    } else {
-      spotSource = 'fmp';
-      this.lastSpotFetchedAt = Date.now();
-    }
-
-    // yfinance spot for crypto (BTC-USD) or as equity fallback
-    if (spot == null) {
-      const yfSym = under?.spotSymbol ?? symbol;
-      const hist = await fetchYfHistory(yfSym, 60_000);
-      if (hist && hist.length > 0) {
-        const last = hist[hist.length - 1]!;
-        if (last.close > 0) {
-          spot = last.close;
-          spotSource = 'yfinance';
-          this.lastSpotFetchedAt = Date.now();
+      } catch { /* optional */ }
+      try {
+        const yfSym = under?.spotSymbol ?? symbol;
+        const hist = await fetchYfHistory(yfSym, 60_000);
+        if (hist && hist.length > 0) {
+          const last = hist[hist.length - 1]!;
+          if (last.close > 0) return { price: last.close, source: 'yfinance' as const };
         }
-      }
-    }
-    if (spot == null && under) {
-      void (await fetchYfInfo(under.spotSymbol, 60_000));
-    }
-
-    this.lastSpotSource = spotSource;
+      } catch { /* optional */ }
+      if (under) { try { await fetchYfInfo(under.spotSymbol, 60_000); } catch { /* optional */ } }
+      return null;
+    })();
+    void spotPromise.catch(() => null);
 
     let snap: VolSnapshot | null = null;
     let chainOk = false;
@@ -243,17 +229,15 @@ export class LiveProvider implements DataProvider {
       ? null
       : (under?.chainSymbol ?? symbol);
 
-    const buildFromFmp = async (sym: string): Promise<VolSnapshot | null> => {
+    const buildFromFmp = async (sym: string, spotVal: number | null): Promise<VolSnapshot | null> => {
       const raw = await fetchFmpOptions(sym);
       if (!raw) return null;
       const quotes: YahooRawOption[] = normalizeFmp(raw as FmpOptionsResponse);
       if (quotes.length < 5) return null;
-      // P0 Fix: observed spot required — never substitute strike as spot.
-      // If spot is unavailable, return null (explicit unavailable state).
-      if (spot == null || !isFinite(spot) || spot <= 0) return null;
+      if (spotVal == null || !isFinite(spotVal) || spotVal <= 0) return null;
       const data: YahooResponse = {
         symbol: sym,
-        spot,
+        spot: spotVal,
         expirations: [...new Set(quotes.map((x) => x.expiry))],
         quotes,
         timestamp: Date.now(),
@@ -270,7 +254,11 @@ export class LiveProvider implements DataProvider {
 
     if (chainSymbol) {
       if (chainMode === 'fmp') {
-        snap = await buildFromFmp(chainSymbol);
+        if (spot == null) {
+          const sp = await spotPromise;
+          if (sp && sp.price > 0) { spot = sp.price; spotSource = sp.source; this.lastSpotFetchedAt = Date.now(); }
+        }
+        snap = await buildFromFmp(chainSymbol, spot);
         if (snap) { chainOk = true; chainUsed = 'fmp'; this.lastChainFetchedAt = Date.now(); }
       } else if (chainMode === 'yfinance') {
         snap = await buildFromYf(chainSymbol);
@@ -278,26 +266,35 @@ export class LiveProvider implements DataProvider {
       } else if (chainMode === 'deribit') {
         // Non-crypto: nothing to do — synthetic fallback below.
       } else {
-        // auto (equity / ETF): yfinance first (free + full chain), FMP if paid key works.
+        // auto: yfinance chain starts immediately without awaiting optional spot; FMP fallback awaits spot only on yfinance miss.
         snap = await buildFromYf(chainSymbol);
         if (snap) {
           chainOk = true;
           chainUsed = 'yfinance';
           this.lastChainFetchedAt = Date.now();
         } else {
-          snap = await buildFromFmp(chainSymbol);
+          if (spot == null) {
+            const sp = await spotPromise;
+            if (sp && sp.price > 0) { spot = sp.price; spotSource = sp.source; this.lastSpotFetchedAt = Date.now(); }
+          }
+          snap = await buildFromFmp(chainSymbol, spot);
           if (snap) { chainOk = true; chainUsed = 'fmp'; this.lastChainFetchedAt = Date.now(); }
         }
       }
     }
 
+    // Adopt optional spot if still null — direct await without immediate-null race.
+    if (spot == null) {
+      const sp = await spotPromise;
+      if (sp && sp.price > 0) { spot = sp.price; spotSource = sp.source; this.lastSpotFetchedAt = Date.now(); }
+    }
     // Prefer market spot from the options payload when our spot is still synthetic.
     if (snap && spot == null && snap.spot > 0) {
       spot = snap.spot;
       spotSource = chainUsed === 'yfinance' ? 'yfinance' : spotSource;
-      this.lastSpotSource = spotSource;
       this.lastSpotFetchedAt = Date.now();
     }
+    this.lastSpotSource = spotSource;
 
     this.lastChainAvailable = chainOk;
     this.lastChainSource = chainUsed;

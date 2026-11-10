@@ -387,6 +387,30 @@ async def rates_term_structure(T: float = Query(0.25, ge=0.01, le=40.0)):
     }
 
 
+@app.post("/api/rates/policy-scenario")
+async def rates_policy_scenario(payload: dict):
+    """
+    REF-08/N3c policy-scenario calculator (private worker endpoint).
+    Deterministic scenario math over explicit caller-supplied fixings,
+    meeting steps, and reference windows. No provider fetch, no invented
+    fixings. Invalid bodies are 400; unexpected failures are 500 without
+    leaking internals. Node exposes this via POST /api/v1/rates/policy-scenario.
+    """
+    from fastapi.responses import JSONResponse
+    from services.policy_calculator import PolicyScenarioError, calculate_policy_scenario
+    try:
+        result = calculate_policy_scenario(payload if isinstance(payload, dict) else {})
+    except PolicyScenarioError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"{type(e).__name__}: calculation failed"})
+    return {
+        **result,
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "source": "caller-supplied-fixings-plus-scenario-steps",
+    }
+
+
 RSS_FEEDS = {
     "conks": "https://conkstack.substack.com/feed",
     "alphapicks": "https://alphapicks.substack.com/feed",

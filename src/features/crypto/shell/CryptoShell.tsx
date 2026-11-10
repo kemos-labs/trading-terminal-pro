@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useState, lazy, Suspense, createContext, useContext } from 'react';
 import { cn } from '../../../lib/utils';
 const CryptoVolatilityView = lazy(() => import('../volatility/CryptoVolatilityView').then(m => ({ default: m.CryptoVolatilityView })));
 const CryptoPositioningView = lazy(() => import('../positioning/CryptoPositioningView').then(m => ({ default: m.CryptoPositioningView })));
@@ -45,16 +45,91 @@ function setWorkflowInUrl(id: CryptoWorkflow) {
   window.history.pushState({}, '', url.toString());
 }
 
+export const SUPPORTED_CRYPTO_ASSETS = ['BTC', 'ETH'] as const;
+export type SupportedCryptoAsset = typeof SUPPORTED_CRYPTO_ASSETS[number];
+
+export function isSupportedCryptoAsset(value: string): value is SupportedCryptoAsset {
+  return (SUPPORTED_CRYPTO_ASSETS as readonly string[]).includes(value.toUpperCase());
+}
+
+export function normalizeCryptoAsset(raw: string | null): SupportedCryptoAsset | null {
+  if (!raw) return null;
+  const up = raw.trim().toUpperCase();
+  return isSupportedCryptoAsset(up) ? up : null;
+}
+
+export const SUPPORTED_CRYPTO_VENUES = ['deribit'] as const;
+export type SupportedCryptoVenue = typeof SUPPORTED_CRYPTO_VENUES[number];
+
+export function isSupportedCryptoVenue(value: string): value is SupportedCryptoVenue {
+  return (SUPPORTED_CRYPTO_VENUES as readonly string[]).includes(value.toLowerCase());
+}
+
+export function normalizeCryptoVenue(raw: string | null): SupportedCryptoVenue | null {
+  if (!raw) return null;
+  const low = raw.trim().toLowerCase();
+  return isSupportedCryptoVenue(low) ? (low as SupportedCryptoVenue) : null;
+}
+
+export interface CryptoAssetContextValue {
+  rawAsset: string;
+  validatedAsset: SupportedCryptoAsset | null;
+  isUnsupported: boolean;
+  venue: SupportedCryptoVenue | null;
+  rawVenue: string;
+  validatedVenue: SupportedCryptoVenue | null;
+  isUnsupportedVenue: boolean;
+}
+
+export const CryptoAssetContext = createContext<CryptoAssetContextValue>({
+  rawAsset: 'BTC',
+  validatedAsset: 'BTC',
+  isUnsupported: false,
+  venue: 'deribit',
+  rawVenue: 'deribit',
+  validatedVenue: 'deribit',
+  isUnsupportedVenue: false,
+});
+
+export function useCryptoAsset(): CryptoAssetContextValue {
+  return useContext(CryptoAssetContext);
+}
+
+function getAssetFromUrl(): string {
+  return new URLSearchParams(window.location.search).get('asset') || 'BTC';
+}
+function getVenueFromUrl(): string {
+  return new URLSearchParams(window.location.search).get('venue') || 'deribit';
+}
+
 export function CryptoShell() {
   const [workflow, setWorkflow] = useState<CryptoWorkflow>(() => getWorkflowFromUrl());
-  const [asset] = useState(() => new URLSearchParams(window.location.search).get('asset') || 'BTC');
-  const [venue] = useState(() => new URLSearchParams(window.location.search).get('venue') || 'deribit');
+  const [asset, setAsset] = useState(() => getAssetFromUrl());
+  const [venue, setVenue] = useState(() => getVenueFromUrl());
 
   useEffect(() => {
-    const onPop = () => setWorkflow(getWorkflowFromUrl());
+    const onPop = () => {
+      setWorkflow(getWorkflowFromUrl());
+      setAsset(getAssetFromUrl());
+      setVenue(getVenueFromUrl());
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  const validatedAsset = useMemo(() => normalizeCryptoAsset(asset), [asset]);
+  const isUnsupported = useMemo(() => validatedAsset == null, [validatedAsset]);
+  const validatedVenue = useMemo(() => normalizeCryptoVenue(venue), [venue]);
+  const isUnsupportedVenue = useMemo(() => validatedVenue == null, [validatedVenue]);
+  const assetContextValue = useMemo<CryptoAssetContextValue>(() => ({
+    rawAsset: asset,
+    validatedAsset,
+    isUnsupported,
+    venue: validatedVenue,
+    rawVenue: venue,
+    validatedVenue,
+    isUnsupportedVenue,
+  }), [asset, validatedAsset, isUnsupported, venue, validatedVenue, isUnsupportedVenue]);
 
   const active = useMemo(() => WORKFLOWS.find(w => w.id === workflow)!, [workflow]);
 
@@ -64,14 +139,15 @@ export function CryptoShell() {
   };
 
   return (
+    <CryptoAssetContext.Provider value={assetContextValue}>
     <div className="flex h-full min-h-0 flex-col gap-2" data-testid="crypto-v2-shell">
       {/* Crypto asset/venue context strip: a labelled region, not a second page banner.
           The single page banner lives in the global TerminalHeader above. */}
       <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-card px-3 py-2" role="region" aria-label="Crypto market context">
         <span className="font-mono text-xs font-bold uppercase tracking-wider">CRYPTO</span>
         <span className="h-4 w-px bg-border" aria-hidden />
-        <span className="font-mono text-xs">{asset} · {venue}</span>
-        <span className="ml-auto font-mono text-xs text-muted-foreground" aria-live="polite">Source: Deribit · {new Date().toISOString().slice(0,10)}</span>
+        <span className="font-mono text-xs" data-testid="crypto-context-strip">{asset} · {validatedVenue ?? 'venue unavailable'}</span>
+        <span className="ml-auto font-mono text-xs text-muted-foreground" aria-live="polite">{isUnsupportedVenue ? `Venue unavailable` : `Source: Deribit`} · {new Date().toISOString().slice(0,10)}</span>
       </div>
 
       {/* Workflow rail */}
@@ -116,5 +192,6 @@ export function CryptoShell() {
 
       </div>
     </div>
+    </CryptoAssetContext.Provider>
   );
 }

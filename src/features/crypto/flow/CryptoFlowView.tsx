@@ -4,6 +4,7 @@ import {
 } from 'recharts';
 import { fetchDeribitTrades, type DeribitTrade } from '../../../api/deribit';
 import { CHART } from '../../../lib/chartTheme';
+import { useCryptoAsset } from '../shell/CryptoShell';
 
 function classifiedRight(trade: DeribitTrade): 'call' | 'put' | null {
   if (trade.right === 'call' || trade.right === 'put') return trade.right;
@@ -12,21 +13,28 @@ function classifiedRight(trade: DeribitTrade): 'call' | 'put' | null {
 }
 
 export function CryptoFlowView() {
+  const { validatedAsset, isUnsupported, rawAsset, validatedVenue, isUnsupportedVenue, rawVenue } = useCryptoAsset();
   const [trades, setTrades] = useState<DeribitTrade[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [asOf, setAsOf] = useState<number | null>(null);
   const [stale, setStale] = useState(false);
 
   useEffect(() => {
+    if (isUnsupportedVenue || !validatedVenue) return;
+    if (isUnsupported || !validatedAsset) return;
     let cancelled = false;
-    fetchDeribitTrades('BTC', 24, 100).then(res => {
+    setTrades(null);
+    setError(null);
+    setAsOf(null);
+    setStale(false);
+    fetchDeribitTrades(validatedAsset, 24, 100).then(res => {
       if (cancelled) return;
       setTrades(res.trades);
       setAsOf(res.fetchedAt);
       setStale(Date.now() - res.fetchedAt > 30_000);
     }).catch((e: Error) => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
-  }, []);
+  }, [validatedAsset, isUnsupported, validatedVenue, isUnsupportedVenue]);
 
   // Aggregates: call/put × buy/sell taker counts + native premium shares.
   const agg = useMemo(() => {
@@ -72,6 +80,24 @@ export function CryptoFlowView() {
   }, [trades]);
 
 
+  if (isUnsupportedVenue) {
+    return (
+      <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 font-mono text-xs" role="alert" data-testid="flow-venue-unsupported">
+        <div className="font-bold">Venue unavailable</div>
+        <div className="mt-1 text-muted-foreground">Unsupported venue &quot;{rawVenue}&quot; — supported: deribit. No data fetched.</div>
+      </div>
+    );
+  }
+
+  if (isUnsupported) {
+    return (
+      <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 font-mono text-xs" role="alert" data-testid="flow-unsupported">
+        <div className="font-bold">Asset unavailable</div>
+        <div className="mt-1 text-muted-foreground">Unsupported asset &quot;{rawAsset}&quot; — supported: BTC, ETH. No data fetched.</div>
+      </div>
+    );
+  }
+
   if (error) return (
     <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">
       <div className="font-bold">Provider unavailable</div>
@@ -89,7 +115,7 @@ export function CryptoFlowView() {
     </div>
   );
 
-  // Native premium: price (BTC) × amount (contracts) × contract_size. Settlement ccy, NOT USD.
+  // Native premium: price (native, e.g. BTC/ETH) × amount (contracts) × contract_size. Settlement ccy, NOT USD.
   const nativeCcy = trades.find(t => t.nativeCurrency)?.nativeCurrency ?? 'native';
   const premiumTrades = trades.filter((trade): trade is DeribitTrade & { premiumNative: number } => trade.premiumNative != null);
   const totalNative = premiumTrades.length > 0

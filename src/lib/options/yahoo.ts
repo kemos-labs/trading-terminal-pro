@@ -425,9 +425,20 @@ export function buildYahooSnapshot(
 // Client-side cache so the live refresh (every few seconds) doesn't re-hit the
 // Python/yfinance proxy each cycle. Chain TTL is longer than spot — options
 // don't meaningfully update every few seconds on free feeds.
+export type YfEnvelopeFreshness = 'live' | 'delayed' | 'stale' | 'expired' | 'unknown' | 'down';
+
+export function normalizeYahooFreshness(raw: unknown): YfEnvelopeFreshness {
+  if (typeof raw !== 'string') return 'unknown';
+  const v = raw.trim().toLowerCase();
+  if (v === 'unavailable') return 'unknown';
+  if (v === 'live' || v === 'delayed' || v === 'stale' || v === 'expired' || v === 'unknown' || v === 'down') return v;
+  return 'unknown';
+}
+
 interface YfChainCache {
   key: string;
   value: VolSnapshot | null;
+  freshness: YfEnvelopeFreshness | null;
   expiry: number;
   fetchedAt: number;
 }
@@ -454,6 +465,7 @@ export async function fetchYahooSnapshot(
     return yfChainCache.value;
   }
   try {
+    // route-parity: GET /api/v1/market/options/:symbol
     const res = await fetch(`/api/v1/market/options/${encodeURIComponent(symbol)}`, {
       // Bounded chain load: the desk gate must never spin
       // "Building chain surface…" forever on a stalled proxy/route.
@@ -464,13 +476,15 @@ export async function fetchYahooSnapshot(
     if (!res.ok) {
       // Negative cache so auto-refresh doesn't stampede a dead proxy.
       // 30s keeps rate-limited Render IP from re-hammering yfinance every loop.
-      yfChainCache = { key, value: null, expiry: now + 30_000, fetchedAt: now };
+      yfChainCache = { key, value: null, freshness: null, expiry: now + 30_000, fetchedAt: now };
       return null;
     }
 
     const envelope = await res.json() as {
       schemaVersion?: number;
       asOf?: string;
+      fetchedAt?: string;
+      freshness?: unknown;
       data?: {
         symbol?: string;
         spot?: number | null;
@@ -488,6 +502,11 @@ export async function fetchYahooSnapshot(
         }>;
       };
     };
+    const sourceFreshness = normalizeYahooFreshness((envelope as { freshness?: unknown }).freshness);
+    const asOfRaw = (envelope as { asOf?: string }).asOf;
+    const asOfMs = asOfRaw ? new Date(asOfRaw).getTime() : NaN;
+    // Keep feed delay separate from observation time; if asOf unparsable, keep NaN timestamp handled downstream as unknown, but preserve fetch freshness separately
+    const hasValidAsOf = asOfRaw ? Number.isFinite(asOfMs) : false;
     const payload = envelope.data;
     const data: YahooResponse | null = envelope.schemaVersion === 1 && payload && Array.isArray(payload.quotes)
       ? {
@@ -506,16 +525,16 @@ export async function fetchYahooSnapshot(
             openInterest: quote.openInterest,
             provenance: 'observed',
           })),
-          timestamp: envelope.asOf ? new Date(envelope.asOf).getTime() : now,
+          timestamp: hasValidAsOf ? asOfMs : NaN,
         }
       : null;
     if (!data || !Array.isArray(data.quotes) || data.quotes.length < 5) {
-      yfChainCache = { key, value: null, expiry: now + 4_000, fetchedAt: now };
+      yfChainCache = { key, value: null, freshness: sourceFreshness, expiry: now + 4_000, fetchedAt: now };
       return null;
     }
     // Fail-closed: missing/zero spot → null snapshot (do not use a strike as spot).
     if (!(data.spot > 0) || !Number.isFinite(data.spot)) {
-      yfChainCache = { key, value: null, expiry: now + 4_000, fetchedAt: now };
+      yfChainCache = { key, value: null, freshness: sourceFreshness, expiry: now + 4_000, fetchedAt: now };
       return null;
     }
     const snap = buildYahooSnapshot(data, r, q, {
@@ -525,15 +544,22 @@ export async function fetchYahooSnapshot(
     });
     // Only cache successful builds for the full TTL; empty/null gets a short TTL.
     const ok = !!snap && snap.expiries.length > 0;
+    let snapWithFreshness: VolSnapshot | null = null;
+    if (ok && snap) {
+      snapWithFreshness = { ...snap, sourceFreshness, timestamp: hasValidAsOf ? snap.timestamp : NaN } as VolSnapshot;
+      // Preserve NaN timestamp as unknown observation time (do not substitute fetch completion)
+      if (!Number.isFinite(snapWithFreshness.timestamp)) (snapWithFreshness as unknown as { timestamp: number }).timestamp = NaN;
+    }
     yfChainCache = {
       key,
-      value: ok ? snap : null,
+      value: snapWithFreshness,
+      freshness: sourceFreshness,
       expiry: now + (ok ? YF_CHAIN_TTL : 4_000),
       fetchedAt: now,
     };
-    return ok ? snap : null;
+    return snapWithFreshness;
   } catch {
-    yfChainCache = { key, value: null, expiry: now + 4_000, fetchedAt: now };
+    yfChainCache = { key, value: null, freshness: null, expiry: now + 4_000, fetchedAt: now };
     return null;
   }
 }

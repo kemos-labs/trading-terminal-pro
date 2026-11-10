@@ -5,7 +5,7 @@
 | **Date** | 2026-07-12 |
 | **Orchestrator** | Grok (this session) — Bloomberg UX research, product IA, gap map, task briefs |
 | **Implementer** | Claude Code + **Tencent Hy3** (295B MoE, 21B active, ~256–262K ctx) |
-| **Product** | VOLATERM — `/home/kalde/trading-terminal-pro` |
+| **Product** | VOLATERM — `the repository root` |
 | **Related** | `docs/BLOOMBERG_SHELL_REDESIGN.md`, `DESIGN.md`, `UI_UX_PLAN.md` |
 
 ---
@@ -305,7 +305,7 @@ You are running on Tencent Hy3 (or Claude Code with Hy3): strong multi-file agen
 - After work: list files changed, commands run, residual risks. Do not commit unless the human asks.
 
 # REPO
-Workspace: /home/kalde/trading-terminal-pro
+Workspace: the repository root
 Stack: React 19, Vite, Zustand, Tailwind, Vitest; Node server.js; MacroVol FastAPI under macrovol-api/
 Read first:
 - docs/engineering/ORCHESTRATION_BBG_HOME.md (this plan)

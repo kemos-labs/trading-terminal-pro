@@ -7,7 +7,10 @@
     "dev": "concurrently -n web,api,macro \"vite\" \"node server.js\" \"npm run rates-worker\"",
     "rates-worker": "python3 -m uvicorn main:app --app-dir services/rates-worker --host 127.0.0.1 --port 8765",
     "macrovol-api": "npm run rates-worker",
-    "build": "tsc -b && vite build",
+    "build:exposure-grid": "node scripts/build-exposure-grid-bundle.mjs",
+    "check:bundle": "node scripts/build-exposure-grid-bundle.mjs --check",
+    "test:bundle-check": "node --test scripts/build-exposure-grid-bundle.check.test.mjs",
+    "build": "npm run build:exposure-grid && tsc -b && vite build",
     "start": "node server.js",
     "start:prod": "bash scripts/start-production.sh",
     "type-check": "tsc -b --noEmit --pretty false",
@@ -27,7 +30,10 @@
     "test:integration": "NODE_ENV=test vitest run server/routes/restoredRoutes.test.js server/routes/v1.test.js server/quota.test.js api/upstreamCache.test.js server/providers/freeCrypto/client.test.js server/providers/entitlements.test.js && NODE_ENV=test vitest run server/providers/deribit/quota.integration.test.js",
     "test:e2e:mocked": "npx playwright test --reporter=line",
     "test:e2e:real-server": "npm run build && npx playwright test --config=playwright.real-server.config.ts",
+    "capture:identity": "node scripts/capture-identity.mjs --write",
+    "verify:capture": "node scripts/verify-capture-evidence.mjs",
     "test:e2e:failure-states": "npm run build && npx playwright test --config=playwright.failure-states.config.ts",
+    "test:e2e:failure-states:evidence": "npm run capture:identity && npx playwright test --config=playwright.failure-states.config.ts && npm run verify:capture",
     "smoke:api": "bash scripts/smoke-api.sh",
     "test:visual": "npx playwright test --config=playwright.visual.config.ts",
     "mcp": "node mcp/mcp-server.js"
@@ -77,5 +83,8 @@
     "typescript": "~6.0.2",
     "vite": "^8.1.0",
     "vitest": "^3.0.9"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

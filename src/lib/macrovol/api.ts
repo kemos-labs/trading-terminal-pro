@@ -115,6 +115,21 @@ export const macrovolApi = {
 
 // ── Types ────────────────────────────────────────────────────
 
+/**
+ * Verbatim server cache envelope (`state/hit/ageMs/stale/coalesced/providerError`).
+ * `fetchJson` preserves it without inference; staleness is ONLY `cache.stale`.
+ * Missing/null = unknown (never stale); frozen `as_of` must never imply stale.
+ * `ageMs` is milliseconds; `providerError` is a sanitized code (never a raw body).
+ */
+export interface CacheMeta {
+  state?: string | null;
+  hit?: boolean | null;
+  ageMs?: number | null;
+  stale?: boolean | null;
+  coalesced?: boolean | null;
+  providerError?: string | null;
+}
+
 export interface RatesSummary {
   sofr: number | null;
   effr: number | null;
@@ -130,6 +145,11 @@ export interface RatesSummary {
   obs_dates?: Record<string, string | null>;
   as_of?: string;
   source?: string;
+  /**
+   * Verbatim server cache envelope; staleness is ONLY `cache.stale === true`.
+   * Missing/null = unknown (never stale); never infer staleness from `as_of`.
+   */
+  cache?: CacheMeta | null;
 }
 
 export interface RatesCurve {

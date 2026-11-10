@@ -21,6 +21,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gateInfoForRequest } from '../../api/stripeBilling.js';
 import {
+  buildForwardVolMatrix,
   buildGreeks,
   buildPositioning,
   buildVolatilitySurface,
@@ -33,6 +34,102 @@ function finiteOrNull(value) {
   if (value == null || value === '') return null;
   const number = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+// ── REF-08/N3c policy-scenario body validation (before any worker call) ──
+const POLICY_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+function policyDateOrNull(value) {
+  if (typeof value !== 'string') return null;
+  const match = POLICY_DATE_RE.exec(value);
+  if (!match) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null;
+}
+function policyFinite(value, min, max) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+}
+function validatePolicyScenarioBody(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return 'Request body must be a JSON object.';
+  const TOP_KEYS = new Set(['fixings', 'meetings', 'sr3', 'sr1', 'policySpreadBps', 'deriveStepFromMidpoint']);
+  for (const key of Object.keys(body)) {
+    if (!TOP_KEYS.has(key)) return `Unknown top-level property '${key}': request keys are fixings, meetings, sr3, sr1, policySpreadBps, deriveStepFromMidpoint.`;
+  }
+  const FIXING_KEYS = new Set(['date', 'value']);
+  const MEETING_KEYS = new Set(['date', 'stepBps', 'targetLower', 'targetUpper']);
+  const WINDOW_KEYS = new Set(['windowStart', 'windowEnd', 'currentRate', 'currentSource', 'currentDate']);
+  const { fixings, meetings, sr3, sr1, policySpreadBps, deriveStepFromMidpoint } = body;
+  if (!Array.isArray(fixings) || fixings.length < 1 || fixings.length > 500) {
+    return 'fixings must be an array of 1 to 500 {date, value} rows.';
+  }
+  for (const row of fixings) {
+    if (!row || typeof row !== 'object') return 'Each fixing must be an object with date and value.';
+    for (const key of Object.keys(row)) {
+      if (!FIXING_KEYS.has(key)) return `Unknown fixing property '${key}': fixing rows accept only date and value.`;
+    }
+    if (!policyDateOrNull(row.date)) return `Fixing date must be YYYY-MM-DD, got ${String(row.date)}.`;
+    if (!policyFinite(row.value, -5, 30)) return 'Fixing value must be a finite percent in [-5, 30].';
+  }
+  if (meetings !== undefined) {
+    if (!Array.isArray(meetings) || meetings.length > 50) return 'meetings must be an array of at most 50 rows.';
+    for (const meeting of meetings) {
+      if (!meeting || typeof meeting !== 'object') return 'Each meeting must be an object with date and stepBps.';
+      for (const key of Object.keys(meeting)) {
+        if (!MEETING_KEYS.has(key)) return `Unknown meeting property '${key}': meeting rows accept only date, stepBps, targetLower and targetUpper.`;
+      }
+      if (!policyDateOrNull(meeting.date)) return `Meeting date must be YYYY-MM-DD, got ${String(meeting.date)}.`;
+      if ('stepBps' in meeting && meeting.stepBps !== undefined && meeting.stepBps !== null
+        && !policyFinite(meeting.stepBps, -500, 500)) {
+        return 'Meeting stepBps must be finite basis points in [-500, 500] when supplied.';
+      }
+      for (const bound of ['targetLower', 'targetUpper']) {
+        if (bound in meeting && meeting[bound] !== undefined && meeting[bound] !== null
+          && !policyFinite(meeting[bound], -5, 30)) {
+          return `Meeting ${bound} must be a finite percent in [-5, 30] when supplied.`;
+        }
+      }
+    }
+  }
+  for (const [name, window] of [['sr3', sr3], ['sr1', sr1]]) {
+    if (window === undefined || window === null) continue;
+    if (!window || typeof window !== 'object' || Array.isArray(window)) return `${name} must be an object with windowStart and windowEnd.`;
+    for (const key of Object.keys(window)) {
+      if (!WINDOW_KEYS.has(key)) return `Unknown ${name} property '${key}': ${name} accepts only windowStart, windowEnd, currentRate, currentSource and currentDate.`;
+    }
+    if (!policyDateOrNull(window.windowStart) || !policyDateOrNull(window.windowEnd)) {
+      return `${name}.windowStart/windowEnd must be YYYY-MM-DD dates.`;
+    }
+    if (window.windowEnd <= window.windowStart) return `${name} window must satisfy windowEnd > windowStart.`;
+    const spanDays = (new Date(`${window.windowEnd}T00:00:00.000Z`) - new Date(`${window.windowStart}T00:00:00.000Z`)) / 86_400_000;
+    if (!(spanDays > 0 && spanDays <= 400)) return `${name} window longer than 400 days is rejected.`;
+    if (window.currentRate !== undefined && window.currentRate !== null
+      && !policyFinite(window.currentRate, -5, 30)) {
+      return `${name}.currentRate must be a finite percent in [-5, 30] or null.`;
+    }
+  }
+  if (policySpreadBps !== undefined && policySpreadBps !== null
+    && !policyFinite(policySpreadBps, -2000, 2000)) {
+    return 'policySpreadBps must be finite basis points in [-2000, 2000] or null.';
+  }
+  if (deriveStepFromMidpoint !== undefined && typeof deriveStepFromMidpoint !== 'boolean') {
+    return 'deriveStepFromMidpoint must be a boolean.';
+  }
+  return null;
+}
+function projectPolicyRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  return {
+    windowStart: typeof row.windowStart === 'string' ? row.windowStart : null,
+    windowEnd: typeof row.windowEnd === 'string' ? row.windowEnd : null,
+    currentRate: finiteOrNull(row.currentRate),
+    currentSource: typeof row.currentSource === 'string' ? row.currentSource : null,
+    currentDate: typeof row.currentDate === 'string' ? row.currentDate : null,
+    currentProvenance: typeof row.currentProvenance === 'string' ? row.currentProvenance : 'unavailable-not-supplied',
+    predictedRate: finiteOrNull(row.predictedRate),
+    predictedProvenance: typeof row.predictedProvenance === 'string' ? row.predictedProvenance : 'unavailable',
+    differenceBps: finiteOrNull(row.differenceBps),
+    status: row.status === 'ok' ? 'ok' : 'unavailable',
+    warnings: Array.isArray(row.warnings) ? row.warnings.filter((w) => typeof w === 'string').slice(0, 25) : [],
+  };
 }
 
 const MONTHS = new Map([
@@ -221,10 +318,10 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
         cache: upstream.body.cache,
         provenanceByField: positioning ? {
           'data.points[].openInterest': 'observed-provider-open-interest',
-          'data.points[].gex1PctUsd': 'derived-bsm-customer-long-oi-proxy',
-          'data.points[].dexUsd': 'derived-bsm-customer-long-oi-proxy',
-          'data.points[].vannaUsdPerUnitVol': 'derived-bsm-customer-long-oi-proxy',
-          'data.points[].charmUsdPerDay': 'derived-bsm-customer-long-oi-proxy',
+          'data.points[].gex1PctUsd': 'derived-bsm-signed-greek-oi-proxy',
+          'data.points[].dexUsd': 'derived-bsm-signed-greek-oi-proxy',
+          'data.points[].vannaUsdPerUnitVol': 'derived-bsm-signed-greek-oi-proxy',
+          'data.points[].charmUsdPerDay': 'derived-bsm-signed-greek-oi-proxy',
         } : {
           'data.points[].iv': 'observed-provider-mark-iv',
           'data.points[].delta': 'derived-black-scholes-merton',
@@ -253,7 +350,8 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
         },
         assumptions: positioning
           ? [
-            'Customer-long sign model; equity contract multiplier 100; missing OI stays unavailable.',
+            'Mixed per-metric signed-Greek OI convention: GEX uses +gamma for calls and -gamma for puts; DEX, Vanna, and Charm use the signed model Greek with no right multiplier. Not customer-long across all metrics; not observed dealer inventory.',
+            'Equity contract multiplier 100; missing or non-finite OI stays unavailable (null); zero OI is valid zero; non-finite exposure outputs are null with incomplete coverage.',
             'Equity expiry dates use 20:00 UTC as a labelled model-time approximation; crypto uses the provider expiry timestamp.',
           ]
           : [
@@ -266,6 +364,88 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
       return sendContract(request, reply, contractName, envelope);
     });
   }
+
+  // ── REF-06 forward-volatility matrix (pairwise upper triangle, DTE/365) ──
+  fastify.get('/api/v1/analytics/forward-vol-matrix/:symbol', {
+    schema: {
+      params: ANALYTICS_PARAMS_SCHEMA,
+      querystring: {
+        type: 'object', additionalProperties: false,
+        properties: { maxRows: { type: 'integer', minimum: 1, maximum: 5_000 } },
+      },
+    },
+  }, async (request, reply) => {
+    const symbol = String(request.params.symbol).toUpperCase();
+    const upstream = await loadCanonicalOptions(fastify, symbol);
+    if (upstream.statusCode !== 200) {
+      return sendError(request, reply, {
+        statusCode: upstream.statusCode >= 400 && upstream.statusCode < 500 ? upstream.statusCode : 502,
+        code: upstream.body?.error?.code ?? 'PROVIDER_UNAVAILABLE',
+        message: 'The canonical option snapshot required for forward-vol analytics is unavailable.',
+        retryable: upstream.statusCode >= 500,
+      });
+    }
+    const result = buildForwardVolMatrix(upstream.body, symbol, { maxRows: request.query?.maxRows });
+    const isCryptoFwd = result.data.ivBasis === 'observed-mark';
+    const fwdExpiryLabelProvenance = isCryptoFwd
+      ? 'utc-date-label-derived-from-provider-expiryMs'
+      : 'upstream-expiry-date-label-not-observed-instant';
+    const fwdDteProvenance = isCryptoFwd
+      ? 'derived-elapsed-calendar-days-from-envelope-asOf-and-provider-expiryMs-v1'
+      : 'derived-elapsed-calendar-days-from-envelope-asOf-and-model-expiry-20utc-v1';
+    const fwdValueProvenance = isCryptoFwd
+      ? 'derived-total-variance-forward-vol-using-provider-expiryMs-v1'
+      : 'derived-total-variance-forward-vol-conditional-on-model-expiry-20utc-v1';
+    const envelope = baseEnvelope(request, {
+      asOf: upstream.body.asOf,
+      fetchedAt: upstream.body.fetchedAt,
+      source: [...new Set([...upstream.body.source, 'terminal-options-analytics'])],
+      freshness: upstream.body.freshness,
+      coverage: derivedCoverage(coverage, result),
+      cache: upstream.body.cache,
+      provenanceByField: {
+        'data.expiries[].atmIv': result.data.ivBasis === 'observed-mark'
+          ? 'observed-provider-mark-iv-nearest-to-spot'
+          : 'derived-solved-mid-nearest-to-spot',
+        'data.expiries[].expiry': fwdExpiryLabelProvenance,
+        'data.cells[].startExpiry': fwdExpiryLabelProvenance,
+        'data.cells[].endExpiry': fwdExpiryLabelProvenance,
+        'data.expiries[].dte': fwdDteProvenance,
+        'data.cells[].startDte': fwdDteProvenance,
+        'data.cells[].endDte': fwdDteProvenance,
+        'data.expiries[].T': 'derived-dte-divided-by-365',
+        'data.cells[].startT': 'derived-dte-divided-by-365',
+        'data.cells[].endT': 'derived-dte-divided-by-365',
+        'data.cells[].value': fwdValueProvenance,
+        'data.origin': 'current-quote-instant-not-an-expiry',
+      },
+      unitsByField: {
+        'data.spot': 'USD',
+        'data.expiries[].dte': 'calendar-days',
+        'data.expiries[].T': 'years-DTE-over-365',
+        'data.expiries[].atmIv': 'decimal-volatility',
+        'data.cells[].startDte': 'calendar-days',
+        'data.cells[].endDte': 'calendar-days',
+        'data.cells[].startT': 'years-DTE-over-365',
+        'data.cells[].endT': 'years-DTE-over-365',
+        'data.cells[].startAtmIv': 'decimal-volatility',
+        'data.cells[].endAtmIv': 'decimal-volatility',
+        'data.cells[].value': 'decimal-volatility-annualized',
+      },
+      assumptions: [
+        'Year fraction is DTE/365 calendar days; T=0 (SPOT) is the current quote instant, never an expiry column.',
+        'Any negative implied forward variance — including tiny negatives — is unavailable, never a clamped zero; exact zero with distinct increasing DTE may be 0.',
+        'Diagonal and lower-triangle cells are structurally blank, not data.',
+        'REF06 expiry-time policy ref06-equity-date-20utc-v1: date-only equity expiries are mapped to 20:00:00.000 UTC on the supplied date solely as a model-time approximation. This is not an observed expiry instant or a verified venue settlement or trading-cutoff rule. No venue, daylight-saving, holiday or early-close adjustment is applied.',
+        'REF06 expiry-time policy ref06-crypto-provider-instant-v1: time to expiry uses the canonical provider-supplied expiryMs instant without replacing its clock. The displayed expiry date is a UTC date label, not the expiry instant.',
+        'DTE is fractional elapsed time from the canonical envelope asOf to the applicable expiry instant, divided by 86,400,000 milliseconds; T = DTE/365. The calculation does not round DTE or substitute fetch time or the current wall clock.',
+        'asOf retains its upstream snapshot meaning; it is not an independently verified exchange quote timestamp.',
+      ],
+      warnings: [...upstream.body.warnings, ...result.warnings],
+      data: result.data,
+    });
+    return sendContract(request, reply, 'forwardVolMatrixResponse', envelope);
+  });
 
   // ── Provider / cache status ────────────────────────────────────────────
   fastify.get('/api/v1/provider/status', async (request, reply) => {
@@ -468,6 +648,114 @@ export function registerV1AnalyticsRoutes(fastify, { sendContract, sendError, ba
       },
     });
     return sendContract(request, reply, 'ratesTermStructureResponse', envelope);
+  });
+
+  // ── Rates: policy scenario calculator (REF-08/N3c math + contract only) ──
+  // Single allowlisted proxy: exact path, POST-only, validated body, no wildcard.
+  fastify.post('/api/v1/rates/policy-scenario', async (request, reply) => {
+    const validationError = validatePolicyScenarioBody(request.body);
+    if (validationError) {
+      return sendError(request, reply, {
+        statusCode: 400,
+        code: 'INVALID_REQUEST',
+        message: validationError,
+        retryable: false,
+      });
+    }
+    let worker;
+    try {
+      const base = resolveRatesWorkerUrl();
+      const res = await fetch(`${base}/api/rates/policy-scenario`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(request.body),
+        signal: AbortSignal.timeout(25_000),
+      });
+      worker = await res.json().catch(() => null);
+      if (!res.ok || !worker || typeof worker !== 'object') {
+        const workerMessage = worker && typeof worker.error === 'string' ? worker.error : null;
+        if (res.status === 400) {
+          return sendError(request, reply, {
+            statusCode: 400,
+            code: 'INVALID_REQUEST',
+            message: workerMessage ?? 'The policy scenario request was invalid.',
+            retryable: false,
+          });
+        }
+        throw new Error(`worker ${res.status}`);
+      }
+    } catch {
+      return sendError(request, reply, {
+        statusCode: 502,
+        code: 'PROVIDER_UNAVAILABLE',
+        message: 'The rates worker policy scenario calculator is unavailable.',
+        retryable: true,
+        provider: 'rates-worker',
+      });
+    }
+    const now = Date.now();
+    const sr3 = projectPolicyRow(worker.sr3);
+    const sr1 = projectPolicyRow(worker.sr1);
+    const requested = (worker.sr3 ? 1 : 0) + (worker.sr1 ? 1 : 0);
+    const fulfilled = (sr3?.predictedRate ?? null) != null ? 1 : 0;
+    const fulfilledSr1 = (sr1?.predictedRate ?? null) != null ? 1 : 0;
+    const missing = [];
+    if (worker.sr3 && (sr3?.predictedRate ?? null) == null) missing.push('sr3-predicted-unavailable');
+    if (worker.sr1 && (sr1?.predictedRate ?? null) == null) missing.push('sr1-predicted-unavailable');
+    const envelope = baseEnvelope(request, {
+      asOf: worker.as_of ?? new Date(now).toISOString(),
+      fetchedAt: now,
+      source: ['terminal-api', 'rates-worker', 'caller-supplied-fixings'],
+      freshness: 'live',
+      coverage: requested > 0
+        ? coverage(fulfilled + fulfilledSr1, requested, missing)
+        : coverage(1, 1),
+      provenanceByField: {
+        'data.fixingLine[].observedValue': 'observed-caller-supplied-sofr-fixing',
+        'data.fixingLine[].scenarioValue': 'scenario-explicit-steps-after-last-observed',
+        'data.sr3.predictedRate': 'scenario-compound-sofr-rate-over-explicit-window',
+        'data.sr1.predictedRate': 'scenario-compound-sofr-rate-over-explicit-window',
+        'data.sr3.currentRate': 'observed-only-with-explicit-source-date',
+        'data.sr1.currentRate': 'observed-only-with-explicit-source-date',
+        'data.policySpreadBps': 'scenario-explicit-override-or-unavailable',
+      },
+      unitsByField: {
+        'data.fixingLine[].observedValue': 'percent-100',
+        'data.fixingLine[].scenarioValue': 'percent-100',
+        'data.fixingLine[].cumulativeStepBps': 'basis-points',
+        'data.sr3.currentRate': 'percent-100',
+        'data.sr3.predictedRate': 'percent-100',
+        'data.sr3.differenceBps': 'basis-points',
+        'data.sr1.currentRate': 'percent-100',
+        'data.sr1.predictedRate': 'percent-100',
+        'data.sr1.differenceBps': 'basis-points',
+        'data.policySpreadBps': 'basis-points',
+      },
+      assumptions: [
+        'Computed at fetchedAt from caller-supplied inputs only; no provider was read and no historical-data entitlement is implied.',
+        'Scenario rows are hypothetical and must not be read as observed market data or a policy-rate forecast.',
+        ...(Array.isArray(worker.assumptions) ? worker.assumptions : []),
+      ],
+      warnings: [...new Set([...(Array.isArray(worker.warnings) ? worker.warnings : [])])],
+      cache: { state: 'miss', hit: false, ageMs: null, stale: false, coalesced: false, providerError: null },
+      data: {
+        fixingLine: (Array.isArray(worker.fixingLine) ? worker.fixingLine : []).slice(0, 560).map((row) => ({
+          date: typeof row.date === 'string' ? row.date : null,
+          observedValue: finiteOrNull(row.observedValue),
+          scenarioValue: finiteOrNull(row.scenarioValue),
+          cumulativeStepBps: finiteOrNull(row.cumulativeStepBps),
+          provenance: row.provenance === 'observed' ? 'observed' : 'scenario',
+        })),
+        sr3,
+        sr1,
+        policySpreadBps: finiteOrNull(worker.policySpreadBps),
+        policySpreadProvenance: typeof worker.policySpreadProvenance === 'string'
+          ? worker.policySpreadProvenance
+          : 'unavailable-not-supplied',
+        lastObservedDate: typeof worker.lastObservedDate === 'string' ? worker.lastObservedDate : null,
+      },
+    });
+    return sendContract(request, reply, 'policyScenarioResponse', envelope);
   });
 
   // ── Crypto carry: funding + perp premium + dated-future basis ──────────

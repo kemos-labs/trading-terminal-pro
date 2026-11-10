@@ -6,6 +6,11 @@ import {
   FIXTURE_SCENARIOS,
   __getEquityExecDoubleForTests,
 } from './providerBoundaryFixtures.js';
+import {
+  ageCacheEntryForTests,
+  clearCacheForTests,
+  getOrFetch,
+} from '../../api/upstreamCache.js';
 
 const realFetch = global.fetch;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -47,7 +52,7 @@ describe('provider-boundary E2E fixtures', () => {
 });
 
 describe('failure-state fixture scenarios (representative RC gate)', () => {
-  it('accepts the nine documented scenarios and rejects unknown names', () => {
+  it('accepts the twelve documented scenarios and rejects unknown names', () => {
     process.env.NODE_ENV = 'test';
     installProviderBoundaryFixtures('success');
     expect(FIXTURE_SCENARIOS).toEqual([
@@ -60,6 +65,9 @@ describe('failure-state fixture scenarios (representative RC gate)', () => {
       'crypto-down',
       'sahmk-down',
       'ksa-entitlement',
+      'vol-stale',
+      'rates-stale',
+      'pos-stale',
     ]);
     for (const name of FIXTURE_SCENARIOS) {
       expect(setFixtureScenario(name)).toBe(name);
@@ -115,6 +123,79 @@ describe('failure-state fixture scenarios (representative RC gate)', () => {
     const bybit = await fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT');
     expect(bybit.status).toBe(200);
     setFixtureScenario('success');
+  });
+
+  it('vol-stale proves a true fresh→stale transition (warm fresh, expired entry + upstream down serves stale with bounded age)', async () => {
+    process.env.NODE_ENV = 'test';
+    installProviderBoundaryFixtures('success');
+    clearCacheForTests();
+    // Same TTL the equity route uses (TTL.OPTIONS_MS = 180s); same
+    // allowStaleOnError semantics; loader hits the same equity execFile
+    // boundary the route loader uses.
+    const TTL_MS = 180_000;
+    const key = `test:vol-stale-transition:${Date.now()}`;
+    const exec = __getEquityExecDoubleForTests();
+    const loadChain = () => new Promise((resolve, reject) => {
+      exec('python3', ['fetch_options.py', 'SPY'], {}, (err, stdout) => {
+        if (err) return reject(err);
+        try {
+          resolve(JSON.parse(stdout));
+        } catch (parseErr) {
+          reject(parseErr);
+        }
+      });
+    });
+    // Warm under success: fresh, non-stale, bounded age, populated quotes.
+    const warm = await getOrFetch(key, TTL_MS, loadChain, { allowStaleOnError: true });
+    expect(warm.stale).toBe(false);
+    expect(warm.fromCache).toBe(false);
+    expect(warm.ageMs).toBeLessThan(30_000);
+    expect(Array.isArray(warm.data?.quotes) && warm.data.quotes.length > 0).toBe(true);
+    const warmCount = warm.data.quotes.length;
+    // Expire that exact entry, then fail upstream: must serve last-good stale.
+    expect(ageCacheEntryForTests(key, 300_000)).toBe(true);
+    expect(ageCacheEntryForTests('test:vol-stale-transition:missing', 300_000)).toBe(false);
+    setFixtureScenario('vol-stale');
+    const stale = await getOrFetch(key, TTL_MS, loadChain, { allowStaleOnError: true });
+    expect(stale.stale).toBe(true);
+    expect(stale.fromCache).toBe(true);
+    expect(stale.ageMs).toBeGreaterThan(200_000);
+    expect(stale.ageMs).toBeLessThan(600_000);
+    expect(stale.providerError).toBe('upstream-error');
+    expect(stale.data?.quotes?.length).toBe(warmCount);
+    setFixtureScenario('success');
+  });
+
+  it('pos-stale throws at the equity boundary exactly like vol-stale (stale-matrix)', async () => {
+    process.env.NODE_ENV = 'test';
+    installProviderBoundaryFixtures('success');
+    setFixtureScenario('pos-stale');
+    const exec = __getEquityExecDoubleForTests();
+    await expect(new Promise((resolve, reject) => {
+      exec('python3', ['fetch_options.py', 'SPY'], {}, (err, stdout) => (err ? reject(err) : resolve(stdout)));
+    })).rejects.toThrow(/equity upstream unavailable \(fixture pos-stale\)/);
+    // Success baseline is untouched: the same boundary succeeds again.
+    setFixtureScenario('success');
+    const body = await new Promise((resolve, reject) => {
+      exec('python3', ['fetch_options.py', 'SPY'], {}, (err, stdout) => (err ? reject(err) : resolve(stdout)));
+    });
+    expect(JSON.parse(body).quotes.length).toBeGreaterThan(0);
+  });
+
+  it('rates-stale 503s only the worker /rates/summary path (other worker paths stay live)', async () => {
+    process.env.NODE_ENV = 'test';
+    installProviderBoundaryFixtures('success');
+    setFixtureScenario('rates-stale');
+    const summary = await fetch('http://127.0.0.1:8765/api/rates/summary');
+    expect(summary.status).toBe(503);
+    const curve = await fetch('http://127.0.0.1:8765/api/rates/curve');
+    expect(curve.status).toBe(200);
+    expect((await curve.json()).yields.length).toBeGreaterThan(0);
+    // Success baseline is untouched.
+    setFixtureScenario('success');
+    const ok = await fetch('http://127.0.0.1:8765/api/rates/summary');
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).sofr).toBe(4.53);
   });
 
   it('rates-malformed answers 200 text/html (genuinely malformed, must be rejected)', async () => {

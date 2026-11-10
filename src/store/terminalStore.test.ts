@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useTerminalStore } from './terminalStore';
 import { buildSnapshot, buildSurfaceGrid } from '../lib/options/synthetic';
 import { sviReadout } from '../lib/options/surfaceTools';
@@ -117,4 +117,58 @@ describe('terminalStore', () => {
     await useTerminalStore.getState().setSource('demo');
     expect(useTerminalStore.getState().source).toBe('live');
   }, 30_000);
+
+  it('rapid symbol switch: stale A reply does not overwrite B snapshot (generation guard)', async () => {
+    const { getProvider } = await import('../lib/data/provider');
+    // Build two distinct live snapshots
+    const snapA = { ...buildSnapshot('AAA', Date.now(), 100, 0, 0), symbol: 'AAA', surfaceSource: 'live' as const };
+    const snapB = { ...buildSnapshot('BBB', Date.now(), 200, 0, 0), symbol: 'BBB', surfaceSource: 'live' as const };
+    const live = getProvider('live') as unknown as { getSnapshot: (s: string) => Promise<never>; lastChainAvailable: boolean; lastChainSource: string; lastSpotSource: string; lastChainFetchedAt: number; lastSpotFetchedAt: number; lastFundingAnn: null };
+    const orig = live.getSnapshot.bind(live);
+    void orig;
+    const spy = vi.spyOn(live, 'getSnapshot').mockImplementation(async (sym: string) => {
+      if (sym === 'AAA') {
+        await new Promise((r) => setTimeout(r, 60));
+        live.lastChainAvailable = true;
+        (live as unknown as Record<string, unknown>).lastChainSource = 'yfinance';
+        (live as unknown as Record<string, unknown>).lastSpotSource = 'yfinance';
+        live.lastChainFetchedAt = Date.now();
+        live.lastSpotFetchedAt = Date.now();
+        return snapA as never;
+      }
+      if (sym === 'BBB') {
+        await new Promise((r) => setTimeout(r, 10));
+        live.lastChainAvailable = true;
+        (live as unknown as Record<string, unknown>).lastChainSource = 'yfinance';
+        (live as unknown as Record<string, unknown>).lastSpotSource = 'yfinance';
+        live.lastChainFetchedAt = Date.now();
+        live.lastSpotFetchedAt = Date.now();
+        return snapB as never;
+      }
+      return null as never;
+    });
+    // Mock enrichment fetches to avoid network
+    const fmp = await import('../lib/data/fmpClient');
+    vi.spyOn(fmp, 'fetchFmpQuote').mockResolvedValue(null as never);
+    vi.spyOn(fmp, 'fetchFmpPriceHistory').mockResolvedValue(null as never);
+    vi.spyOn(fmp, 'fetchFmpProfile').mockResolvedValue(null as never);
+    vi.spyOn(fmp, 'fetchFmpNews').mockResolvedValue(null as never);
+    vi.spyOn(fmp, 'fetchFmpEarnings').mockResolvedValue(null as never);
+    vi.spyOn(fmp, 'fetchFmpTreasuryRates').mockResolvedValue(null as never);
+    const yf = await import('../lib/data/yfinanceClient');
+    vi.spyOn(yf, 'fetchYfHistory').mockResolvedValue(null as never);
+    vi.spyOn(yf, 'fetchYfInfo').mockResolvedValue(null as never);
+    // Fire overlapping symbol switches
+    const pA = useTerminalStore.getState().setSymbol('AAA');
+    // Immediately switch to BBB before AAA resolves
+    const pB = useTerminalStore.getState().setSymbol('BBB');
+    void pA; void pB;
+    await new Promise((r) => setTimeout(r, 120));
+    const st = useTerminalStore.getState();
+    expect(st.symbol).toBe('BBB');
+    expect(st.snapshot?.symbol).toBe('BBB');
+    expect(st.loading).toBe(false);
+    spy.mockRestore();
+    vi.restoreAllMocks();
+  });
 });

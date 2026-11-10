@@ -1,0 +1,26 @@
+{
+  "$comment": "Declared representative failure-state capture coverage. This file is the expectation source for the required-artifact post-capture gate (scripts/verify-capture-evidence.mjs): expected PNG+sidecar pairs are steps x viewports. It is representative, NOT the full C6 matrix. e2e/failure-states.spec.ts is the capture implementation; names here must match its shot names fail-<short>-<scenario>-<viewport>-<desk>.png.",
+  "gate": "failure-states",
+  "spec": "e2e/failure-states.spec.ts",
+  "viewports": [
+    { "name": "desktop", "width": 1440, "height": 900 },
+    { "name": "laptop", "width": 1280, "height": 800 },
+    { "name": "tablet", "width": 1024, "height": 768 },
+    { "name": "mobile", "width": 390, "height": 844 }
+  ],
+  "failureSteps": [
+    { "scenario": "home-partial", "desk": "home", "workflow": "home", "deepLink": "/?desk=home" },
+    { "scenario": "chain-empty", "desk": "volatility", "workflow": "vol-sub-surface", "deepLink": "/?desk=vol&sec=vol-sub-surface" },
+    { "scenario": "chain-empty", "desk": "positioning", "workflow": "pos-sub-chain", "deepLink": "/?desk=positioning&sec=pos-sub-chain" },
+    { "scenario": "trade-loading", "desk": "trade", "workflow": "trade-sub-structure", "deepLink": "/?desk=desk&sec=trade-sub-structure" },
+    { "scenario": "rates-malformed", "desk": "rates", "workflow": "rates-mode-funding", "deepLink": "/?desk=rates&sec=rates-mode-funding" },
+    { "scenario": "crypto-partial", "desk": "crypto", "workflow": "crypto-v2-overview", "deepLink": "/?desk=crypto&view=overview" },
+    { "scenario": "crypto-down", "desk": "crypto", "workflow": "crypto-v2-overview", "deepLink": "/?desk=crypto&view=overview" },
+    { "scenario": "ksa-stale", "desk": "ksa", "workflow": "ksa-sub-board", "deepLink": "/?desk=ksa&sec=ksa-sub-board" },
+    { "scenario": "ksa-entitlement", "desk": "ksa", "workflow": "ksa-sub-board", "deepLink": "/?desk=ksa&sec=ksa-sub-board" },
+    { "scenario": "vol-stale", "desk": "volatility", "workflow": "vol-sub-surface", "deepLink": "/?desk=vol&sec=vol-sub-surface" },
+    { "scenario": "rates-stale", "desk": "rates", "workflow": "rates-mode-funding", "deepLink": "/?desk=rates&sec=rates-mode-funding" },
+    { "scenario": "pos-stale", "desk": "positioning", "workflow": "pos-sub-chain", "deepLink": "/?desk=positioning&sec=pos-sub-chain" },
+    { "scenario": "academy-empty", "desk": "academy", "workflow": "academy-sub-options", "deepLink": "/?desk=academy&sec=academy-sub-options" }
+  ]
+}

@@ -1,6 +1,6 @@
 /**
  * MCP contract tests (Phase 11) — generic MCP client over stdio (2025-11-25).
- * Assertions: 12 read-only tools; strict input/output schemas with
+ * Assertions: 15 read-only tools; strict input/output schemas with
  * additionalProperties:false; no trading/order/account/Stripe/secret tools;
  * structured content; tool failures typed; oversized/malformed inputs rejected.
  */
@@ -12,6 +12,7 @@ import { once } from 'node:events';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { buildServer } from '../server/app.js';
+import { resolveRatesWorkerUrl } from '../server/ratesWorkerUrl.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = import.meta.dirname;
@@ -104,12 +105,59 @@ function json(body: unknown) {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
 }
 
+vi.mock('../server/routes/equityFeeds.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../server/routes/equityFeeds.js')>();
+  return {
+    ...original,
+    getOptionChainSnapshot: async (symbol: string, opts?: unknown) => {
+      if (String(symbol).toUpperCase() === 'TESTCAL') {
+        return {
+          symbol: 'TESTCAL',
+          spot: 100,
+          timestamp: '2026-01-05T12:00:00.000Z',
+          quotes: [
+            { strike: 100, expiry: '2026-01-06', right: 'call', bid: 5, ask: 5.2, markIv: 0.25, openInterest: 50 },
+            { strike: 100, expiry: '2030-12-18', right: 'put', bid: 4, ask: 4.2, markIv: 0.25, openInterest: 40 },
+          ],
+        };
+      }
+      return (original as unknown as { getOptionChainSnapshot: (s: string, o?: unknown) => Promise<unknown> }).getOptionChainSnapshot(symbol, opts);
+    },
+  };
+});
+
 function installProviderBoundary() {
+  const workerOrigin = new URL(resolveRatesWorkerUrl()).origin;
   const expiry = Date.UTC(2030, 11, 30, 8);
   const timestamp = Date.now();
   global.fetch = vi.fn(async (input) => {
     const url = new URL(String(input));
     const rpc = (result: unknown) => json({ jsonrpc: '2.0', result });
+    // REF-08/N3c synthetic worker stand-in: shape-identical canned result so the
+    // MCP tool test exercises the real REST route + contract without a live worker.
+    if (url.origin === workerOrigin && url.pathname === '/api/rates/policy-scenario') {
+      return json({
+        fixingLine: [
+          { date: '2026-01-05', observedValue: 5.0, scenarioValue: 5.0, cumulativeStepBps: 0.0, provenance: 'observed' },
+          { date: '2026-01-08', observedValue: null, scenarioValue: 5.1, cumulativeStepBps: 10.0, provenance: 'scenario' },
+        ],
+        sr3: {
+          windowStart: '2026-01-05', windowEnd: '2026-01-09',
+          currentRate: 4.9, currentSource: 'synthetic-fixture', currentDate: '2026-01-05',
+          currentProvenance: 'observed-explicit-source-date',
+          predictedRate: 5.0261, predictedProvenance: 'scenario-compound-sofr-rate',
+          differenceBps: 12.61, status: 'ok', warnings: [],
+        },
+        sr1: null,
+        policySpreadBps: null,
+        policySpreadProvenance: 'unavailable-not-supplied',
+        lastObservedDate: '2026-01-05',
+        warnings: ['policy spread omitted: stays null/Unavailable (no default).'],
+        assumptions: ['synthetic-fixture assumption'],
+        as_of: '2026-01-09T00:00:00.000Z',
+        source: 'caller-supplied-fixings-plus-scenario-steps',
+      });
+    }
     if (url.hostname.includes('binance.com')) {
       if (url.pathname.includes('premiumIndex')) return json({ symbol: 'BTCUSDT', markPrice: '60001', indexPrice: '60000', lastFundingRate: '0.0001' });
       if (url.pathname.includes('openInterest')) return json({ symbol: 'BTCUSDT', openInterest: '100' });
@@ -156,19 +204,23 @@ describe('MCP read-only server (contract)', () => {
     global.fetch = REAL_FETCH;
   }, 10_000);
 
-  it('tools/list exposes exactly the 12 read-only tools with explicit schemas', async () => {
+  it('tools/list exposes exactly the 16 read-only tools with explicit schemas', async () => {
     const res = (await client.call('tools/list', {})) as { tools: { name: string; inputSchema: { additionalProperties?: boolean; properties?: Record<string, unknown> }; outputSchema?: { $ref?: string; anyOf?: unknown[]; $defs?: Record<string, unknown> } }[] };
-    expect(res.tools).toHaveLength(12);
+    expect(res.tools).toHaveLength(16);
     const names = res.tools.map((t) => t.name).sort();
     expect(res.tools.every((tool) => tool.outputSchema?.$defs && (tool.outputSchema.$ref || tool.outputSchema.anyOf))).toBe(true);
     expect(names).toEqual([
       'terminal.get_crypto_carry',
       'terminal.get_crypto_flow',
+      'terminal.get_exposure_grid',
+      'terminal.get_forward_vol_matrix',
       'terminal.get_greeks',
       'terminal.get_health',
       'terminal.get_market_snapshot',
       'terminal.get_options_chain',
+      'terminal.get_policy_scenario',
       'terminal.get_positioning',
+      'terminal.get_positioning_workbench',
       'terminal.get_provider_status',
       'terminal.get_rates_curve',
       'terminal.get_stir_curve',
@@ -225,6 +277,142 @@ describe('MCP read-only server (contract)', () => {
     }
   }, 30_000);
 
+  it('get_forward_vol_matrix returns a validated triangular matrix (unavailable never zero)', async () => {
+    const listed = (await client.call('tools/list', {})) as { tools: { name: string; outputSchema: object }[] };
+    const schema = listed.tools.find((tool) => tool.name === 'terminal.get_forward_vol_matrix')?.outputSchema;
+    expect(schema).toBeTruthy();
+    const res = (await client.call('tools/call', { name: 'terminal.get_forward_vol_matrix', arguments: { symbol: 'TESTCAL' } })) as { content: { type: string; text: string }[]; structuredContent: { data: Record<string, unknown> }; isError?: boolean };
+    expect(res.isError).toBeFalsy();
+    expect(ajv.compile(schema)(res.structuredContent), ajv.errorsText()).toBe(true);
+    expect(JSON.parse(res.content[0].text)).toEqual(res.structuredContent);
+    const data = res.structuredContent.data as Record<string, unknown>;
+    expect((data.origin as Record<string, unknown>).label).toBe('SPOT');
+    expect(data.formula).toBe('fwdVol = sqrt((sigma2^2*T2 - sigma1^2*T1)/(T2-T1))');
+    expect(data.yearFraction).toBe('DTE/365 calendar');
+    expect(data.ivBasis).toBe('derived-solved-mid');
+    const cells = data.cells as { startIndex: number; endIndex: number; value: number | null; structural: boolean; reason: string | null }[];
+    for (const cell of cells) {
+      if (cell.endIndex <= cell.startIndex) {
+        expect(cell.structural).toBe(true);
+        expect(cell.value).toBeNull();
+        expect(cell.reason).toBe('structural');
+      } else {
+        expect(cell.value == null || (Number.isFinite(cell.value) && cell.value >= 0)).toBe(true);
+      }
+    }
+    expect(res.content[0].text).not.toContain('NaN');
+    expect(res.content[0].text).not.toContain('Infinity');
+  }, 30_000);
+
+  it('get_forward_vol_matrix rejects bad input without substitution', async () => {
+    await expect(client.call('tools/call', { name: 'terminal.get_forward_vol_matrix', arguments: { symbol: 'AA++bad' } })).rejects.toThrow(/invalid format/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_forward_vol_matrix', arguments: {} })).rejects.toThrow(/missing required/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_forward_vol_matrix', arguments: { symbol: 'BTC', maxRows: 1.5 } })).rejects.toThrow(/integer/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_forward_vol_matrix', arguments: { symbol: 'BTC', extra: true } })).rejects.toThrow(/additional property/i);
+  });
+
+  it('get_policy_scenario returns the canonical REST contract as structuredContent', async () => {
+    const listed = (await client.call('tools/list', {})) as { tools: { name: string; outputSchema: object }[] };
+    const schema = listed.tools.find((tool) => tool.name === 'terminal.get_policy_scenario')?.outputSchema;
+    expect(schema).toBeTruthy();
+    const args = {
+      fixings: [{ date: '2026-01-05', value: 5.0 }, { date: '2026-01-06', value: 5.0 }],
+      meetings: [{ date: '2026-01-08', stepBps: 10 }],
+      sr3: { windowStart: '2026-01-05', windowEnd: '2026-01-09', currentRate: 4.9, currentSource: 'synthetic-fixture', currentDate: '2026-01-05' },
+    };
+    const res = (await client.call('tools/call', { name: 'terminal.get_policy_scenario', arguments: args })) as { content: { type: string; text: string }[]; structuredContent: { data: Record<string, unknown> }; isError?: boolean };
+    expect(res.isError).toBeFalsy();
+    expect(ajv.compile(schema)(res.structuredContent), ajv.errorsText()).toBe(true);
+    expect(JSON.parse(res.content[0].text)).toEqual(res.structuredContent);
+    const data = res.structuredContent.data as Record<string, unknown>;
+    const line = data.fixingLine as { date: string; observedValue: number | null; scenarioValue: number | null; provenance: string }[];
+    expect(line.find((r) => r.date === '2026-01-05')?.provenance).toBe('observed');
+    expect(line.find((r) => r.date === '2026-01-08')?.provenance).toBe('scenario');
+    expect(data.policySpreadBps).toBeNull();
+    expect(res.content[0].text).not.toContain('NaN');
+    expect(res.content[0].text).not.toContain('Infinity');
+  }, 30_000);
+
+  it('get_policy_scenario rejects bad input without substitution', async () => {
+    await expect(client.call('tools/call', { name: 'terminal.get_policy_scenario', arguments: {} })).rejects.toThrow(/missing required/i);
+    await expect(client.call('tools/call', { name: 'terminal.get_policy_scenario', arguments: { fixings: [], extra: true } })).rejects.toThrow(/additional property/i);
+  });
+
+  it('policy scenario tools/list exposes nested strict schema', async () => {
+    const res = (await client.call('tools/list', {})) as { tools: { name: string; inputSchema: Record<string, unknown> }[] };
+    const tool = res.tools.find((t) => t.name === 'terminal.get_policy_scenario');
+    expect(tool).toBeTruthy();
+    const s = tool!.inputSchema as Record<string, unknown>;
+    expect(s.additionalProperties).toBe(false);
+    expect(s.required).toEqual(['fixings']);
+    const props = s.properties as Record<string, Record<string, unknown>>;
+    // fixings
+    expect(props.fixings).toMatchObject({ type: 'array', minItems: 1, maxItems: 500 });
+    const fixItem = (props.fixings as Record<string, unknown>).items as Record<string, unknown>;
+    expect(fixItem.additionalProperties).toBe(false);
+    expect(fixItem.required).toEqual(['date', 'value']);
+    expect((fixItem.properties as Record<string, unknown>).date).toBeTruthy();
+    expect((fixItem.properties as Record<string, unknown>).value).toMatchObject({ minimum: -5, maximum: 30 });
+    // meetings
+    const meetItem = (props.meetings as Record<string, unknown>).items as Record<string, unknown>;
+    expect(meetItem.additionalProperties).toBe(false);
+    expect(meetItem.required).toEqual(['date']);
+    expect((meetItem.properties as Record<string, unknown>).stepBps).toMatchObject({ minimum: -500, maximum: 500 });
+    // sr3/sr1
+    for (const k of ['sr3', 'sr1']) {
+      const win = props[k] as Record<string, unknown>;
+      expect(win.additionalProperties).toBe(false);
+      expect(win.required).toEqual(['windowStart', 'windowEnd']);
+      expect((win.properties as Record<string, unknown>).windowStart).toBeTruthy();
+      expect((win.properties as Record<string, unknown>).currentRate).toBeTruthy();
+    }
+    // nullable + boolean
+    expect((props.policySpreadBps as Record<string, unknown>).type).toEqual(['number', 'null']);
+    expect(props.deriveStepFromMidpoint).toMatchObject({ type: 'boolean' });
+  });
+
+  it('policy scenario nested validation rejects extra keys, bad dates, non-finite/out-of-range, and missing window keys before fetch', async () => {
+    const fetchSpy = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    const before = (fetchSpy as unknown as { mock: { calls: unknown[] } })?.mock?.calls?.length ?? 0;
+    const expectReject = async (args: unknown, pattern: RegExp) => {
+      await expect(client.call('tools/call', { name: 'terminal.get_policy_scenario', arguments: args })).rejects.toThrow(pattern);
+      expect(client.lines.at(-1)?.error?.code).toBe(-32602);
+    };
+    // extra key in fixing item
+    await expectReject({ fixings: [{ date: '2026-01-05', value: 5, extra: 1 }] }, /additional property/i);
+    // extra key in meeting item
+    await expectReject({ fixings: [{ date: '2026-01-05', value: 5 }], meetings: [{ date: '2026-01-08', stepBps: 10, extra: 1 }] }, /additional property/i);
+    // extra key in sr3
+    await expectReject({ fixings: [{ date: '2026-01-05', value: 5 }], sr3: { windowStart: '2026-01-05', windowEnd: '2026-01-09', extra: 1 } }, /additional property/i);
+    // extra key in sr1
+    await expectReject({ fixings: [{ date: '2026-01-05', value: 5 }], sr1: { windowStart: '2026-01-05', windowEnd: '2026-01-09', extra: 1 } }, /additional property/i);
+    // malformed date
+    await expectReject({ fixings: [{ date: '2026-13-01', value: 5 }] }, /invalid format/i);
+    await expectReject({ fixings: [{ date: '2026-01-05', value: 5 }], meetings: [{ date: 'bad-date' }] }, /invalid format/i);
+    // non-finite nested number
+    await expectReject({ fixings: [{ date: '2026-01-05', value: Infinity }] }, /finite number/i);
+    // out-of-range nested numbers
+    await expectReject({ fixings: [{ date: '2026-01-05', value: 99 }] }, /must be <=/i);
+    await expectReject({ fixings: [{ date: '2026-01-05', value: 5 }], meetings: [{ date: '2026-01-08', stepBps: 1000 }] }, /must be <=/i);
+    await expectReject({ fixings: [{ date: '2026-01-05', value: 5 }], sr3: { windowStart: '2026-01-05', windowEnd: '2026-01-09', currentRate: 99 } }, /must be <=/i);
+    await expectReject({ fixings: [{ date: '2026-01-05', value: 5 }], policySpreadBps: 9999 }, /must be <=/i);
+    // missing required nested window key
+    await expectReject({ fixings: [{ date: '2026-01-05', value: 5 }], sr3: { windowStart: '2026-01-05' } }, /missing required/i);
+    await expectReject({ fixings: [{ date: '2026-01-05', value: 5 }], sr1: { windowEnd: '2026-01-09' } }, /missing required/i);
+    // no fetch should have been issued for any nested-invalid case
+    const after = (fetchSpy as unknown as { mock: { calls: unknown[] } })?.mock?.calls?.length ?? before;
+    expect(after).toBe(before);
+  });
+
+  it('policy scenario nullable fields are accepted when valid', async () => {
+    const res1 = (await client.call('tools/call', { name: 'terminal.get_policy_scenario', arguments: { fixings: [{ date: '2026-01-05', value: 5 }], sr3: { windowStart: '2026-01-05', windowEnd: '2026-01-09', currentRate: null } } })) as { isError?: boolean; structuredContent: unknown };
+    expect(res1.isError).toBeFalsy();
+    const res2 = (await client.call('tools/call', { name: 'terminal.get_policy_scenario', arguments: { fixings: [{ date: '2026-01-05', value: 5 }], policySpreadBps: null } })) as { isError?: boolean; structuredContent: unknown };
+    expect(res2.isError).toBeFalsy();
+    const res3 = (await client.call('tools/call', { name: 'terminal.get_policy_scenario', arguments: { fixings: [{ date: '2026-01-05', value: 5 }], policySpreadBps: 0 } })) as { isError?: boolean };
+    expect(res3.isError).toBeFalsy();
+  });
+
   it('invalid symbol errors with typed error (never fabricates)', async () => {
     await expect(client.call('tools/call', { name: 'terminal.get_options_chain', arguments: { symbol: 'AA++bad' } })).rejects.toThrow(/invalid format/i);
   });
@@ -267,6 +455,76 @@ describe('MCP read-only server (contract)', () => {
     await expect(client.call('tools/call', { name: 'terminal.get_volatility_surface', arguments: { symbol: 'BTC', maxRows: 1.5 } })).rejects.toThrow(/integer/i);
     expect(client.lines.at(-1)?.error?.code).toBe(-32602);
   });
+
+  it('get_positioning_workbench with a calendar block returns a validated same-frame calendar surface', async () => {
+    const T0 = '2026-01-05T12:00:00.000Z';
+    const T1 = '2027-01-05T12:00:00.000Z';
+    const listed = (await client.call('tools/list', {})) as { tools: { name: string; outputSchema: object }[] };
+    const schema = listed.tools.find((tool) => tool.name === 'terminal.get_positioning_workbench')?.outputSchema;
+    expect(schema).toBeTruthy();
+    const res = (await client.call('tools/call', {
+      name: 'terminal.get_positioning_workbench',
+      arguments: {
+        symbol: 'TESTCAL',
+        prices: [95, 100, 105],
+        times: [T0, T1],
+        referenceTime: T0,
+        calendar: { dates: ['2026-01-05', '2026-01-07', '2031-01-05'] },
+        scenario: {
+          riskFreeRate: 0.04,
+          carryRate: 0.01,
+          model: 'spot-european',
+          multiplier: 100,
+          expiryOverrides: {
+            '2026-01-06': '2026-01-06T12:00:00.000Z',
+            '2030-12-18': '2030-12-18T21:00:00.000Z',
+          },
+        },
+      },
+    })) as { content: { text: string }[]; structuredContent: { data: Record<string, unknown> }; isError?: boolean };
+    expect(res.isError).toBeFalsy();
+    // structuredContent validates against the tool's own output contract.
+    expect(ajv.compile(schema)(res.structuredContent), ajv.errorsText()).toBe(true);
+    expect(JSON.parse(res.content[0].text)).toEqual(res.structuredContent);
+    const data = res.structuredContent.data as Record<string, unknown>;
+    const cal = data.calendar as Record<string, unknown>;
+    expect(cal).toBeTruthy();
+    // Same snapshot frame: calendar proves the bound quote set, not a second fetch.
+    expect(cal.snapshotIdentity).toBe(data.frameId);
+    // Current/peak/domain/clock semantics with honest dollar units.
+    const current = cal.current as Record<string, unknown>;
+    expect(current.unit).toBe('$/1% move');
+    expect(current.instant).toBe(T0);
+    expect(cal.clock).toBe('12:00:00.000');
+    expect((cal.instants as string[])[0]).toBe(T0);
+    expect((cal.peak as Record<string, unknown>).value).toBeTypeOf('number');
+    expect((cal.domain as Record<string, unknown>).symmetricAuto).toBe(false);
+    // Null-not-zero: the fully-expired 2031 column is null with typed reasons.
+    const cells = (cal.cells as { value: number | null; reasons: string[] }[][]).flat();
+    expect(cells.length).toBe(9);
+    const nulls = cells.filter((c) => c.value === null);
+    expect(nulls.length).toBeGreaterThan(0);
+    for (const c of nulls) expect(c.reasons.length).toBeGreaterThan(0);
+    expect(JSON.stringify(res)).not.toContain('NaN');
+  }, 30_000);
+
+  it('get_exposure_grid accepts dex and rejects unknown metrics without substitution', async () => {
+    const listed = (await client.call('tools/list', {})) as { tools: { name: string; inputSchema: { properties: { metric: { enum: string[] } } }; outputSchema: object }[] };
+    const tool = listed.tools.find((t) => t.name === 'terminal.get_exposure_grid');
+    expect(tool?.inputSchema.properties.metric.enum).toEqual(['gex', 'charm', 'dex']);
+    // Unknown metrics stop at protocol-level validation (-32602), never substituted.
+    await expect(client.call('tools/call', {
+      name: 'terminal.get_exposure_grid',
+      arguments: { symbol: 'BTC', metric: 'vanna', prices: [59000, 61000], times: ['2026-01-05T12:00:00.000Z'] },
+    })).rejects.toThrow(/one of/i);
+    const dex = (await client.call('tools/call', {
+      name: 'terminal.get_exposure_grid',
+      arguments: { symbol: 'BTC', metric: 'dex', prices: [59000, 61000], times: ['2026-01-05T12:00:00.000Z'] },
+    })) as { content: { text: string }[]; structuredContent: { data: Record<string, unknown> }; isError?: boolean };
+    expect(dex.isError).toBeFalsy();
+    expect(dex.structuredContent.data).toMatchObject({ metric: 'dex', units: '$Δ notional' });
+    expect(JSON.stringify(dex)).not.toContain('NaN');
+  }, 30_000);
 
   it('academy search returns bounded results (≤12)', async () => {
     const res = (await client.call('tools/call', { name: 'terminal.search_academy', arguments: { q: 'option' } })) as { content: { text: string }[] };

@@ -5,29 +5,38 @@ import {
 import { CHART, chartAxisTick, tightDomain } from '../../../lib/chartTheme';
 import { fetchDeribitMarket, type DeribitMarketBundle } from '../../../api/deribit';
 import { toFundingSnapshot } from '../../../lib/math/carry/funding';
+import { useCryptoAsset } from '../shell/CryptoShell';
 import { computeBasis } from '../../../lib/math/carry/basis';
 import { yearFractionAct365 } from '../../../lib/math/units';
 
 export function CryptoCarryView() {
+  const { validatedAsset, isUnsupported, rawAsset, validatedVenue, isUnsupportedVenue, rawVenue } = useCryptoAsset();
   const [bundle, setBundle] = useState<DeribitMarketBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
 
   useEffect(() => {
+    if (isUnsupportedVenue || !validatedVenue) return;
+    if (isUnsupported || !validatedAsset) return;
     let cancelled = false;
-    fetchDeribitMarket('BTC').then(r => {
+    setBundle(null);
+    setError(null);
+    setStale(false);
+    fetchDeribitMarket(validatedAsset).then(r => {
       if (cancelled) return;
       setBundle(r);
       setStale(Date.now() - r.fetchedAt > 60_000);
     }).catch((e: Error) => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
-  }, []);
+  }, [validatedAsset, isUnsupported, validatedVenue, isUnsupportedVenue]);
 
   /** Funding history — Deribit public get_funding_history (server-cached). */
   const [fundingHistory, setFundingHistory] = useState<{ t: number; rate8h: number }[] | null>(null);
   useEffect(() => {
+    if (isUnsupportedVenue || !validatedVenue) return;
+    if (isUnsupported || !validatedAsset) { setFundingHistory(null); return; }
     let cancelled = false;
-    fetch(`/api/v1/market/crypto/${bundle?.currency ?? 'BTC'}/funding?days=30`)
+    fetch(`/api/v1/market/crypto/${validatedAsset}/funding?days=30`)
       .then((r) => (r.ok ? r.json() : null))
       .then((envelope: { data?: { points?: { timestamp?: number; rate8h?: number }[] } } | null) => {
         if (cancelled) return;
@@ -40,7 +49,7 @@ export function CryptoCarryView() {
       })
       .catch(() => { if (!cancelled) setFundingHistory(null); });
     return () => { cancelled = true; };
-  }, [bundle?.currency]);
+  }, [validatedAsset, isUnsupported, validatedVenue, isUnsupportedVenue]);
 
   const now = Date.now();
   const datedFutures = (bundle?.instruments ?? [])
@@ -78,6 +87,24 @@ export function CryptoCarryView() {
 
 
 
+
+  if (isUnsupportedVenue) {
+    return (
+      <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 font-mono text-xs" role="alert" data-testid="carry-venue-unsupported">
+        <div className="font-bold">Venue unavailable</div>
+        <div className="mt-1 text-muted-foreground">Unsupported venue &quot;{rawVenue}&quot; — supported: deribit. No data fetched.</div>
+      </div>
+    );
+  }
+
+  if (isUnsupported) {
+    return (
+      <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 font-mono text-xs" role="alert" data-testid="carry-unsupported">
+        <div className="font-bold">Asset unavailable</div>
+        <div className="mt-1 text-muted-foreground">Unsupported asset &quot;{rawAsset}&quot; — supported: BTC, ETH. No data fetched.</div>
+      </div>
+    );
+  }
 
   if (error) return (
     <div className="rounded border border-destructive bg-destructive/10 p-4 font-mono text-xs" role="alert">

@@ -30,6 +30,12 @@ type GridMetric = 'omega' | 'invNd2' | 'nd2';
 
 export function StructureWorkflow() {
   const snapshot = useTerminalStore((s) => s.snapshot)!;
+  const chainProvenance = useTerminalStore((s) => s.provenance.chain);
+  const quoteFreshness = chainProvenance?.kind ?? 'unknown';
+  const quoteSource = chainProvenance?.source ?? null;
+  const freshnessLabel = chainProvenance == null
+    ? 'quote freshness unknown (no chain provenance reported)'
+    : `quote reference freshness: ${quoteFreshness}${quoteSource ? ` (source ${quoteSource})` : ''}`;
   // Shared structure controls (one combo spec drives PnL profile, BEs, scenario sim).
   const [template, setTemplate] = useState<ComboTemplate>('short_straddle');
   const [expiryIdx, setExpiryIdx] = useState(0);
@@ -111,7 +117,13 @@ export function StructureWorkflow() {
         }
         bodyClassName="grid grid-cols-1 md:grid-cols-2 gap-1 min-h-0"
       >
-        <DeskChartFrame xTitle="Spot" yTitle="PnL ($)" className="min-h-[200px]">
+        {/* Definite test hooks below: data-chart-points lets the real-server
+            probe assert non-empty curve geometry at every viewport.
+            isAnimationActive={false}: recharts mount animation renders via a
+            clip rect, so an early capture shows flat/partial curves that mimic
+            a data bug (seen in archival trade-loading laptop/tablet shots).
+            Disabling it makes pixels deterministic at capture time. */}
+        <DeskChartFrame xTitle="Spot" yTitle="PnL ($)" className="min-h-[200px]" testId="structure-chart-pnl" chartPoints={profile.length}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={profile} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
@@ -120,11 +132,11 @@ export function StructureWorkflow() {
               <Tooltip contentStyle={chrome.tooltipStyle} />
               <ReferenceLine y={0} stroke={DESK_SERIES.zero} />
               <ReferenceLine x={snapshot.spot} stroke={DESK_SERIES.spot} strokeDasharray="3 3" />
-              <Area type="monotone" dataKey="pnl" stroke={DESK_SERIES.combo} fill={DESK_SERIES.combo} fillOpacity={0.2} name="PnL" />
+              <Area type="monotone" dataKey="pnl" stroke={DESK_SERIES.combo} fill={DESK_SERIES.combo} fillOpacity={0.2} name="PnL" isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </DeskChartFrame>
-        <DeskChartFrame xTitle="Spot" yTitle="Greeks" className="min-h-[200px]">
+        <DeskChartFrame xTitle="Spot" yTitle="Greeks" className="min-h-[200px]" testId="structure-chart-greeks" chartPoints={profile.length}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={profile} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
@@ -133,15 +145,67 @@ export function StructureWorkflow() {
               <Tooltip contentStyle={chrome.tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'var(--font-mono), monospace' }} />
               <ReferenceLine x={snapshot.spot} stroke={DESK_SERIES.spot} strokeDasharray="3 3" />
-              <Line type="monotone" dataKey="delta" stroke={CHART_GREEK.delta} strokeWidth={1.5} dot={false} name="Delta" />
-              <Line type="monotone" dataKey="vega" stroke={CHART_GREEK.vega} strokeWidth={1.5} dot={false} name="Vega" />
-              <Line type="monotone" dataKey="gamma" stroke={CHART_GREEK.gamma} strokeWidth={1} dot={false} name="Gamma" />
+              <Line type="monotone" dataKey="delta" stroke={CHART_GREEK.delta} strokeWidth={1.5} dot={false} name="Delta" isAnimationActive={false} />
+              <Line type="monotone" dataKey="vega" stroke={CHART_GREEK.vega} strokeWidth={1.5} dot={false} name="Vega" isAnimationActive={false} />
+              <Line type="monotone" dataKey="gamma" stroke={CHART_GREEK.gamma} strokeWidth={1} dot={false} name="Gamma" isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </DeskChartFrame>
       </DeskToolShell>
 
-      {/* SECTION B — leverage grid */}
+      {/* SECTION A2 — executable entry transparency (display-only; no mid/last/model substitution) */}
+      <section
+        aria-label="Executable entry transparency"
+        data-testid="structure-entry-transparency"
+        className="rounded border border-border bg-card px-2 py-1.5"
+      >
+        <h3 className="font-mono text-type-xs font-semibold text-foreground">Executable entry — observed basis only</h3>
+        <p className="font-mono text-type-xs text-muted-foreground">
+          Long legs require an observed positive ask · short legs require an observed positive bid ·
+          premium quoted $/share · model mark is not executable and is never substituted.
+        </p>
+        <p data-testid="structure-entry-freshness" className="font-mono text-type-xs text-muted-foreground">
+          {freshnessLabel} — observed quotes do not guarantee current execution.
+        </p>
+        <ul className="mt-1 grid grid-cols-1 gap-1 md:grid-cols-2 font-mono text-type-xs">
+          {legs.map((leg, i) => {
+            const basisLabel = leg.entryBasis === 'ask'
+              ? 'observed ask'
+              : leg.entryBasis === 'bid'
+                ? 'observed bid'
+                : leg.entryBasis === 'user'
+                  ? 'explicit user entry'
+                  : null;
+            const missingSide = leg.side === 'long' ? 'observed ask' : 'observed bid';
+            const unavailableReason = leg.entryPrice == null || basisLabel == null
+              ? `missing ${missingSide} at K ${leg.strike ?? '—'} ${leg.expiry ?? ''}`.trim()
+              : null;
+            return (
+              <li
+                key={leg.id}
+                data-testid={`structure-entry-leg-${i}`}
+                className="rounded border border-border px-1.5 py-1"
+              >
+                <span className="font-semibold capitalize text-foreground">
+                  Leg {i + 1}: {leg.side} {leg.kind} K {leg.strike ?? '—'} {leg.expiry ?? ''}
+                </span>{' '}
+                {unavailableReason ? (
+                  <span className="text-down">entry unavailable: {unavailableReason}</span>
+                ) : (
+                  <span className="text-foreground">
+                    entry ${fmtPrice(leg.entryPrice, 2)} premium ($/share) ({basisLabel})
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {mark.unavailable ? (
+          <p data-testid="structure-entry-overall" className="mt-1 font-mono text-type-xs text-down">
+            Structure unavailable: {mark.unavailableReason ?? 'missing executable entry'} — Mark/PnL shown as —.
+          </p>
+        ) : null}
+      </section>
       <DeskToolShell
         controls={
           <>
@@ -224,22 +288,32 @@ export function StructureWorkflow() {
       >
         <DeskChartFrame
           xTitle="Horizon (days)" yTitle="PnL ($)" className="min-h-[220px]"
+          testId="structure-chart-sim" chartPoints={simChart.length}
           header={<span className="text-muted-foreground">Scenario GBM — μ,σ user-set · not historical backtest</span>}
         >
-          <ResponsiveContainer width="100%" height="100%">
+          {/* Definite pixel height: ResponsiveContainer height="100%" cannot
+              resolve inside the DeskChartFrame flex body when the frame's own
+              height is content-derived (min-height clamp), and renders no svg
+              (measured: frame 220px, body 181px, container 0px, 0 paths at all
+              four viewports). Grid-laid-out primaries resolve only because the
+              grid track supplies a definite height. Numeric-height wrapper
+              follows the PnlWorkflow precedent. Layout-only; no data change. */}
+          <div className="w-full min-h-0" style={{ height: 220 }}>
+          <ResponsiveContainer width="100%" height={220}>
             <ComposedChart data={simChart} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
               <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartDayTick(v)} label={deskAxisLabel('Days')} />
               <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={simDomain} tickFormatter={(v: number) => chartSignedTick(v, 0)} label={deskAxisLabel('PnL ($)', 'insideLeft')} />
               <Tooltip contentStyle={chrome.tooltipStyle} />
               <ReferenceLine y={0} stroke={DESK_SERIES.zero} />
-              <Area type="monotone" dataKey="p95" stroke="none" fill={DESK_SERIES.bandOuter} fillOpacity={0.12} />
-              <Area type="monotone" dataKey="p5" stroke="none" fill="#000" fillOpacity={1} />
-              <Area type="monotone" dataKey="p75" stroke="none" fill={DESK_SERIES.bandInner} fillOpacity={0.18} />
-              <Area type="monotone" dataKey="p25" stroke="none" fill="#000" fillOpacity={1} />
-              <Line type="monotone" dataKey="p50" stroke={DESK_SERIES.median} strokeWidth={2} dot={false} name="p50" />
+              <Area type="monotone" dataKey="p95" stroke="none" fill={DESK_SERIES.bandOuter} fillOpacity={0.12} isAnimationActive={false} />
+              <Area type="monotone" dataKey="p5" stroke="none" fill="#000" fillOpacity={1} isAnimationActive={false} />
+              <Area type="monotone" dataKey="p75" stroke="none" fill={DESK_SERIES.bandInner} fillOpacity={0.18} isAnimationActive={false} />
+              <Area type="monotone" dataKey="p25" stroke="none" fill="#000" fillOpacity={1} isAnimationActive={false} />
+              <Line type="monotone" dataKey="p50" stroke={DESK_SERIES.median} strokeWidth={2} dot={false} name="p50" isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
         </DeskChartFrame>
       </DeskToolShell>
     </div>

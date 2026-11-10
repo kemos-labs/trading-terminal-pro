@@ -12,6 +12,7 @@ const KsaMarketView = lazy(() => import('../views/KsaMarketView').then(m => ({ d
 const RatesView = lazy(() => import('../views/RatesView').then(m => ({ default: m.RatesView })));
 const HomeBriefing = lazy(() => import('../home/HomeBriefing').then(m => ({ default: m.HomeBriefing })));
 import { DeskLoading } from '../common/Skeleton';
+import { UI_COPY } from '../../config/uiCopy';
 import type { ActiveTab } from '../../lib/options/types';
 
 const VolStructureView = lazy(() => import('../views/VolStructureView').then(m => ({ default: m.VolStructureView })));
@@ -29,8 +30,10 @@ export const INDEPENDENT_TABS: ReadonlySet<ActiveTab> = new Set([
 
 export function renderDeskView(tab: ActiveTab, loading: boolean): ReactNode {
   if (loading && !INDEPENDENT_TABS.has(tab)) {
-    const testId = tab === 'vol' ? 'vol-structure-view' : tab === 'positioning' ? 'positioning-view' : tab === 'desk' ? 'trade-structure-workflow' : tab === 'rates' ? 'rates-view' : undefined;
-    return <div data-testid={testId} className="h-full"><DeskLoading message="Building chain surface…" /></div>;
+    // Trade/Vol/Positioning block on chain; Vol wrapper must NOT reuse the vol testid (single owner is VolStructureView)
+    const testId = tab === 'desk' ? 'trade-structure-workflow' : tab === 'positioning' ? 'positioning-view' : tab === 'rates' ? 'rates-view' : undefined;
+    // Note: tab==='vol' deliberately yields undefined here — canonical vol testid lives inside VolStructureView
+    return <div data-testid={testId} className="h-full"><DeskLoading message={UI_COPY.load.chain} /></div>;
   }
 
   const view = (() => {
@@ -57,7 +60,7 @@ export function renderDeskView(tab: ActiveTab, loading: boolean): ReactNode {
   })();
 
   return (
-    <div key={tab} className="h-full term-crossfade" data-testid={tab === 'vol' ? 'vol-structure-view' : tab === 'positioning' ? 'positioning-view' : tab === 'rates' ? 'rates-view' : undefined}>
+    <div key={tab} className="h-full term-crossfade" data-testid={tab === 'positioning' ? 'positioning-view' : tab === 'rates' ? 'rates-view' : undefined}>
       <Suspense fallback={<DeskLoading message="Loading view…" />}>{view}</Suspense>
     </div>
   );

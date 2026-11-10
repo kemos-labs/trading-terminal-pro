@@ -25,7 +25,7 @@ const SHORTCUTS = [
   { key: 'L', action: 'Refresh LIVE feeds' },
   { key: '?', action: 'Toggle shortcuts' },
   { key: 'Ctrl/⌘ K', action: 'Command palette' },
-  { key: 'Tab', action: 'Cycle tabs' },
+  { key: 'Tab / Shift+Tab', action: 'Move focus (native)' },
 ];
 
 /**

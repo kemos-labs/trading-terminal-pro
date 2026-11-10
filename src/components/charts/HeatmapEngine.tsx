@@ -59,8 +59,10 @@ export interface HeatmapEngineProps {
   domain?: [number, number];
   units?: string;
   metricLabel?: string;
-  /** Spot/ATM reference line position on the columns axis */
+  /** Spot/ATM reference line — legacy column-snapped (colKey) or true numeric value (spotValue). Prefer spotValue for truthful interpolation. */
   spotRef?: { colKey: string; label: string } | null;
+  spotValue?: number | null;
+  spotLabel?: string | null;
   onCellSelect?: (ctx: HeatmapTooltipContext | null) => void;
   emptyMessage?: string;
   className?: string;
@@ -86,7 +88,7 @@ function sequentialColor(t: number, colors: ReturnType<typeof resolveCanvasColor
 
 export function HeatmapEngine({
   rows, cols, cells, diverging, domain, units = '', metricLabel = 'value',
-  spotRef, onCellSelect, emptyMessage = 'No heatmap data — values stay unavailable.', className, caption,
+  spotRef, spotValue, spotLabel, onCellSelect, emptyMessage = 'No heatmap data — values stay unavailable.', className, caption,
 }: HeatmapEngineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -185,8 +187,41 @@ export function HeatmapEngine({
       }
     }
 
-    // Spot/ATM reference line on columns.
-    if (spotRef) {
+    // Spot/ATM reference line — prefer true numeric interpolation, fallback to column-snapped.
+    if (spotValue != null && Number.isFinite(spotValue) && cols.length) {
+      const nums = cols.map((c) => c.num).filter((n): n is number => typeof n === 'number' && Number.isFinite(n));
+      if (nums.length === cols.length) {
+        const min = nums[0]!;
+        const max = nums[nums.length - 1]!;
+        if (spotValue >= min && spotValue <= max) {
+          let frac: number | null = null;
+          for (let i = 0; i < nums.length; i++) if (nums[i] === spotValue) { frac = i; break; }
+          if (frac == null) {
+            for (let i = 0; i < nums.length - 1; i++) {
+              const a = nums[i]!;
+              const b = nums[i + 1]!;
+              if (spotValue > a && spotValue < b) { frac = i + (spotValue - a) / (b - a); break; }
+            }
+          }
+          if (frac != null) {
+            const x = padL + (frac + 0.5) * cellW;
+            ctx.strokeStyle = colorWithAlpha(colors.brand, 0.85);
+            ctx.setLineDash([4, 3]);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x, layout.padT - 4);
+            ctx.lineTo(x, layout.padT + layout.h);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = colors.brand;
+            ctx.font = '9px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            const label = spotLabel ?? `SPOT ${spotValue.toFixed(0)}`;
+            ctx.fillText(label, x, layout.padT - 7);
+          }
+        }
+      }
+    } else if (spotRef) {
       const ci = cols.findIndex((k) => k.key === spotRef.colKey);
       if (ci >= 0) {
         const x = padL + (ci + 0.5) * cellW;
@@ -220,7 +255,7 @@ export function HeatmapEngine({
     for (let r = 0; r < rows.length; r++) {
       ctx.fillText(rows[r]!.label, padL - 6, padT + r * cellH + cellH / 2);
     }
-  }, [cells, rows, cols, diverging, dMin, dMax, dim, layout, hover, focus, colors, spotRef]);
+  }, [cells, rows, cols, diverging, dMin, dMax, dim, layout, hover, focus, colors, spotRef, spotValue, spotLabel]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -372,7 +407,7 @@ export function HeatmapEngine({
             </span>
           )}
         </div>
-        {spotRef && <span className="shrink-0">spot/ATM ref: {spotRef.label}</span>}
+        {(spotValue != null && Number.isFinite(spotValue) ? <span className="shrink-0" data-testid="spot-label">spot/ATM ref: {spotLabel ?? `SPOT ${spotValue.toFixed(0)}`}</span> : spotRef ? <span className="shrink-0" data-testid="spot-label">spot/ATM ref: {spotRef.label}</span> : null)}
       </div>
 
       {/* Accessible table fallback — same data, DOM table */}

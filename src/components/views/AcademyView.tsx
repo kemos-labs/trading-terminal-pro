@@ -83,6 +83,88 @@ function coverOf(p: TopicFile): string {
   return p.cover || p.figure || '/docs/academy/figures/covers/pub-mark.svg';
 }
 
+/**
+ * Academy shareable deep links — stable query-string binding.
+ *
+ * Root design: desk/section routing stays owned by TerminalLayout (`?desk=` / `?sec=`).
+ * Academy owns only `?q=` (search) and `?doc=` (article) and always preserves
+ * every other param (desk/sec/unrelated). No new path router, no registry change:
+ * registry `deepLinkFor('academy', section)` (`/?desk=academy&sec=...`) is untouched.
+ *
+ * Security boundary: `?doc=` is untrusted input. It is normalized by
+ * `normalizeAcademyDocParam` and opened (ContentReader fetch) ONLY when the
+ * normalized value is present in the loaded trusted catalog index. Unknown,
+ * malformed, absolute, external, or traversal values render an explicit
+ * unavailable/not-found state with catalog navigation and never fetch.
+ * While the catalog is pending (or errored) an absent doc is NOT reported —
+ * the loading/error state wins until the index outcome is known.
+ */
+export const ACADEMY_QUERY_PARAM = 'q';
+export const ACADEMY_DOC_PARAM = 'doc';
+const QUERY_DEBOUNCE_MS = 200;
+
+/** Strict normalization for the untrusted `?doc=` value. Returns `docs/...` or null. */
+export function normalizeAcademyDocParam(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const v = raw.trim();
+  if (!v) return null;
+  if (v.includes('\0') || v.includes('\\')) return null;
+  // Absolute / external / scheme URLs are never academy docs.
+  if (v.startsWith('/')) return null;
+  if (v.includes('://')) return null;
+  if (/^[a-zA-Z][a-zA-Z0-9+.\-]*:/.test(v)) return null;
+  // Traversal segments are never valid, even if they would resolve inside docs/.
+  const segments = v.split('/');
+  if (segments.some((s) => s === '' || s === '.' || s === '..')) return null;
+  if (!v.startsWith('docs/')) return null;
+  if (!/^docs\/[A-Za-z0-9_.\-\/]+\.md$/.test(v)) return null;
+  return v;
+}
+
+/** Read the Academy-owned params from the live URL (strict escaping via URLSearchParams). */
+export function readAcademyUrl(): { query: string; docRaw: string | null } {
+  try {
+    const params = new URL(window.location.href).searchParams;
+    return {
+      query: params.get(ACADEMY_QUERY_PARAM) ?? '',
+      docRaw: params.get(ACADEMY_DOC_PARAM),
+    };
+  } catch {
+    return { query: '', docRaw: null };
+  }
+}
+
+/** Write Academy-owned params, preserving desk/sec/unrelated params. */
+export function writeAcademyUrl(
+  next: { query?: string; doc?: string | null },
+  mode: 'push' | 'replace',
+): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (next.query !== undefined) {
+    if (next.query === '') url.searchParams.delete(ACADEMY_QUERY_PARAM);
+    else url.searchParams.set(ACADEMY_QUERY_PARAM, next.query);
+  }
+  if (next.doc !== undefined) {
+    if (next.doc == null) url.searchParams.delete(ACADEMY_DOC_PARAM);
+    else url.searchParams.set(ACADEMY_DOC_PARAM, next.doc);
+  }
+  const href = url.toString();
+  if (mode === 'push') window.history.pushState(null, '', href);
+  else window.history.replaceState(null, '', href);
+}
+
+function collectTrustedPaths(indexData: AcademyIndex): Set<string> {
+  const out = new Set<string>();
+  for (const c of indexData.categories) {
+    for (const f of c.files ?? []) {
+      if (typeof f.path === 'string' && f.path) out.add(f.path);
+    }
+  }
+  return out;
+}
+
+
 function catFromSection(sectionId: string | null | undefined): CatId {
   if (sectionId && SECTION_TO_CAT[sectionId]) return SECTION_TO_CAT[sectionId]!;
   return 'archive';
@@ -99,7 +181,13 @@ export function AcademyView() {
     catFromSection(useTerminalStore.getState().deskSectionId),
   );
   const [activePath, setActivePath] = useState<string | null>(null);
+  /** Raw `?doc=` with no trusted catalog entry (unknown/malformed/external/traversal). Never fetched. */
+  const [docNotFound, setDocNotFound] = useState<string | null>(null);
   const postsByPath = useRef<Map<string, Post>>(new Map());
+  /** Cold-load / back-forward `?doc=` awaiting index outcome. Never reported absent while pending. */
+  const pendingDocRaw = useRef<string | null>(
+    typeof window === 'undefined' ? null : readAcademyUrl().docRaw,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -131,7 +219,13 @@ export function AcademyView() {
     if (!deskSectionId?.startsWith('academy-sub-')) return;
     const next = catFromSection(deskSectionId);
     setActiveCategory((prev) => {
-      if (prev !== next) setActivePath(null);
+      if (prev !== next) {
+        pendingDocRaw.current = null;
+        setActivePath(null);
+        setDocNotFound(null);
+        // Category switch drops the article deep link (replace: not a reader close).
+        if (readAcademyUrl().docRaw != null) writeAcademyUrl({ doc: null }, 'replace');
+      }
       return next;
     });
   }, [deskSectionId]);
@@ -159,8 +253,12 @@ export function AcademyView() {
     postsByPath.current = m;
   }, [archivePosts]);
 
-  /** Search filter — title/source/tags/sections match; applies inside archive & category lists. */
-  const [query, setQuery] = useState('');
+  /** Search filter — title/source/tags/sections match; applies inside archive & category lists.
+   * Initial value honors a shareable `?q=` cold load; typing syncs back debounced. */
+  const [query, setQuery] = useState(() =>
+    typeof window === 'undefined' ? '' : readAcademyUrl().query,
+  );
+  const queryHydrated = useRef(false);
   const matchesQuery = useCallback((p: Post) => {
     const q = query.trim().toLowerCase();
     if (!q) return true;
@@ -187,8 +285,107 @@ export function AcademyView() {
   }, [index, activeCategory]);
 
   const openByPath = useCallback((path: string) => {
-    setActivePath(path);
+    // Trusted-catalog gate: open (fetch) only entries present in the loaded index.
+    const trusted =
+      postsByPath.current.has(path) ||
+      (index ? collectTrustedPaths(index).has(path) : false);
+    if (trusted) {
+      setDocNotFound(null);
+      setActivePath(path);
+      writeAcademyUrl({ doc: path }, 'push');
+    } else if (index) {
+      // Index outcome known and path absent (or malformed): shareable not-found, no fetch.
+      setActivePath(null);
+      setDocNotFound(path);
+      writeAcademyUrl({ doc: path }, 'push');
+    } else {
+      // Catalog still pending: park the request, never report absent, never fetch.
+      pendingDocRaw.current = path;
+      setActivePath(null);
+      setDocNotFound(null);
+      writeAcademyUrl({ doc: path }, 'push');
+    }
+  }, [index]);
+
+  const closeReader = useCallback(() => {
+    pendingDocRaw.current = null;
+    setActivePath(null);
+    setDocNotFound(null);
+    // Push the list state so browser back can return to the article.
+    writeAcademyUrl({ doc: null }, 'push');
   }, []);
+
+  /** Resolve an untrusted raw `?doc=` against the loaded catalog (or park while pending). */
+  const resolveDocRaw = useCallback((raw: string | null) => {
+    if (raw == null || raw === '') {
+      pendingDocRaw.current = null;
+      setActivePath(null);
+      setDocNotFound(null);
+      return;
+    }
+    const normalized = normalizeAcademyDocParam(raw);
+    if (normalized == null) {
+      pendingDocRaw.current = null;
+      setActivePath(null);
+      setDocNotFound(raw);
+      return;
+    }
+    if (!index) {
+      // Catalog outcome unknown — wait for load/error, do not report absent.
+      pendingDocRaw.current = raw;
+      setActivePath(null);
+      setDocNotFound(null);
+      return;
+    }
+    pendingDocRaw.current = null;
+    if (collectTrustedPaths(index).has(normalized)) {
+      setDocNotFound(null);
+      setActivePath(normalized);
+    } else {
+      setActivePath(null);
+      setDocNotFound(raw);
+    }
+  }, [index]);
+
+  // Cold load + index arrival: resolve the parked `?doc=` once the outcome is known.
+  useEffect(() => {
+    if (!index) return;
+    if (pendingDocRaw.current != null) resolveDocRaw(pendingDocRaw.current);
+  }, [index, resolveDocRaw]);
+
+  // Typed search syncs to `?q=` debounced via replace (no history spam), preserving params.
+  useEffect(() => {
+    if (!queryHydrated.current) {
+      queryHydrated.current = true;
+      return;
+    }
+    const t = window.setTimeout(() => {
+      const current = readAcademyUrl().query;
+      if (current !== query) writeAcademyUrl({ query }, 'replace');
+    }, QUERY_DEBOUNCE_MS);
+    return () => window.clearTimeout(t);
+  }, [query]);
+
+  // Back/forward and cross-handler URL changes restore search + article state.
+  useEffect(() => {
+    const onPop = () => {
+      const { query: q, docRaw } = readAcademyUrl();
+      setQuery((prev) => (prev === q ? prev : q));
+      resolveDocRaw(docRaw);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [resolveDocRaw]);
+
+  // Esc closes the unavailable-link state too (reader Esc lives in ContentReader).
+  useEffect(() => {
+    if (!docNotFound || activePath) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeReader();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [docNotFound, activePath, closeReader]);
 
   const activePost = activePath
     ? postsByPath.current.get(activePath) ??
@@ -196,18 +393,50 @@ export function AcademyView() {
       null
     : null;
 
-  if (activePath) {
+  if (activePath || docNotFound) {
+    if (docNotFound && !activePath) {
+      return (
+        <SectionErrorBoundary name="Academy">
+          <div
+            className="academy-type academy-publication academy-post-page"
+            data-testid="academy-doc-not-found"
+          >
+            <div className="academy-post-sticky">
+              <div className="academy-col academy-post-sticky-inner">
+                <button type="button" onClick={closeReader} className="academy-back">
+                  ← Kemos Research Academy
+                </button>
+              </div>
+            </div>
+            <div className="academy-post-scroll">
+              <div className="academy-col academy-post-header-block">
+                <h1 className="academy-post-h1">Essay unavailable</h1>
+                <p className="academy-post-subtitle">
+                  No academy essay matches this link. It may be mistyped, moved, or
+                  outside the academy catalog.
+                </p>
+                <p className="academy-dek">
+                  <button type="button" onClick={closeReader} className="academy-back">
+                    Browse all essays
+                  </button>
+                </p>
+              </div>
+            </div>
+          </div>
+        </SectionErrorBoundary>
+      );
+    }
     return (
       <SectionErrorBoundary name="Academy">
         <ContentReader
           key={activePath}
-          docPath={activePath.startsWith('/') ? activePath : `/${activePath}`}
+          docPath={activePath!.startsWith('/') ? activePath! : `/${activePath!}`}
           title={activePost?.title}
           subtitle={activePost?.source}
           level={activePost?.level}
           figure={activePost ? coverOf(activePost) : undefined}
           sectionLabel={activePost?.catLabel}
-          onClose={() => setActivePath(null)}
+          onClose={closeReader}
         />
       </SectionErrorBoundary>
     );

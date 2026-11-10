@@ -12,7 +12,7 @@ import {
 } from '../../../hooks/useBoardFocus';
 import { SerffBoard } from './SerffBoard';
 import { CalendarPacksBoard } from './CalendarPacksBoard';
-import { SofrFuturesCurve } from './SofrFuturesCurve';
+import { SofrFuturesCurve, type SofrCurvePoint } from './SofrFuturesCurve';
 
 /** Dense CME-style header cells — fill full width (no fixed-width dead gutter). */
 const SR3_COLS =
@@ -20,6 +20,42 @@ const SR3_COLS =
 
 function fmtPx(v: number | null | undefined, d = 2): string {
   return v != null && Number.isFinite(v) ? v.toFixed(d) : '—';
+}
+
+/** Count contracts whose source is exactly the observed token 'live'.
+ * Absent, empty, null, uppercase, or whitespace-padded values are not live. */
+export function countLiveContracts(rows: StirContract[] | undefined): number {
+  return (rows || []).filter((c) => c.source === 'live').length;
+}
+
+/** Map one STIR leg's fetched contracts to curve points (REF07/N3a-small plumbing). */
+export function toLegCurve(rows: StirContract[] | undefined, sofr: number | null): SofrCurvePoint[] {
+  return (rows || []).map((c) => {
+    const settlePx = c.settlement ?? c.prev_close ?? null;
+    const prior =
+      settlePx != null && Number.isFinite(settlePx) && settlePx > 50 ? 100 - settlePx : null;
+    const implied = c.implied_rate ?? null;
+    const finiteImplied = implied != null && Number.isFinite(implied) ? implied : null;
+    const finiteLast = c.last_price != null && Number.isFinite(c.last_price) ? c.last_price : null;
+    // Pass through optional reference-quarter provenance only when a finite non-empty
+    // source string is present; absent/empty/non-string values stay null (Unavailable).
+    const refs = c as { ref_start?: unknown; ref_end?: unknown };
+    const refStart =
+      typeof refs.ref_start === 'string' && refs.ref_start.trim() !== '' ? refs.ref_start : null;
+    const refEnd =
+      typeof refs.ref_end === 'string' && refs.ref_end.trim() !== '' ? refs.ref_end : null;
+    return {
+      x: c.month || c.contract,
+      rate: implied,
+      prior,
+      vsSofr: sofr != null && finiteImplied != null ? (finiteImplied - sofr) * 100 : null,
+      source: c.source,
+      contract: c.contract,
+      ref_start: refStart,
+      ref_end: refEnd,
+      futures_price: finiteLast ?? (finiteImplied != null ? 100 - finiteImplied : null),
+    };
+  });
 }
 
 function fmtNet(v: number | null | undefined, d = 3): string {
@@ -33,12 +69,18 @@ function BoardShell({
   actions,
   children,
   className = '',
+  scrollKey,
+  scrollLabel,
+  hint,
 }: {
   title: ReactNode;
   badge?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
+  scrollKey?: string;
+  scrollLabel?: string;
+  hint?: ReactNode;
 }) {
   return (
     <div className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded border border-border bg-background/30 ${className}`}>
@@ -49,17 +91,19 @@ function BoardShell({
             <span className="ml-1.5 font-normal text-muted-foreground">{badge}</span>
           )}
         </div>
+        {hint}
         {actions}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto" tabIndex={0} role="region" aria-label="Scrollable data">{children}</div>
+      <div className="min-h-0 flex-1 overflow-auto" tabIndex={0} role="region" aria-label={scrollLabel ?? 'Scrollable data'} data-board-scroll={scrollKey} style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}>{children}</div>
     </div>
   );
 }
 
-function DenseTableHead({ cols }: { cols: string[] }) {
+function DenseTableHead({ cols, trackClass = '' }: { cols: string[]; trackClass?: string }) {
   return (
-    <div className="sticky top-0 z-[1] grid border-b border-border bg-card/95 px-1.5 py-0.5 font-mono text-type-2xs text-muted-foreground"
+    <div className={`sticky top-0 z-[1] grid border-b border-border bg-card/95 px-1.5 py-0.5 font-mono text-type-2xs text-muted-foreground ${trackClass}`}
       style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}
+      data-track={trackClass || undefined}
     >
       {cols.map((c, i) => (
         <span
@@ -78,27 +122,33 @@ function DenseRow({
   emphasize,
   onClick,
   selected,
+  trackClass = '',
+  identClass = '',
+  numClass = '',
 }: {
   cells: { text: string; className?: string; align?: 'left' | 'right' }[];
   emphasize?: boolean;
   onClick?: () => void;
   selected?: boolean;
+  trackClass?: string;
+  identClass?: string;
+  numClass?: string;
 }) {
   return (
     <div
-      role={onClick ? 'row' : undefined}
       onClick={onClick}
       className={`grid items-center border-b border-border/40 px-1.5 py-0.5 font-mono text-type-2xs hover:bg-muted/20 ${
         onClick ? 'cursor-default' : ''
-      } ${selected ? 'focus-ring-term-inset bg-primary/10' : ''} ${emphasize ? 'font-semibold' : ''}`}
+      } ${selected ? 'focus-ring-term-inset bg-primary/10' : ''} ${emphasize ? 'font-semibold' : ''} ${trackClass}`}
       style={{ gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))` }}
+      data-track={trackClass || undefined}
     >
       {cells.map((cell, i) => (
         <span
           key={i}
           className={`truncate tabular-nums ${
             cell.align === 'left' || i < 2 ? 'text-left' : 'text-right'
-          } ${cell.className || ''}`}
+          } ${cell.className || ''} ${i < 2 ? identClass : numClass}`}
         >
           {cell.text}
         </span>
@@ -155,6 +205,20 @@ export function StirSection({
     ticker: x.ticker || x.contract,
     implied: x.implied_rate!,
   }));
+
+  /**
+   * REF07/N3a-small prop plumbing: map the already-fetched stir.sr1 / stir.zq
+   * rows into curve points. No fetch, no math change — null/non-finite values
+   * pass through untouched; availability is decided by the curve component.
+   */
+  const sr1Curve = useMemo<SofrCurvePoint[]>(
+    () => toLegCurve(stir?.sr1, stir?.sofr ?? null),
+    [stir?.sr1, stir?.sofr],
+  );
+  const zqCurve = useMemo<SofrCurvePoint[]>(
+    () => toLegCurve(stir?.zq, stir?.sofr ?? null),
+    [stir?.zq, stir?.sofr],
+  );
 
   return (
     <CollapsibleSection
@@ -244,22 +308,62 @@ export function StirSection({
         Invest free space: wide = SR3 left + (SR1 / Tsy) right column that stretches.
         No duplicate path chart (CurvesBoard owns the dual SOFR path).
       */}
+      {/* Responsive STIR identifier readability (<=560px): SR3/SR1 keep a common
+          header/body track with minimum column widths inside the existing
+          board-local scrollers. Identifiers wrap instead of truncating to
+          ellipsis; desktop/tablet layout above the boundary is unchanged.
+          Treasury presentation is untouched. */}
+      <style>{`
+.stir-scroll-hint { display: none; }
+@media (max-width: 560px) {
+  .stir-scroll-hint { display: inline-block; }
+  .stir-sr3-track {
+    grid-template-columns: minmax(104px, 1.1fr) minmax(104px, 1.2fr) repeat(8, minmax(68px, 0.9fr)) minmax(110px, 1.2fr) !important;
+    min-width: 860px;
+  }
+  .stir-sr1-track {
+    grid-template-columns: minmax(104px, 1.1fr) minmax(104px, 1.2fr) repeat(6, minmax(68px, 0.9fr)) !important;
+    min-width: 620px;
+  }
+  .stir-sr3-track .stir-ident,
+  .stir-sr1-track .stir-ident {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+  .stir-sr3-track .stir-num,
+  .stir-sr1-track .stir-num {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+  }
+}
+`}</style>
+      {/* REF07 independent-leg reachability: the curve (with its existing per-leg
+          controls) is always mounted so SR1/ZQ legs stay selectable when SR3
+          is empty. Boards below keep their guarded layout/empty-state wording. */}
+      <div className="mt-1.5">
+        <SofrFuturesCurve
+          data={stirChart}
+          sr1Data={sr1Curve}
+          zqData={zqCurve}
+          asOf={stir?.as_of}
+          height={260}
+        />
+      </div>
       {liveSr3.length > 0 ? (
         <>
-          {/* PR-S2: dual SOFR futures path (live + prior settle) for the active strip. */}
-          <div className="mt-1.5">
-            <SofrFuturesCurve
-              data={stirChart}
-              asOf={stir?.as_of}
-              height={260}
-            />
-          </div>
           <div className="mt-1.5 grid grid-cols-1 items-stretch gap-1.5 xl:grid-cols-12">
           {/* ── 3M SOFR (SR3) — primary strip, takes most width ── */}
           <BoardShell
             className="xl:col-span-7 2xl:col-span-8"
+            scrollKey="stir-sr3"
+            scrollLabel="SR3 SOFR futures board data"
+            hint={<span aria-hidden="true" className="stir-scroll-hint font-mono text-type-2xs text-muted-foreground">Scroll → for full strip</span>}
             title="3M SOFR FUTURES (SFR / SR3) · CME board"
-            badge={`${liveSr3.filter((c) => c.source === 'live' || !c.source).length} live${
+            badge={`${countLiveContracts(liveSr3)} live${
               liveSr3.some((c) => c.source === 'settled')
                 ? ` · ${liveSr3.filter((c) => c.source === 'settled').length} settled`
                 : ''
@@ -289,9 +393,9 @@ export function StirSection({
               />
             }
           >
-            <div className={`${SR3_COLS} sticky top-0 z-[1] border-b border-border bg-card/95 px-1.5 py-0.5 font-mono text-type-2xs text-muted-foreground`}>
-              <span>Month</span>
-              <span>Ticker</span>
+            <div className={`${SR3_COLS} stir-sr3-track sticky top-0 z-[1] border-b border-border bg-card/95 px-1.5 py-0.5 font-mono text-type-2xs text-muted-foreground`} data-board="stir-sr3-head">
+              <span className="stir-ident">Month</span>
+              <span className="stir-ident">Ticker</span>
               <span className="text-right">Last</span>
               <span className="text-right">Chg</span>
               <span className="text-right">Sett</span>
@@ -320,42 +424,43 @@ export function StirSection({
                   <div
                     key={c.contract}
                     onClick={() => focusStir(index, 'ticker')}
-                    className={`${SR3_COLS} cursor-default px-1.5 py-[3px] font-mono text-type-2xs hover:bg-muted/20 ${
+                    className={`${SR3_COLS} stir-sr3-track cursor-default px-1.5 py-[3px] font-mono text-type-2xs hover:bg-muted/20 ${
                       stirFocused && index === stirRow
                         ? 'focus-ring-term-inset bg-primary/10'
                         : ''
                     }`}
+                    data-board="stir-sr3-row"
                   >
-                    <span className={`truncate ${c.source === 'settled' ? 'text-zinc-400' : 'text-muted-foreground'}`}>
+                    <span className={`truncate stir-ident ${c.source === 'settled' ? 'text-zinc-400' : 'text-muted-foreground'}`}>
                       {c.month}
                       {c.source === 'settled' ? ' · set' : ''}
                     </span>
-                    <span className={`truncate font-bold ${c.source === 'settled' ? 'text-zinc-400' : 'text-foreground'}`}>
+                    <span className={`truncate stir-ident font-bold ${c.source === 'settled' ? 'text-zinc-400' : 'text-foreground'}`}>
                       {c.ticker || c.contract}
                     </span>
-                    <span className="text-right tabular-nums font-semibold">
+                    <span className="text-right tabular-nums font-semibold stir-num">
                       {fmtPx(last)}
                     </span>
                     <span
-                      className={`text-right tabular-nums ${
+                      className={`text-right tabular-nums stir-num ${
                         net == null ? '' : net >= 0 ? 'text-up' : 'text-down'
                       }`}
                     >
                       {fmtNet(net)}
                     </span>
-                    <span className="text-right tabular-nums text-muted-foreground">
+                    <span className="text-right tabular-nums text-muted-foreground stir-num">
                       {fmtPx(sett)}
                     </span>
-                    <span className="text-right tabular-nums">{fmtPx(c.high)}</span>
-                    <span className="text-right tabular-nums">{fmtPx(c.low)}</span>
-                    <span className="text-right tabular-nums">
+                    <span className="text-right tabular-nums stir-num">{fmtPx(c.high)}</span>
+                    <span className="text-right tabular-nums stir-num">{fmtPx(c.low)}</span>
+                    <span className="text-right tabular-nums stir-num">
                       {c.volume != null ? c.volume.toLocaleString() : '—'}
                     </span>
-                    <span className="text-right tabular-nums font-semibold">
+                    <span className="text-right tabular-nums font-semibold stir-num">
                       {c.implied_rate!.toFixed(3)}
                     </span>
                     <span
-                      className={`text-right tabular-nums ${
+                      className={`text-right tabular-nums stir-num ${
                         vs != null && vs < 0
                           ? 'text-up'
                           : vs != null && vs > 0
@@ -378,7 +483,10 @@ export function StirSection({
           <div className="grid min-h-0 grid-rows-2 gap-1.5 xl:col-span-5 2xl:col-span-4">
             <BoardShell
               title="1M SOFR (SR1) strip · SERFF near legs"
-              badge={`${liveSr1.length} live`}
+              badge={`${countLiveContracts(liveSr1)} live`}
+              scrollKey="stir-sr1"
+              scrollLabel="SR1 SOFR futures board data"
+              hint={<span aria-hidden="true" className="stir-scroll-hint font-mono text-type-2xs text-muted-foreground">Scroll → for full strip</span>}
             >
               {liveSr1.length === 0 ? (
                 <EmptyState
@@ -391,10 +499,14 @@ export function StirSection({
                 <>
                   <DenseTableHead
                     cols={['Month', 'Ticker', 'Last', 'Chg', 'Hi', 'Lo', 'Vol', 'Impl%']}
+                    trackClass="stir-sr1-track"
                   />
                   {liveSr1.map((c) => (
                     <DenseRow
                       key={c.contract}
+                      trackClass="stir-sr1-track"
+                      identClass="stir-ident"
+                      numClass="stir-num"
                       cells={[
                         { text: c.month || '—', align: 'left', className: 'text-muted-foreground' },
                         {

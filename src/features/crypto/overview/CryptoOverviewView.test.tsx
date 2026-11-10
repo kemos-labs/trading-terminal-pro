@@ -68,4 +68,22 @@ describe('CryptoOverviewView provider states', () => {
     deribit.mockReturnValue(new Promise(() => {})); free.mockResolvedValue(market(['Binance Futures'])); render(<CryptoOverviewView />);
     await waitFor(() => expect(screen.getByText('Public exchange data; free alternative to Velo, not Velo-normalized.')).toBeInTheDocument());
   });
+  it('uses a flex column + auto-rows-fr grid so the 2x2 cards stretch and avoid ~50% dead space (desktop-crypto-v2-overview)', async () => {
+    const fs = await import('node:fs');
+    const p = await import('node:path');
+    const text = fs.readFileSync(p.join(import.meta.dirname, 'CryptoOverviewView.tsx'), 'utf8');
+    expect(text).toMatch(/flex.*flex-col/);
+    expect(text).toContain('flex-1');
+    expect(text).toContain('auto-rows-fr');
+    // Cards must stretch inside the grid
+    expect(text).toContain('flex flex-col rounded border p-3');
+    deribit.mockResolvedValue(bundle); free.mockResolvedValue(market(['Binance Futures', 'Bybit Linear']));
+    render(<CryptoOverviewView />);
+    await waitFor(() => expect(screen.getByTestId('overview-workstation')).toBeInTheDocument());
+    const ws = screen.getByTestId('overview-workstation');
+    expect(ws.className).toContain('flex');
+    expect(ws.className).toContain('flex-col');
+    expect(ws.className).toContain('lg:min-h-[640px]');
+    expect(ws.className).toContain('xl:min-h-[660px]');
+  });
 });

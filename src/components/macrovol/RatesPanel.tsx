@@ -9,6 +9,7 @@ import { SnapshotCards } from './rates/SnapshotCards';
 import { ShapeSection } from './rates/ShapeSection';
 import { NyFedBoard } from './rates/NyFedBoard';
 import { StirSection } from './rates/StirSection';
+import { PolicyScenarioPanel } from './rates/PolicyScenarioPanel';
 import { BasisSection } from './rates/BasisSection';
 import { CashFuturesMonitor } from './rates/CashFuturesMonitor';
 import { PlumbingSection } from './rates/PlumbingSection';
@@ -39,7 +40,7 @@ export function RatesPanel({
   mode?: 'funding' | 'ust' | 'stir' | 'world';
 }) {
   const {
-    summary, plumbing, basis, basisHist, stir, shape, curve, curveMeta,
+    summary, summaryCache, plumbing, basis, basisHist, stir, shape, curve, curveMeta,
     curveCompare, curveComparePoints, corr,
     error, loading, stirLoading,
     stirChart, shapeHistoryCharts, basisChart,
@@ -76,8 +77,40 @@ export function RatesPanel({
     );
   }
 
+  // Truthful stale disclosure: ONLY `cache.stale` from the server envelope.
+  // Frozen `as_of` (FRED T-1 daily prints) must never imply stale.
+  const ratesStale = summaryCache?.stale === true;
+  const ratesStaleTitle = (() => {
+    const parts = ['rates cache stale'];
+    if (summaryCache?.ageMs != null && Number.isFinite(summaryCache.ageMs)) {
+      parts.push(`age ${Math.max(0, Math.round(summaryCache.ageMs))}ms`);
+    }
+    if (summaryCache?.providerError) parts.push(String(summaryCache.providerError));
+    return parts.join(' \u00b7 ');
+  })();
+
   const funding = (
     <>
+      {ratesStale && (
+        <div
+          className="flex flex-wrap items-center gap-2 rounded border border-warn/30 bg-warn/5 px-1.5 py-1 font-mono"
+          data-testid="rates-mixed-status"
+          role="status"
+          title={ratesStaleTitle}
+        >
+          <span
+            data-testid="rates-stale"
+            role="status"
+            title={ratesStaleTitle}
+            className="rounded border border-warn/40 bg-warn/10 px-1.5 py-0.5 text-type-2xs text-warn"
+          >
+            Stale
+          </span>
+          <span className="text-type-2xs text-muted-foreground">
+            rates summary only · macro / stress / plumbing keep their own badges
+          </span>
+        </div>
+      )}
       <PlumbingBarometer plumbing={plumbing} basis={basis} summary={summary} />
       <MoneyMarketStrip
         summary={summary}
@@ -175,6 +208,9 @@ export function RatesPanel({
               <NyFedBoard nyfed={stir.nyfed} />
             </div>
           )}
+          <div>
+            <PolicyScenarioPanel />
+          </div>
         </>
       )}
     </>

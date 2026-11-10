@@ -1,10 +1,10 @@
 /**
  * Positioning desk — chain + dealer stack (GEX/DEX/VEX/Charm) + levels + parity edge.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
-  ComposedChart, Line, Cell,
+  ComposedChart, Line, LineChart, Cell,
 } from 'recharts';
 import { useTerminalStore } from '../../store/terminalStore';
 import { Panel } from '../terminal/Panel';
@@ -15,6 +15,7 @@ import { EmptyState } from '../common/EmptyState';
 import { SectionErrorBoundary } from '../common/SectionErrorBoundary';
 import { VirtualRows } from '../common/VirtualRows';
 import { FlashAlphaStrip } from '../positioning/FlashAlphaStrip';
+import { WorkbenchView } from '../../features/positioning/workbench/WorkbenchView';
 import { fmtCompact, fmtPrice, fmtPct, fmtSigned } from '../../lib/format';
 
 /** Compact signed notional for Δ columns. */
@@ -29,6 +30,7 @@ import {
   impliedMove,
   maxPainStrike,
   scanParityEdges,
+  type DealerExposure,
   type DealerMetric,
   type ExposureWeight,
 } from '../../lib/options/analytics';
@@ -50,6 +52,11 @@ import { HeatmapEngine, type HeatmapCellData, type HeatmapAxisKey } from '../cha
 import { DESK_SERIES } from '../desk/seriesGrammar';
 import { DeskModeBar } from '../terminal/DeskModeBar';
 // DealerGradientPanel / DealerGreekProfiles / SessionGexHeatmap removed in Phase 9 (Plotly/Three stubs).
+import type { VolSnapshot } from '../../lib/options/types';
+import { loadGexSession, type GexSessionSeries } from '../../lib/options/gexSession';
+import {
+  buildSessionGexMatrix,
+} from '../../lib/options/sessionGexView';
 import {
   computeGexBookDeltas,
   loadGexBook,
@@ -94,6 +101,708 @@ type StrikeZoom = 'all' | 'atm20' | 'atm10' | 'atm5';
 /** Book slice for MenthorQ-style net GEX chart. */
 type ExpMode = 'all' | '0dte' | 'front' | string; // string = exact expiry
 
+/** Session heat shares the 96h stale rule with Home briefing + Vol skew. */
+const SESSION_STALE_MS = 96 * 3600_000;
+
+/** Latest 8 sample columns kept in the DOM table fallback (canvas shows all). */
+const SESSION_TABLE_COLS = 8;
+/** Latest 6 time slices drawn as profile lines (same stored data, no new math). */
+const SESSION_PROFILE_SLICES = 6;
+
+const SESSION_SLICE_COLORS = [CHART.series.cyan, CHART.series.up, CHART.series.amber, CHART.series.down];
+
+/**
+ * Session GEX — strike × browser-sample-time heat + dealer Greek profiles (OI proxy).
+ * Reads browser-local `loadGexSession(symbol)` only; no fetch, no polling, no new math.
+ * Missing OI/metrics stay null → hatched canvas holes + `—` table cells; zero is valid.
+ */
+function SessionGexSection({
+  snapshot,
+  symbol,
+  weight,
+  onWeight,
+}: {
+  snapshot: VolSnapshot;
+  symbol: string;
+  weight: ExposureWeight;
+  onWeight: (w: ExposureWeight) => void;
+}) {
+  const [sessMetric, setSessMetric] = useState<DealerMetric>('gex');
+  const [sessFocus, setSessFocus] = useState(0);
+  const [sessPinned, setSessPinned] = useState<string | null>(null);
+  const series: GexSessionSeries | null = useMemo(() => {
+    try {
+      return loadGexSession(symbol);
+    } catch {
+      return null;
+    }
+    // Re-read when the live snapshot advances (samples are appended by GexLevelsStrip).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, snapshot.timestamp]);
+  const matrix = useMemo(
+    () => buildSessionGexMatrix(series, sessMetric),
+    [series, sessMetric],
+  );
+  const sampleCount = series?.points.length ?? 0;
+  const stale = snapshot.timestamp > 0 && Date.now() - snapshot.timestamp > SESSION_STALE_MS;
+  const unit = METRICS.find((m) => m.id === sessMetric)?.unit ?? '';
+  const partial = !!matrix && matrix.supported && matrix.withMetric > 0 && matrix.withMetric < matrix.totalStrikes;
+  const rows = matrix?.rows ?? [];
+  const focusRow = rows.length ? Math.max(0, Math.min(rows.length - 1, sessFocus)) : 0;
+
+  const onSectionKey = (e: ReactKeyboardEvent) => {
+    if (!rows.length) return;
+    if (e.key === 'j') {
+      e.preventDefault();
+      setSessFocus((f) => Math.max(0, Math.min(rows.length - 1, f + 1)));
+    } else if (e.key === 'k') {
+      e.preventDefault();
+      setSessFocus((f) => Math.max(0, f - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const r = rows[focusRow];
+      setSessPinned(r ? `strike ${r.label} · ${sampleCount} samples` : null);
+    }
+  };
+
+  /** Profile lines: one Recharts line per sampled slice over strikes (stored values / 1e6). */
+  const profile = useMemo(() => {
+    if (!matrix || !matrix.supported || !series || series.points.length < 2) return null;
+    const slices = series.points.slice(-SESSION_PROFILE_SLICES);
+    const keyOf = (i: number) => `s${i}`;
+    const data = matrix.strikes.map((k, ri) => {
+      const row: Record<string, number | string | null> = { strike: k, label: matrix.rows[ri]!.label };
+      slices.forEach((p, i) => {
+        const colIdx = series.points.indexOf(p);
+        const v = matrix.cells[ri]?.[colIdx]?.value;
+        row[keyOf(i)] = v != null ? v / 1e6 : null;
+      });
+      return row;
+    });
+    return { data, slices, keyOf };
+  }, [matrix, series]);
+
+  const tableCols = useMemo(() => {
+    if (!matrix) return [];
+    return matrix.cols.map((c, idx) => ({ c, idx })).slice(-SESSION_TABLE_COLS);
+  }, [matrix]);
+
+  return (
+    <div
+      className="shrink-0 border-t border-border p-2"
+      data-testid="session-gex-section"
+      tabIndex={0}
+      role="region"
+      aria-label={`Session GEX strike by time, metric ${sessMetric}. Press j and k to move the focused strike, Enter to pin.`}
+      onKeyDown={onSectionKey}
+    >
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-1 font-mono text-type-2xs">
+        <span className="font-semibold text-foreground">
+          SESSION GEX · strike × time (OI proxy, session)
+        </span>
+        <span className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
+          <DeskModeBar
+            items={METRICS.map((m) => ({ id: m.id, label: m.label, title: m.unit }))}
+            activeId={sessMetric}
+            onSelect={(id) => { setSessMetric(id as DealerMetric); setSessFocus(0); setSessPinned(null); }}
+          />
+          <DeskModeBar
+            items={[
+              { id: 'oi', label: 'OI', title: 'Session samples stored OI-weighted; selector re-weights live profiles only, not history' },
+              { id: 'volume', label: 'Vol', title: 'Volume weight applies to live profiles only — session history stays OI-weighted' },
+              { id: 'unit', label: 'Unit', title: 'Unit weight applies to live profiles only — session history stays OI-weighted' },
+            ]}
+            activeId={weight}
+            onSelect={(id) => onWeight(id as ExposureWeight)}
+          />
+        </span>
+      </div>
+      <p className="mb-1 font-mono text-type-2xs text-muted-foreground leading-snug">
+        Source: OI-weighted exposure (not observed dealer inventory) · Units: {unit || '—'} ·
+        sample HH:MM (browser) · coverage{' '}
+        {matrix ? `${matrix.withMetric}/${matrix.totalStrikes}` : '—'}
+      </p>
+      <div className="mb-1 flex flex-wrap items-center gap-1.5 font-mono text-type-2xs">
+        {stale ? (
+          <span className="rounded border border-warn/50 bg-warn/10 px-1.5 py-0.5 text-warn" role="status">Stale</span>
+        ) : (
+          <span className="rounded border border-up/40 bg-up/10 px-1.5 py-0.5 text-up" role="status">Live</span>
+        )}
+        {partial && (
+          <span
+            className="rounded border border-warn/40 bg-warn/10 px-1.5 py-0.5 text-warn"
+            role="status"
+            title={`coverage: ${matrix!.withMetric}/${matrix!.totalStrikes} strikes carry this metric`}
+          >
+            Partial
+          </span>
+        )}
+        <span className="text-muted-foreground" data-testid="session-gex-count">
+          Session {sampleCount} sample{sampleCount === 1 ? '' : 's'}
+        </span>
+        {snapshot.spot != null && (
+          <span className="text-muted-foreground" data-testid="session-gex-spot">
+            spot {fmtPrice(snapshot.spot, 0)}
+          </span>
+        )}
+        {matrix?.flip != null && (
+          <span className="text-muted-foreground" data-testid="session-gex-flip">
+            flip {fmtPrice(matrix.flip, 0)}
+          </span>
+        )}
+      </div>
+      {!matrix ? (
+        <EmptyState
+          kind="no-data"
+          title="No session history — collect at least 2 samples"
+          body="Browser samples accumulate automatically while the chain polls (hidden-tab aware). No values fabricated."
+        />
+      ) : !matrix.supported ? (
+        <EmptyState
+          kind="no-data"
+          title={`No stored ${sessMetric.toUpperCase()} profile this session`}
+          body="Session samples store GEX/Charm sparse profiles only (derived from OI, model dealer convention). Switch metric to GEX or Charm."
+        />
+      ) : matrix.rows.length === 0 ? (
+        <EmptyState
+          kind="no-data"
+          title="No session strikes with this metric"
+          body="Stored samples carry no finite values for this metric (missing stays missing, never zero-filled)."
+        />
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div className="h-64" data-testid="session-gex-heat">
+            <HeatmapEngine
+              rows={matrix.rows}
+              cols={matrix.cols}
+              cells={matrix.cells}
+              diverging
+              units="$"
+              metricLabel={`session ${sessMetric.toUpperCase()}`}
+              spotValue={Number.isFinite(snapshot.spot) ? snapshot.spot : null}
+              spotLabel={`SPOT ${fmtPrice(snapshot.spot, 0)}`}
+              caption={`Session ${sessMetric.toUpperCase()} by strike and browser sample time (OI proxy)`}
+              emptyMessage="No session history — collect at least 2 samples."
+            />
+          </div>
+          {profile && profile.data.length > 0 && (
+            <div className="h-32" data-testid="session-gex-profiles">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={profile.data} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid {...deskChartChrome().grid} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ ...deskChartChrome().tick, fontSize: 9 }}
+                    tickLine={false}
+                    stroke={deskChartChrome().axisLine}
+                    interval={Math.max(0, Math.floor(profile.data.length / 10))}
+                  />
+                  <YAxis
+                    tick={deskChartChrome().tick}
+                    tickLine={false}
+                    stroke={deskChartChrome().axisLine}
+                    width={44}
+                    tickFormatter={(v: number) => `${v.toFixed(0)}M`}
+                  />
+                  <Tooltip contentStyle={deskChartChrome().tooltipStyle} />
+                  <ReferenceLine y={0} stroke={DESK_SERIES.zero} />
+                  {matrix.flip != null && (
+                    <ReferenceLine
+                      x={matrix.rows.reduce((best, r) => (
+                        Math.abs((r.num ?? 0) - matrix.flip!) < Math.abs((best.num ?? 0) - matrix.flip!) ? r : best
+                      )).label}
+                      stroke={CHART.series.down}
+                      strokeDasharray="3 3"
+                      label={{ value: 'Flip', position: 'top', fill: CHART.series.down, fontSize: 8 }}
+                    />
+                  )}
+                  {profile.slices.map((p, i) => (
+                    <Line
+                      key={`${p.t}-${i}`}
+                      type="monotone"
+                      dataKey={profile.keyOf(i)}
+                      name={new Date(p.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      stroke={SESSION_SLICE_COLORS[i % SESSION_SLICE_COLORS.length]}
+                      strokeWidth={1.5}
+                      dot={false}
+                      connectNulls={false}
+                      isAnimationActive={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <div
+            className="font-mono text-type-2xs text-muted-foreground"
+            data-testid="session-gex-focus"
+            role="status"
+          >
+            focused strike {rows[focusRow]?.label ?? '—'} · j/k to move · Enter pins · {sessPinned ?? 'nothing pinned'}
+          </div>
+          <div className="max-h-48 overflow-auto rounded border border-border/60">
+            <table role="table" data-testid="session-gex-table" aria-label="Session exposure values by strike and sample time" className="w-full border-collapse font-mono text-type-2xs">
+              <caption className="sr-only">
+                Session {sessMetric.toUpperCase()} by strike and browser sample time — `—` means missing (never zero)
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col" className="sticky left-0 bg-card px-1.5 py-1 text-left">strike \ time</th>
+                  {tableCols.map(({ c }) => (
+                    <th key={c.key} scope="col" className="px-1.5 py-1 text-right">{c.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, ri) => (
+                  <tr
+                    key={r.key}
+                    className={ri === focusRow ? 'bg-primary/10' : undefined}
+                    aria-selected={ri === focusRow}
+                  >
+                    <th scope="row" className="sticky left-0 bg-card px-1.5 py-1 text-left">{r.label}</th>
+                    {tableCols.map(({ c, idx }) => {
+                      const v = matrix.cells[ri]?.[idx]?.value;
+                      return (
+                        <td key={c.key} className="px-1.5 py-1 text-right tabular-nums">
+                          {v != null ? fmtCompact(v) : '—'}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* REF-02/N1c — POSITION BY STRIKE (presentation-only, source-backed)    */
+/* Reuses the already computed `dealer` points (selected-expiry scoped   */
+/* signed Greek×OI proxy) plus observed chain OI from the same snapshot. */
+/* No route, worker, contract, OpenAPI, MCP, provider, or workbench      */
+/* change. Missing stays null/Unavailable — never 0, NaN, or synthetic.  */
+/* ------------------------------------------------------------------ */
+
+type PbsView = 'net' | 'callput' | 'combined';
+type PbsUnits = 'gex' | 'contracts';
+
+function pbsNum(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/** Selected-expiry label shared by the panel header + exact disclosure. */
+function pbsExpiryLabel(expMode: ExpMode, snapshot: VolSnapshot): string {
+  if (expMode === 'all') return 'All expiries';
+  if (expMode === '0dte') return '0DTE';
+  if (expMode === 'front') {
+    const f = snapshot.expiries[0];
+    return f ? `Front (${f.expiry})` : 'Front (none)';
+  }
+  return expMode;
+}
+
+function pbsAsOf(snapshot: VolSnapshot): string {
+  if (!pbsNum(snapshot.timestamp) || snapshot.timestamp <= 0) return 'Unavailable';
+  try {
+    return new Date(snapshot.timestamp).toISOString();
+  } catch {
+    return 'Unavailable';
+  }
+}
+
+/** $GEX signed display, same $M scale as the Net GEX chart (never NaN). */
+function pbsFmtGex(v: number | null): string {
+  if (!pbsNum(v)) return '—';
+  const m = v / 1e6;
+  if (!pbsNum(m)) return '—';
+  const sign = m > 0 ? '+' : m < 0 ? '−' : '';
+  const abs = Math.abs(m);
+  const body = abs >= 100 ? abs.toFixed(0) : abs >= 1 ? abs.toFixed(1) : abs.toFixed(2);
+  return `${sign}$${body}M`;
+}
+
+/** Observed-contract display (exact counts, never zero-filled). */
+function pbsFmtContracts(v: number | null, signed: boolean): string {
+  if (!pbsNum(v)) return '—';
+  const r = Math.round(v);
+  if (!pbsNum(r)) return '—';
+  const sign = signed ? (r > 0 ? '+' : r < 0 ? '−' : '') : '';
+  return `${sign}${Math.abs(r).toLocaleString('en-US')}`;
+}
+
+interface PbsRow {
+  strike: number;
+  callGEX: number;
+  putGEX: number;
+  netGEX: number;
+  callOI: number | null;
+  putOI: number | null;
+  /** Display convention: net contracts = call OI − put OI (not dealer direction). */
+  netOI: number | null;
+}
+
+/** One signed horizontal bar around a center zero line (divs only, no new dep). */
+function PbsBar({
+  value,
+  maxAbs,
+  testId,
+  label,
+}: {
+  value: number | null;
+  maxAbs: number;
+  testId: string;
+  label: string;
+}) {
+  if (!pbsNum(value) || !pbsNum(maxAbs) || maxAbs <= 0) {
+    return (
+      <span
+        data-testid={testId}
+        aria-label={`${label}: Unavailable`}
+        className="font-mono text-type-2xs text-muted-foreground"
+      >
+        —
+      </span>
+    );
+  }
+  const pct = Math.min(50, (Math.abs(value) / maxAbs) * 50);
+  const pos = value >= 0;
+  return (
+    <span
+      data-testid={testId}
+      role="img"
+      aria-label={`${label}: ${value}`}
+      className="relative block h-3 w-full overflow-hidden rounded-sm bg-muted/20"
+    >
+      <span aria-hidden className="absolute inset-y-0 left-1/2 w-px bg-foreground/60" />
+      <span
+        aria-hidden
+        className={cn(
+          'absolute inset-y-0.5',
+          pos ? 'left-1/2 bg-up/80' : 'right-1/2 bg-down/80',
+        )}
+        style={{ width: `${pct}%` }}
+      />
+    </span>
+  );
+}
+
+function PositionByStrikeSection({
+  snapshot,
+  dealer,
+  expMode,
+  weight,
+  chainStale,
+}: {
+  snapshot: VolSnapshot;
+  dealer: DealerExposure;
+  expMode: ExpMode;
+  weight: ExposureWeight;
+  chainStale: boolean;
+}) {
+  const [view, setView] = useState<PbsView>('net');
+  const [units, setUnits] = useState<PbsUnits>('gex');
+  const [active, setActive] = useState<number | null>(null);
+
+  /**
+   * Rows reuse dealer.points (already scoped to the selected expiry mode)
+   * joined to observed OI summed over the same selected-expiry slices.
+   * Any null/invalid OI side poisons only that side (and the net), never 0.
+   */
+  const rows: PbsRow[] = useMemo(() => {
+    const first = snapshot.expiries[0];
+    const slices = snapshot.expiries.filter((s) => {
+      if (expMode === 'all') return true;
+      if (expMode === '0dte') return s.dte <= 0;
+      if (expMode === 'front') return first ? s.expiry === first.expiry : false;
+      return s.expiry === expMode;
+    });
+    const oi = new Map<number, { call: number; callOk: boolean; callSeen: boolean; put: number; putOk: boolean; putSeen: boolean }>();
+    const acc = (strike: number) => {
+      let e = oi.get(strike);
+      if (!e) {
+        e = { call: 0, callOk: true, callSeen: false, put: 0, putOk: true, putSeen: false };
+        oi.set(strike, e);
+      }
+      return e;
+    };
+    for (const sl of slices) {
+      for (const q of sl.calls) {
+        const e = acc(q.strike);
+        e.callSeen = true;
+        if (pbsNum(q.openInterest) && q.openInterest >= 0) e.call += q.openInterest;
+        else e.callOk = false;
+      }
+      for (const q of sl.puts) {
+        const e = acc(q.strike);
+        e.putSeen = true;
+        if (pbsNum(q.openInterest) && q.openInterest >= 0) e.put += q.openInterest;
+        else e.putOk = false;
+      }
+    }
+    return dealer.points.map((p) => {
+      const e = oi.get(p.strike);
+      const callOI = e && e.callSeen && e.callOk ? e.call : null;
+      const putOI = e && e.putSeen && e.putOk ? e.put : null;
+      return {
+        strike: p.strike,
+        callGEX: p.callGEX,
+        putGEX: p.putGEX,
+        netGEX: p.netGEX,
+        callOI,
+        putOI,
+        netOI: callOI != null && putOI != null ? callOI - putOI : null,
+      };
+    });
+  }, [snapshot, dealer, expMode]);
+
+  const gexMax = useMemo(() => {
+    let m = 0;
+    for (const r of rows) {
+      for (const v of [r.callGEX, r.putGEX, r.netGEX]) {
+        if (pbsNum(v)) m = Math.max(m, Math.abs(v));
+      }
+    }
+    return m;
+  }, [rows]);
+
+  const oiMax = useMemo(() => {
+    let m = 0;
+    for (const r of rows) {
+      if (pbsNum(r.callOI)) m = Math.max(m, Math.abs(r.callOI));
+      if (pbsNum(r.putOI)) m = Math.max(m, Math.abs(r.putOI));
+      if (pbsNum(r.netOI)) m = Math.max(m, Math.abs(r.netOI));
+    }
+    return m;
+  }, [rows]);
+
+  const hasAnyContracts = useMemo(() => rows.some((r) => r.netOI != null), [rows]);
+  const contractsBlocked = units === 'contracts' && (weight !== 'oi' || !hasAnyContracts);
+  const contractsReason = weight !== 'oi'
+    ? `current weight is ${weight} (scenario) — switch to OI for observed contracts`
+    : 'observed OI missing for the selected expiry';
+
+  const defaultStrike = useMemo(() => {
+    if (!rows.length) return null;
+    let best = rows[0]!.strike;
+    for (const r of rows) {
+      if (Math.abs(r.strike - snapshot.spot) < Math.abs(best - snapshot.spot)) best = r.strike;
+    }
+    return best;
+  }, [rows, snapshot.spot]);
+  const activeStrike = active ?? defaultStrike;
+  const activeRow = rows.find((r) => r.strike === activeStrike) ?? null;
+
+  const expiryLabel = pbsExpiryLabel(expMode, snapshot);
+  const asOf = pbsAsOf(snapshot);
+  const unitsLabel = units === 'gex'
+    ? 'Greek exposure ($GEX, $M per 1% move, signed)'
+    : 'Contracts (observed chain OI, signed display)';
+  const sourceLabel = units === 'gex'
+    ? weight === 'oi'
+      ? 'Derived signed Greek × OI proxy (dealer-sign model)'
+      : `Derived signed Greek × OI proxy (dealer-sign model) — ${weight} (scenario)`
+    : 'Observed chain OI / contracts (net = call OI − put OI display convention)';
+
+  return (
+    <div
+      className="shrink-0 border-t border-border p-2"
+      data-testid="pbs-panel"
+      role="region"
+      aria-label="Position by strike — signed exposure by strike"
+    >
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-1 font-mono text-type-2xs">
+        <span className="font-semibold text-foreground">
+          POSITION BY STRIKE · signed exposure by strike · {expiryLabel}
+        </span>
+        {chainStale && (
+          <span
+            data-testid="pbs-stale-scope"
+            role="status"
+            className="rounded border border-warn/40 bg-warn/10 px-1 py-0 text-warn"
+            title="Position-by-strike rows are derived from the stale chain"
+          >
+            stale chain input
+          </span>
+        )}
+      </div>
+      <div className="mb-1 flex flex-wrap items-center gap-1.5">
+        <DeskModeBar
+          items={[
+            { id: 'net', label: 'Net', title: 'One signed net bar per strike' },
+            { id: 'callput', label: 'Call / Put', title: 'Signed call and put components separately' },
+            { id: 'combined', label: 'Combined', title: 'Call + put components plus their net relationship' },
+          ]}
+          activeId={view}
+          onSelect={(id) => setView(id as PbsView)}
+        />
+        <DeskModeBar
+          items={[
+            { id: 'gex', label: 'Greek exposure ($GEX)', title: 'Existing signed dealerExposure GEX proxy, $M per 1% move' },
+            { id: 'contracts', label: 'Contracts', title: 'Observed chain OI / contracts for the selected expiry only' },
+          ]}
+          activeId={units}
+          onSelect={(id) => setUnits(id as PbsUnits)}
+        />
+      </div>
+      <p className="mb-1 font-mono text-type-2xs text-muted-foreground leading-snug">
+        ◀ negative · center zero line · positive ▶ · bars signed around zero ·
+        legend: Call = signed call component · Put = signed put component · Net = signed sum
+      </p>
+      {contractsBlocked ? (
+        <div
+          data-testid="pbs-contracts-unavailable"
+          role="status"
+          className="rounded border border-warn/40 bg-warn/10 px-2 py-1.5 font-mono text-type-2xs text-warn"
+        >
+          Contracts Unavailable — {contractsReason}. The Greek proxy stays separate (switch units back to
+          Greek exposure ($GEX)). Contracts are never dealer inventory.
+        </div>
+      ) : (
+        <div
+          className="max-h-64 overflow-auto rounded border border-border/60"
+          role="list"
+          aria-label={`Position by strike rows, ${view} view, ${unitsLabel}`}
+        >
+          {rows.map((r) => {
+            const isActive = r.strike === activeStrike;
+            const gexVals = { call: r.callGEX, put: r.putGEX, net: r.netGEX };
+            const oiVals = {
+              call: r.callOI,
+              put: r.putOI != null ? -r.putOI : null,
+              net: r.netOI,
+            };
+            const vals = units === 'gex' ? gexVals : oiVals;
+            const maxAbs = units === 'gex' ? gexMax : oiMax;
+            const fmt = (v: number | null, signed: boolean) =>
+              units === 'gex' ? pbsFmtGex(v) : pbsFmtContracts(v == null ? null : signed ? v : Math.abs(v), signed);
+            const summary = units === 'gex'
+              ? `net ${fmt(vals.net, true)}`
+              : r.netOI == null
+                ? 'net Unavailable'
+                : `net ${fmt(vals.net, true)} contracts`;
+            return (
+              <div key={r.strike} role="listitem">
+                <button
+                  type="button"
+                  data-testid={`pbs-row-${r.strike}`}
+                  aria-label={`Strike ${r.strike}, ${summary}, ${expiryLabel}`}
+                  onFocus={() => setActive(r.strike)}
+                  onMouseEnter={() => setActive(r.strike)}
+                  onClick={() => setActive(r.strike)}
+                  className={cn(
+                    'block w-full border-b border-border/30 px-1.5 py-1 text-left hover:bg-muted/20',
+                    isActive && 'bg-primary/10',
+                  )}
+                >
+                <span className="flex items-baseline justify-between gap-2 font-mono text-type-2xs">
+                  <span className="tabular-nums text-foreground">K {r.strike}</span>
+                  {(view === 'net' || view === 'combined') && (
+                    <span
+                      data-testid={`pbs-net-value-${r.strike}`}
+                      className={cn(
+                        'tabular-nums',
+                        units === 'contracts' && r.netOI == null
+                          ? 'text-muted-foreground'
+                          : (vals.net ?? 0) >= 0
+                            ? 'text-up'
+                            : 'text-down',
+                      )}
+                    >
+                      net {fmt(vals.net, true)}
+                    </span>
+                  )}
+                </span>
+                <span className="mt-0.5 flex flex-col gap-0.5">
+                  {(view === 'callput' || view === 'combined') && (
+                    <>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-7 shrink-0 font-mono text-type-2xs text-muted-foreground">Call</span>
+                        <span className="min-w-0 flex-1">
+                          <PbsBar value={vals.call} maxAbs={maxAbs} testId={`pbs-bar-call-${r.strike}`} label={`Strike ${r.strike} call component`} />
+                        </span>
+                        <span data-testid={`pbs-call-value-${r.strike}`} className="w-20 shrink-0 text-right font-mono text-type-2xs tabular-nums text-muted-foreground">
+                          {fmt(vals.call, false)}
+                        </span>
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-7 shrink-0 font-mono text-type-2xs text-muted-foreground">Put</span>
+                        <span className="min-w-0 flex-1">
+                          <PbsBar value={vals.put} maxAbs={maxAbs} testId={`pbs-bar-put-${r.strike}`} label={`Strike ${r.strike} put component`} />
+                        </span>
+                        <span data-testid={`pbs-put-value-${r.strike}`} className="w-20 shrink-0 text-right font-mono text-type-2xs tabular-nums text-muted-foreground">
+                          {fmt(vals.put, false)}
+                        </span>
+                      </span>
+                    </>
+                  )}
+                  {(view === 'net' || view === 'combined') && (
+                    <span className="flex items-center gap-1.5">
+                      {view === 'combined' && (
+                        <span className="w-7 shrink-0 font-mono text-type-2xs text-muted-foreground">Net</span>
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <PbsBar value={vals.net} maxAbs={maxAbs} testId={`pbs-bar-net-${r.strike}`} label={`Strike ${r.strike} net`} />
+                      </span>
+                    </span>
+                  )}
+                </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div
+        data-testid="pbs-detail"
+        role="status"
+        aria-live="polite"
+        tabIndex={0}
+        aria-label="Exact position-by-strike disclosure for the focused strike"
+        className="mt-1 rounded border border-border/60 bg-card/40 px-2 py-1 font-mono text-type-2xs leading-snug"
+      >
+        {activeRow ? (
+          <>
+            <span data-testid="pbs-detail-strike">strike {String(activeRow.strike)}</span>
+            {' · '}
+            <span data-testid="pbs-detail-spot">spot {pbsNum(snapshot.spot) ? String(snapshot.spot) : 'Unavailable'}</span>
+            {' · '}
+            <span data-testid="pbs-detail-expiry">expiry {expiryLabel}</span>
+            {' · '}
+            <span data-testid="pbs-detail-asof">as of {asOf}</span>
+            <br />
+            <span data-testid="pbs-detail-units">units {unitsLabel}</span>
+            {' · '}
+            <span data-testid="pbs-detail-source">source {sourceLabel}</span>
+            <br />
+            <span data-testid="pbs-detail-values">
+              {units === 'gex'
+                ? `call ${pbsFmtGex(activeRow.callGEX)} · put ${pbsFmtGex(activeRow.putGEX)} · net ${pbsFmtGex(activeRow.netGEX)}`
+                : activeRow.netOI == null
+                  ? `call ${pbsFmtContracts(activeRow.callOI, false)} · put ${pbsFmtContracts(activeRow.putOI, false)} · net Unavailable (a side is missing — never zero-filled)`
+                  : `call ${pbsFmtContracts(activeRow.callOI, false)} · put ${pbsFmtContracts(activeRow.putOI, false)} · net ${pbsFmtContracts(activeRow.netOI, true)} contracts`}
+            </span>
+          </>
+        ) : (
+          'No strike selected — no values fabricated.'
+        )}
+      </div>
+      <p
+        data-testid="pbs-provenance"
+        className="mt-1 font-mono text-type-2xs text-muted-foreground leading-snug"
+      >
+        $GEX = Derived signed Greek × OI proxy (dealer-sign model){weight !== 'oi' ? ` — ${weight} (scenario)` : ''} · Contracts = Observed chain OI /
+        contracts, selected expiry only · units {unitsLabel} · as of {asOf} · scoped {expiryLabel} ·
+        not verified dealer inventory · missing renders —/Unavailable (never 0, NaN, or synthetic).
+      </p>
+    </div>
+  );
+}
+
 export function PositioningView() {
   const deskSectionId = useTerminalStore((s) => s.deskSectionId);
   // Book = chain + dealer together; Tools = Lvl+Edge+Strat stacked.
@@ -104,8 +813,16 @@ export function PositioningView() {
   const [strikeZoom, setStrikeZoom] = useState<StrikeZoom>('atm20');
   const [expMode, setExpMode] = useState<ExpMode>('all');
   const [profileOn, setProfileOn] = useState(true);
+  const [workbenchOn, setWorkbenchOn] = useState(false);
   const snapshot = useTerminalStore((s) => s.snapshot);
   const symbol = useTerminalStore((s) => s.symbol);
+  /**
+   * Read-only chain staleness for derived-panel stamping (same existing
+   * `provenance.chain` truth OptionChain uses). No store/provider change;
+   * spot freshness is untouched and keeps its own header badge.
+   */
+  const chainProv = useTerminalStore((s) => s.provenance.chain);
+  const chainStale = chainProv?.kind === 'stale' || chainProv?.kind === 'expired';
   const sviReadout = useTerminalStore((s) => s.sviReadout);
   const arbResult = useTerminalStore((s) => s.arbResult);
   const setDeskContext = useTerminalStore((s) => s.setDeskContext);
@@ -427,8 +1144,13 @@ export function PositioningView() {
         </div>
       )}
 
-      <div className="min-h-0 flex-1">
-        {flowSplit && (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {workbenchOn && snapshot ? (
+          <div data-testid="positioning-workbench-slot">
+            <WorkbenchView initialSymbol={symbol} onExit={() => setWorkbenchOn(false)} />
+          </div>
+        ) : null}
+        {!(workbenchOn && snapshot) && flowSplit && (
           <div className="flex h-full min-h-0 flex-col lg:flex-row">
             <div className="min-h-0 min-w-0 flex-1 border-b border-border lg:border-b-0 lg:border-r">
         <SectionErrorBoundary name="Chain">
@@ -463,6 +1185,16 @@ export function PositioningView() {
                     role="status"
                   >
                     {dealer.unitNote}
+                  </div>
+                )}
+                {chainStale && (
+                  <div
+                    className="shrink-0 border-b border-warn/30 bg-warn/5 px-3 py-1 font-mono text-type-2xs text-warn"
+                    role="status"
+                    data-testid="dealer-stale-scope"
+                    title="Dealer stack is derived from the option chain, which is stale; spot keeps its own live badge"
+                  >
+                    Derived from stale chain · spot stays live
                   </div>
                 )}
                 <div className="flex flex-col gap-1 border-b border-border px-2 py-1.5">
@@ -531,6 +1263,20 @@ export function PositioningView() {
                       title="Toggle cumulative GEX/DEX profile lines"
                     >
                       <Explain term="gexProfile">Profiles</Explain>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWorkbenchOn((v) => !v)}
+                      aria-expanded={workbenchOn}
+                      className={cn(
+                        'rounded px-1.5 py-0.5 font-mono text-type-2xs border',
+                        workbenchOn
+                          ? 'border-primary bg-primary/10 text-foreground'
+                          : 'border-border text-muted-foreground',
+                      )}
+                      title="Linked positioning workbench: strike profile plus gamma and charm grids from one snapshot frame"
+                    >
+                      Workbench
                     </button>
                   </div>
                   <PrintStrip
@@ -750,6 +1496,19 @@ export function PositioningView() {
                   </div>
                 </div>
 
+                {/* REF-02/N1c — Position by strike (presentation-only, same dealer/snapshot/expiry) */}
+                {dealer && snapshot && dealer.points.length > 0 && (
+                  <SectionErrorBoundary name="Position by strike">
+                    <PositionByStrikeSection
+                      snapshot={snapshot}
+                      dealer={dealer}
+                      expMode={expMode}
+                      weight={weight}
+                      chainStale={chainStale}
+                    />
+                  </SectionErrorBoundary>
+                )}
+
                 {/* Expiry matrix + 1D / session Δ */}
                 {expiryRows.length > 0 && (
                   <div className="shrink-0 border-t border-border">
@@ -757,6 +1516,16 @@ export function PositioningView() {
                       <span className="font-semibold text-foreground">
                         EXPIRY MATRIX · GEX / DEX / Δ1D · CR / PS / HVL
                       </span>
+                      {chainStale && (
+                        <span
+                          data-testid="expiry-stale-scope"
+                          role="status"
+                          className="rounded border border-warn/40 bg-warn/10 px-1 py-0 text-warn"
+                          title="Expiry rows are derived from the stale chain"
+                        >
+                          stale chain input
+                        </span>
+                      )}
                       <Explain term="gexChange1d">
                         <span className="cursor-help underline decoration-dotted">
                           {bookDeltas.hasPriorDay
@@ -904,6 +1673,16 @@ export function PositioningView() {
                       <span className="font-semibold text-foreground">
                         EXPOSURE MATRIX · net GEX by strike × expiry ($mm per 1%)
                       </span>
+                      {chainStale && (
+                        <span
+                          data-testid="exposure-stale-scope"
+                          role="status"
+                          className="rounded border border-warn/40 bg-warn/10 px-1 py-0 text-warn"
+                          title="Exposure cells are derived from the stale chain"
+                        >
+                          stale chain input
+                        </span>
+                      )}
                       <span className="text-muted-foreground">
                         spot-centered ±10% · hatched = missing (never zero)
                       </span>
@@ -970,6 +1749,13 @@ export function PositioningView() {
                       />
                     </div>
                   </div>
+                )}
+
+                {/* Session GEX heat — strike × browser-sample-time (browser-local, no fetch) */}
+                {snapshot && dealer && dealer.points.length > 0 && (
+                  <SectionErrorBoundary name="Session GEX">
+                    <SessionGexSection snapshot={snapshot} symbol={symbol} weight={weight} onWeight={setWeight} />
+                  </SectionErrorBoundary>
                 )}
 
                 {/* Multi-exp small multiples */}

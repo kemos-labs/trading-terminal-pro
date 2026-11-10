@@ -811,7 +811,18 @@ async function fetchLiveSnapshot(symbol: string, force: boolean) {
     const spotAsOf = liveSpot
       ? (provider.lastSpotFetchedAt || now)
       : (prev.lastSpotUpdate || null);
-    const chainAsOf = provider.lastChainFetchedAt || now;
+    const snapSourceKind = (snap as unknown as { sourceFreshness?: string | null }).sourceFreshness ?? null;
+    // Map server freshness strings to client domain kind; unavailable -> unknown
+    const normalizedChainSourceKind = (() => {
+      if (!snapSourceKind) return undefined;
+      const v = String(snapSourceKind).trim().toLowerCase();
+      if (v === 'unavailable') return 'unknown' as const;
+      if (['live','delayed','stale','expired','unknown','down','demo'].includes(v)) return v as import('../lib/data/freshness').FreshnessKind;
+      return 'unknown' as const;
+    })();
+    // Preserve independent observation times: chain uses snapshot timestamp (may be NaN -> unknown), spot uses its own fetch time
+    const chainAsOfRaw = snap.timestamp;
+    const chainAsOf = Number.isFinite(chainAsOfRaw) && chainAsOfRaw > 0 ? chainAsOfRaw : null;
     const spotProv = makeProvenance('spot', provider.lastSpotSource, spotAsOf, {
       previousKind: prev.provenance.spot?.kind,
       demo: false,
@@ -824,6 +835,7 @@ async function fetchLiveSnapshot(symbol: string, force: boolean) {
         previousKind: prev.provenance.chain?.kind,
         demo: false,
         label: chainOk ? `chain:${provider.lastChainSource}` : 'chain:none',
+        sourceKind: normalizedChainSourceKind,
       },
     );
     const spotSrc = provider.lastSpotSource === 'synthetic' ? 'none' as const : provider.lastSpotSource;

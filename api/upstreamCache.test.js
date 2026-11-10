@@ -195,59 +195,77 @@ describe('upstreamCache', () => {
   });
 
   it('stale:true when loader throws and prior hit exists', async () => {
+    // Determinism: the previous version used ttl = 1ms plus a 5ms real sleep.
+    // getOrFetch's default stale ceiling is max(ttl, ttl * 10) = 10ms, so when
+    // the event loop delayed the timer by >5ms (full-suite load) the entry became
+    // "too old to serve stale" and the loader error was rethrown → flake.
+    // Backdate the entry instead: no wall-clock/scheduling dependence at all.
+    const ttlMs = 60_000;
+    const backdateMs = 120_000; // > ttl (so a reload is attempted), << stale ceiling 600_000
     const key = `test:stale:${Date.now()}`;
-    await getOrFetch(key, 1, async () => ({ v: 1 })); // cache then expire
-    await new Promise((r) => setTimeout(r, 5));
+    await getOrFetch(key, ttlMs, async () => ({ v: 1 }));
+    expect(ageCacheEntryForTests(key, backdateMs)).toBe(true);
     const r = await getOrFetch(
       key,
-      1,
+      ttlMs,
       async () => {
         throw new Error('boom');
       },
-      { allowStaleOnError: true },
+      { allowStaleOnError: true, maxStaleMs: 10 * ttlMs },
     );
     expect(r.data).toEqual({ v: 1 });
     expect(r.stale).toBe(true);
     expect(r.fromCache).toBe(true);
     expect(r.providerError).toBe('upstream-error');
+    // Stronger than before: the stale serve is provably the backdated hit.
+    expect(r.ageMs).toBeGreaterThanOrEqual(backdateMs);
   });
 
   it('preserves only bounded provider error codes on stale serves', async () => {
+    // Determinism: same ttl=1ms + 5ms-sleep race as above (default stale ceiling
+    // is 10ms). Backdate each entry instead so the stale branch is not timing-dependent.
+    const ttlMs = 60_000;
+    const backdateMs = 120_000;
     const key = `test:stale-code:${Date.now()}`;
-    await getOrFetch(key, 1, async () => ({ v: 1 }));
-    await new Promise((r) => setTimeout(r, 5));
-    const coded = await getOrFetch(key, 1, async () => {
+    await getOrFetch(key, ttlMs, async () => ({ v: 1 }));
+    expect(ageCacheEntryForTests(key, backdateMs)).toBe(true);
+    const coded = await getOrFetch(key, ttlMs, async () => {
       throw Object.assign(new Error('sensitive provider body must not cross the cache boundary'), { code: 'rate_limited' });
-    });
+    }, { maxStaleMs: 10 * ttlMs });
     expect(coded).toMatchObject({ stale: true, providerError: 'rate_limited' });
+    expect(coded.ageMs).toBeGreaterThanOrEqual(backdateMs);
     expect(JSON.stringify(coded)).not.toContain('sensitive provider body');
 
     const unknownKey = `test:stale-unknown-code:${Date.now()}`;
-    await getOrFetch(unknownKey, 1, async () => ({ v: 2 }));
-    await new Promise((r) => setTimeout(r, 5));
-    const redacted = await getOrFetch(unknownKey, 1, async () => {
+    await getOrFetch(unknownKey, ttlMs, async () => ({ v: 2 }));
+    expect(ageCacheEntryForTests(unknownKey, backdateMs)).toBe(true);
+    const redacted = await getOrFetch(unknownKey, ttlMs, async () => {
       throw Object.assign(new Error('private diagnostic'), { code: 'provider_internal_reference' });
-    });
+    }, { maxStaleMs: 10 * ttlMs });
     expect(redacted.providerError).toBe('upstream-error');
     expect(JSON.stringify(redacted)).not.toContain('provider_internal_reference');
   });
 
   it('normalizes status and abort failures to safe stale provider codes', async () => {
+    // Determinism: same ttl=1ms + 5ms-sleep race (default stale ceiling 10ms).
+    const ttlMs = 60_000;
+    const backdateMs = 120_000;
     const statusKey = `test:stale-status:${Date.now()}`;
-    await getOrFetch(statusKey, 1, async () => ({ v: 3 }));
-    await new Promise((r) => setTimeout(r, 5));
-    const status = await getOrFetch(statusKey, 1, async () => {
+    await getOrFetch(statusKey, ttlMs, async () => ({ v: 3 }));
+    expect(ageCacheEntryForTests(statusKey, backdateMs)).toBe(true);
+    const status = await getOrFetch(statusKey, ttlMs, async () => {
       throw Object.assign(new Error('provider response leaked body'), { status: 503 });
-    });
+    }, { maxStaleMs: 10 * ttlMs });
     expect(status.providerError).toBe('http-503');
+    expect(status.ageMs).toBeGreaterThanOrEqual(backdateMs);
     expect(JSON.stringify(status)).not.toContain('provider response leaked body');
 
     const abortKey = `test:stale-abort:${Date.now()}`;
-    await getOrFetch(abortKey, 1, async () => ({ v: 4 }));
-    await new Promise((r) => setTimeout(r, 5));
-    const aborted = await getOrFetch(abortKey, 1, async () => {
+    await getOrFetch(abortKey, ttlMs, async () => ({ v: 4 }));
+    expect(ageCacheEntryForTests(abortKey, backdateMs)).toBe(true);
+    const aborted = await getOrFetch(abortKey, ttlMs, async () => {
       throw Object.assign(new Error('private timeout diagnostic'), { name: 'AbortError' });
-    });
+    }, { maxStaleMs: 10 * ttlMs });
     expect(aborted.providerError).toBe('timeout');
     expect(JSON.stringify(aborted)).not.toContain('private timeout diagnostic');
   });

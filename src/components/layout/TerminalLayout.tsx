@@ -154,14 +154,15 @@ export function TerminalLayout() {
     if (s.source !== 'live') {
       void s.setSource('live');
     }
-    const tab = s.activeTab as string;
+    // Use reactive activeTab so Home -> Vol transition actually starts the chain.
+    const tab = activeTab as string;
     // Trade workflows price real legs and therefore need the same observed
     // option chain as Vol/Positioning before rendering their controls.
     const chainDependent = ['vol', 'positioning', 'desk'].includes(tab);
     if (chainDependent && !s.snapshot && s.lastChainUpdate === 0) {
       void setSymbol(s.symbol || 'SPY');
     }
-  }, [setSymbol, urlHydrated]);
+  }, [setSymbol, urlHydrated, activeTab]);
 
   // Preload heavy Vol chunks during boot so Greeks is not a cold lazy hit after Enter — only for chain-dependent desks.
   useEffect(() => {
@@ -218,12 +219,8 @@ export function TerminalLayout() {
     setSymbolDialogOpen(false);
   }, [setSymbol]);
 
-  const nextTab = useCallback(() => {
-    const tabs = TABS.map((t) => t.id);
-    const idx = tabs.indexOf(activeTab);
-    setActiveTab(tabs[(idx + 1) % tabs.length] as ActiveTab);
-  }, [activeTab, setActiveTab]);
-
+  // Tab / Shift+Tab are native focus navigation only (never desk cycling).
+  // Desk access: visible navigation + number-key shortcuts (1–7) below.
   useKeyboardShortcuts({
     'mod+k': () => {
       // Focus always-on command line AND open the command palette overlay
@@ -237,9 +234,8 @@ export function TerminalLayout() {
       void useTerminalStore.getState().setSource('live');
       toast.message('LIVE', { description: 'Refreshing market feeds' });
     },
-    tab: nextTab,
-    '?': () => setShortcutsOpen((o) => !o),
     tab1: () => setActiveTab('vol'),
+    '?': () => setShortcutsOpen((o) => !o),
     tab2: () => setActiveTab('positioning'),
     tab3: () => setActiveTab('desk'),
     tab4: () => setActiveTab('crypto'),

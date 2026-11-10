@@ -113,7 +113,7 @@ function MoverTable({
   onPick: (sym: string) => void;
 }) {
   return (
-    <Panel title={title} className="min-h-0 flex-1" data-testid="ksa-view">
+    <Panel title={title} className="shrink-0" data-testid={`ksa-movers-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}>
       <div className="max-h-[220px] overflow-auto">
         <table className="w-full font-mono text-type-xs">
           <thead className="sticky top-0 bg-card text-muted-foreground">
@@ -287,7 +287,7 @@ function KsaDepthCharts({ board }: { board: KsaBoard | null }) {
   const br = depth?.breadth;
 
   return (
-    <div className="grid min-h-0 grid-cols-1 gap-2 xl:grid-cols-2">
+    <div className="grid shrink-0 grid-cols-1 gap-2 xl:grid-cols-2">
       <Panel title="TASI path (warmer samples)">
         <DeskChartFrame height={180} yTitle="Index" xTitle="Riyadh time · free samples only">
           {hist.length < 1 ? (
@@ -506,7 +506,7 @@ export function KsaMarketView() {
 
   return (
     <SectionErrorBoundary name="KSA Market">
-      <div className="flex h-full min-h-0 flex-col gap-2 overflow-auto p-2" data-testid="ksa-view">
+      <div className="flex h-full min-h-0 flex-col gap-2 overflow-auto p-2 [&>*]:shrink-0" data-testid="ksa-view">
         {/* Session strip */}
         <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-card/40 px-2 py-1.5 font-mono text-type-xs">
           <span className="font-semibold tracking-wide">KSA · TADAWUL</span>
@@ -631,7 +631,7 @@ export function KsaMarketView() {
         <KsaDepthCharts board={board} />
 
         {/* Movers tables — value leaders omitted on free tier (no traded_value field) */}
-        <div className="grid min-h-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
           <MoverTable title="Gainers" rows={board?.gainers || []} mode="pct" onPick={setFocusSym} />
           <MoverTable title="Losers" rows={board?.losers || []} mode="pct" onPick={setFocusSym} />
           <MoverTable title="Volume" rows={board?.volumeLeaders || []} mode="vol" onPick={setFocusSym} />

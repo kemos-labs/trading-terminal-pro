@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   macrovolApi,
+  type CacheMeta,
   type RatesSummary,
   type PlumbingData,
   type RatesCurve,
@@ -35,6 +36,7 @@ export function periodsParamForWindow(
  */
 export function useRatesData() {
   const [summary, setSummary] = useState<RatesSummary | null>(null);
+  const [summaryCache, setSummaryCache] = useState<CacheMeta | null>(null);
   const [plumbing, setPlumbing] = useState<PlumbingData | null>(null);
   const [basis, setBasis] = useState<BasisData | null>(null);
   const [basisHist, setBasisHist] = useState<BasisHistoryData | null>(null);
@@ -71,6 +73,7 @@ export function useRatesData() {
       perfMark('rates.core.end');
       perfMeasure('rates.core', 'rates.load.start', 'rates.core.end');
       if (s.status === 'fulfilled') setSummary(s.value);
+      if (s.status === 'fulfilled') setSummaryCache(s.value?.cache ?? null);
       if (p.status === 'fulfilled') setPlumbing(p.value);
       if (c.status === 'fulfilled') {
         const res = c.value as RatesCurve;
@@ -221,7 +224,7 @@ export function useRatesData() {
   }, [curveCompare, curve]);
 
   return {
-    summary, plumbing, basis, basisHist, stir, shape, curve, curveMeta, curveCompare, curveComparePoints, corr,
+    summary, summaryCache, plumbing, basis, basisHist, stir, shape, curve, curveMeta, curveCompare, curveComparePoints, corr,
     error, loading, stirLoading,
     stirChart, shapeHistoryCharts, basisChart,
     compareWindow, setCompareWindow: setCompareWindowSafe,

@@ -24,6 +24,22 @@ const FIXTURE_CLOCK = new Date(Date.UTC(2026, 8, 1, 1, 30)).toISOString();
 const EVIDENCE_DIR = new URL('./screenshots/', import.meta.url);
 mkdirSync(EVIDENCE_DIR, { recursive: true });
 
+// Run/source identity stamped at capture time (never retrofitted).
+// e2e/.capture-run.json is written by `npm run capture:identity` BEFORE the
+// gate runs; the post-capture CLI (scripts/verify-capture-evidence.mjs)
+// requires every new sidecar to carry this exact runId/sourceDigest.
+function loadCaptureIdentity(): { runId: string | null; sourceDigest: string | null } {
+  try {
+    const raw = readFileSync(new URL('./.capture-run.json', import.meta.url), 'utf8');
+    const parsed = JSON.parse(raw) as { runId?: unknown; sourceDigest?: unknown };
+    if (typeof parsed.runId === 'string' && typeof parsed.sourceDigest === 'string') {
+      return { runId: parsed.runId, sourceDigest: parsed.sourceDigest };
+    }
+  } catch { /* no pre-capture identity: sidecars omit run identity and the post-capture gate fails closed */ }
+  return { runId: null, sourceDigest: null };
+}
+const CAPTURE_IDENTITY = loadCaptureIdentity();
+
 const EXPECTED_WORKFLOWS = 27;
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
@@ -152,6 +168,9 @@ for (const viewport of VIEWPORTS) {
               screenshot: shotName,
               commit: EVIDENCE_FULL_HEAD,
               commitShort: EVIDENCE_HEAD,
+              ...(CAPTURE_IDENTITY.runId && CAPTURE_IDENTITY.sourceDigest
+                ? { runId: CAPTURE_IDENTITY.runId, sourceDigest: CAPTURE_IDENTITY.sourceDigest }
+                : {}),
               scenario: 'success',
               viewport: { name: viewport.name, width: viewport.width, height: viewport.height },
               workflow: workflow.id,

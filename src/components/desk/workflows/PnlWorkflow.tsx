@@ -25,7 +25,7 @@ import { useSpotPath } from '../useSpotPath';
 import { DeskToolShell } from '../DeskToolShell';
 import { DeskField, DeskSelect } from '../DeskField';
 import { PrintStrip } from '../PrintStrip';
-import { DeskChartFrame, deskChartChrome, deskAxisLabel } from '../DeskChart';
+import { DeskChartFrame, deskChartChrome } from '../DeskChart';
 import { DESK_LEGEND, DESK_SERIES } from '../seriesGrammar';
 import { CHART, CHART_GREEK, chartDayTick, chartPriceTick, chartSignedTick, tightDomain } from '../../../lib/chartTheme';
 import { Explain } from '../../common/Explain';
@@ -171,8 +171,8 @@ export function PnlWorkflow() {
           <ResponsiveContainer width="100%" height={240}>
             <ComposedChart data={oChart} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
-              <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} interval="preserveStartEnd" label={deskAxisLabel('Date')} />
-              <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={oDomain} tickFormatter={(v: number) => chartSignedTick(v, 0)} label={deskAxisLabel('PnL ($)', 'insideLeft')} />
+              <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} interval="preserveStartEnd" />
+              <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={oDomain} tickFormatter={(v: number) => chartSignedTick(v, 0)} />
               <Tooltip contentStyle={chrome.tooltipStyle} />
               <ReferenceLine y={0} stroke={DESK_SERIES.zero} />
               <Area type="monotone" dataKey="pnl" stroke={DESK_SERIES.historyLive} fill={DESK_SERIES.historyLive} fillOpacity={0.15} name="Mark PnL" />
@@ -216,8 +216,8 @@ export function PnlWorkflow() {
           <ResponsiveContainer width="100%" height={240}>
             <ComposedChart data={cChart} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
-              <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} interval="preserveStartEnd" label={deskAxisLabel('Date')} />
-              <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={cDomain} tickFormatter={(v: number) => chartSignedTick(v, 0)} label={deskAxisLabel('PnL ($)', 'insideLeft')} />
+              <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} interval="preserveStartEnd" />
+              <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={cDomain} tickFormatter={(v: number) => chartSignedTick(v, 0)} />
               <Tooltip contentStyle={chrome.tooltipStyle} />
               <ReferenceLine y={0} stroke={DESK_SERIES.zero} />
               <Area type="monotone" dataKey="pnl" stroke={DESK_SERIES.historyLive} fill={DESK_SERIES.historyLive} fillOpacity={0.12} name="Mark PnL" />
@@ -274,8 +274,8 @@ export function PnlWorkflow() {
             <ResponsiveContainer width="100%" height={240}>
               <ComposedChart data={sPayoffChart} margin={chrome.margin}>
                 <CartesianGrid {...chrome.grid} />
-                <XAxis dataKey="spot" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartPriceTick(v)} label={deskAxisLabel('Spot')} />
-                <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={sBeDomain} tickFormatter={(v: number) => chartSignedTick(v, 0)} label={deskAxisLabel('PnL ($)', 'insideLeft')} />
+                <XAxis dataKey="spot" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartPriceTick(v)} />
+                <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={sBeDomain} tickFormatter={(v: number) => chartSignedTick(v, 0)} />
                 <Tooltip contentStyle={chrome.tooltipStyle} />
                 <ReferenceLine y={0} stroke={DESK_SERIES.zero} />
                 <ReferenceLine x={snapshot.spot} stroke={DESK_SERIES.spot} strokeDasharray="3 3" />
@@ -292,8 +292,8 @@ export function PnlWorkflow() {
             <ResponsiveContainer width="100%" height={240}>
               <ComposedChart data={sPnlChart} margin={chrome.margin}>
                 <CartesianGrid {...chrome.grid} />
-                <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} interval="preserveStartEnd" label={deskAxisLabel('Date')} />
-                <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={sPnlDomain} tickFormatter={(v: number) => chartSignedTick(v, 0)} label={deskAxisLabel('PnL ($)', 'insideLeft')} />
+                <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} interval="preserveStartEnd" />
+                <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={sPnlDomain} tickFormatter={(v: number) => chartSignedTick(v, 0)} />
                 <Tooltip contentStyle={chrome.tooltipStyle} />
                 <ReferenceLine y={0} stroke={DESK_SERIES.zero} />
                 <Area type="monotone" dataKey="pnl" stroke={DESK_SERIES.historyLive} fill={DESK_SERIES.historyLive} fillOpacity={0.15} name="Mark PnL" />
@@ -354,8 +354,8 @@ export function PnlWorkflow() {
           <ResponsiveContainer width="100%" height={80}>
             <ComposedChart data={bChart} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
-              <XAxis dataKey="strike" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartPriceTick(v)} label={deskAxisLabel('Strike')} />
-              <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={44} tickFormatter={(v: number) => `${v.toFixed(1)}%`} label={deskAxisLabel('BE dist %', 'insideLeft')} />
+              <XAxis dataKey="strike" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartPriceTick(v)} />
+              <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={44} tickFormatter={(v: number) => `${v.toFixed(1)}%`} />
               <Tooltip contentStyle={chrome.tooltipStyle} formatter={(v: number) => [`${v.toFixed(2)}%`, 'BE dist']} labelFormatter={(k: number) => `K ${chartPriceTick(k)}`} />
               <ReferenceLine y={0} stroke={DESK_SERIES.zero} />
               <ReferenceLine x={snapshot.spot} stroke={DESK_SERIES.spot} strokeDasharray="3 3" />
@@ -385,8 +385,8 @@ export function PnlWorkflow() {
           <ResponsiveContainer width="100%" height={240}>
             <ComposedChart data={eChart} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
-              <XAxis dataKey="strike" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartPriceTick(v)} label={deskAxisLabel('Strike')} />
-              <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={eDomain} tickFormatter={(v: number) => chartSignedTick(v, 2)} label={deskAxisLabel('Price ($)', 'insideLeft')} />
+              <XAxis dataKey="strike" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartPriceTick(v)} />
+              <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={eDomain} tickFormatter={(v: number) => chartSignedTick(v, 2)} />
               <Tooltip contentStyle={chrome.tooltipStyle} />
               <ReferenceLine x={snapshot.spot} stroke={DESK_SERIES.spot} strokeDasharray="3 3" />
               <Line type="monotone" dataKey="market" stroke={CHART.series.muted} strokeWidth={1.5} dot={false} name={DESK_LEGEND.market} />
@@ -421,8 +421,8 @@ export function PnlWorkflow() {
           <ResponsiveContainer width="100%" height={240}>
             <ComposedChart data={mcChart} margin={chrome.margin}>
               <CartesianGrid {...chrome.grid} />
-              <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartDayTick(v)} label={deskAxisLabel('Days')} />
-              <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={mcDomain} tickFormatter={(v: number) => chartSignedTick(v, 0)} label={deskAxisLabel('PnL ($)', 'insideLeft')} />
+              <XAxis dataKey="t" tick={chrome.tick} stroke={chrome.axisLine} tickFormatter={(v: number) => chartDayTick(v)} />
+              <YAxis tick={chrome.tick} stroke={chrome.axisLine} width={52} domain={mcDomain} tickFormatter={(v: number) => chartSignedTick(v, 0)} />
               <Tooltip contentStyle={chrome.tooltipStyle} />
               <ReferenceLine y={0} stroke={DESK_SERIES.zero} />
               <Area type="monotone" dataKey="p95" stroke="none" fill={DESK_SERIES.bandOuter} fillOpacity={0.12} />

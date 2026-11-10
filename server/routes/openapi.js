@@ -258,7 +258,7 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
       },
       '/api/v1/analytics/positioning/{symbol}': {
         get: {
-          operationId: 'v1GetPositioning', tags: ['v1', 'equities', 'crypto'], summary: 'OI-weighted customer-long exposure proxy; never dealer inventory',
+          operationId: 'v1GetPositioning', tags: ['v1', 'equities', 'crypto'], summary: 'OI-weighted signed-Greek exposure proxy (GEX +call/−put gamma; DEX/Vanna/Charm signed Greek); never dealer inventory',
           parameters: [
             symbolParam(),
             { name: 'riskFreeRate', in: 'query', description: 'Decimal annual rate; supply together with carryRate. No default.', schema: { type: 'number', minimum: -0.25, maximum: 1 } },
@@ -272,9 +272,133 @@ export function buildOpenApiDocument(registry, runtimeRoutes = []) {
           },
         },
       },
+      '/api/v1/analytics/forward-vol-matrix/{symbol}': {
+        get: {
+          operationId: 'v1GetForwardVolMatrix', tags: ['v1', 'equities', 'crypto'], summary: 'Pairwise forward-volatility upper-triangle matrix (total-variance basis, DTE/365); negative variance unavailable, lower triangle structurally blank',
+          description: 'Forward-volatility matrix from ATM legs. REF06 expiry-time policy ref06-equity-date-20utc-v1: date-only equity expiries map to 20:00:00.000 UTC on the supplied date solely as a model-time approximation (not an observed expiry instant, verified venue settlement, or trading-cutoff rule; no venue/DST/holiday/early-close adjustment). REF06 expiry-time policy ref06-crypto-provider-instant-v1: crypto keeps the canonical provider expiryMs instant; the displayed date is a UTC label, not the instant. DTE is fractional elapsed time from envelope asOf to the applicable instant divided by 86,400,000 ms; T=DTE/365, unrounded, never fetch time/wall clock.',
+          parameters: [
+            symbolParam(),
+            { name: 'maxRows', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 5_000 } },
+          ],
+          responses: {
+            200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/forwardVolMatrixResponse' }, 'Validated forward-vol matrix envelope'),
+            400: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed request error'),
+            502: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed provider/coverage error'),
+          },
+        },
+      },
+      '/api/v1/analytics/positioning/exposure-grid': {
+        post: {
+          operationId: 'v1PostExposureGrid', tags: ['v1', 'positioning'], summary: 'Hypothetical price × time signed exposure scenario grid from the shared engine; observed snapshot quotes plus explicit scenario overrides only',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object', additionalProperties: false,
+                  required: ['symbol', 'metric', 'prices', 'times'],
+                  properties: {
+                    symbol: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' },
+                    metric: { type: 'string', enum: ['gex', 'charm', 'dex'] },
+                    prices: { type: 'array', minItems: 2, maxItems: 150, items: { type: 'number', exclusiveMinimum: 0 } },
+                    times: { type: 'array', minItems: 1, maxItems: 150, items: {}, description: 'Strict UTC instants only: Z-suffixed ISO-8601 (optional 1–3 digit fraction, valid calendar date) or finite safe-integer epoch ms; date-only, timezone-less, offset, rollover, and non-finite values are 400' },
+                    maxRows: { type: 'integer', minimum: 1, maximum: 5000 },
+                    scenario: {
+                      type: 'object', additionalProperties: false,
+                      properties: {
+                        riskFreeRate: { type: 'number', minimum: -0.25, maximum: 1 },
+                        carryRate: { type: 'number', minimum: -0.25, maximum: 1 },
+                        model: { type: 'string', enum: ['spot-european'], description: 'Equity-only; rejected as not applicable on crypto snapshots' },
+                        multiplier: { type: 'number', exclusiveMinimum: 0, maximum: 100000, description: 'Explicit caller-supplied scenario contract multiplier (bounded finite positive); labelled scenario, never observed' },
+                        expiryOverrides: { type: 'object', additionalProperties: { type: 'string' }, description: 'Equity-only YYYY-MM-DD expiry date to strict UTC instant; rejected as not applicable on crypto snapshots' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/exposureGridResponse' }, 'Validated exposure-grid envelope'),
+            400: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed request error'),
+            502: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed provider/coverage error'),
+          },
+        },
+      },
+      '/api/v1/analytics/positioning/workbench': {
+        post: {
+          operationId: 'v1PostPositioningWorkbench', tags: ['v1', 'positioning'], summary: 'Linked positioning workbench: strike profile plus gamma, DEX delta-pressure, and charm grids from one snapshot frame; explicit scenario only',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object', additionalProperties: false,
+                  required: ['symbol', 'prices', 'times', 'referenceTime', 'scenario'],
+                  properties: {
+                    symbol: { type: 'string', pattern: '^[A-Z][A-Z0-9.-]{0,11}$' },
+                    prices: { type: 'array', minItems: 2, maxItems: 150, items: { type: 'number', exclusiveMinimum: 0 } },
+                    times: { type: 'array', minItems: 1, maxItems: 150, items: {}, description: 'Strict UTC instants only (8-digit date-like numerics rejected)' },
+                    referenceTime: { description: 'Strict UTC instant equal to one of times' },
+                    expiryFilter: { type: 'string', maxLength: 10 },
+                    zeroDteOnly: { type: 'boolean' },
+                    maxRows: { type: 'integer', minimum: 1, maximum: 5000 },
+                    scenario: {
+                      type: 'object', additionalProperties: false,
+                      required: ['riskFreeRate', 'carryRate', 'model', 'multiplier'],
+                      properties: {
+                        riskFreeRate: { type: 'number', minimum: -0.25, maximum: 1 },
+                        carryRate: { type: 'number', minimum: -0.25, maximum: 1 },
+                        model: { type: 'string', enum: ['spot-european'] },
+                        multiplier: { type: 'number', exclusiveMinimum: 0, maximum: 100000 },
+                        expiryOverrides: { type: 'object', additionalProperties: { type: 'string' } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/exposureWorkbenchResponse' }, 'Validated workbench envelope'),
+            400: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed request error'),
+            502: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed provider/coverage error'),
+          },
+        },
+      },
       '/api/v1/provider/status': { get: { operationId: 'v1GetProviderStatus', tags: ['v1', 'system'], summary: 'Provider entitlement and cache status', responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/providerStatusResponse' }, 'Validated provider status envelope') } } },
       '/api/v1/rates/stir': { get: { operationId: 'v1GetRatesStir', tags: ['v1', 'rates'], summary: 'STIR/SR3/SR1/ZQ strip and exact SERFF analytics', responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/ratesStirResponse' }, 'Validated STIR envelope') } } },
       '/api/v1/rates/term-structure': { get: { operationId: 'v1GetRatesTermStructure', tags: ['v1', 'rates'], summary: 'Nullable Treasury/SOFR term structure', parameters: [{ name: 'T', in: 'query', schema: { type: 'number', minimum: 0.01, maximum: 40 } }], responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/ratesTermStructureResponse' }, 'Validated term structure envelope') } } },
+      '/api/v1/rates/policy-scenario': {
+        post: {
+          operationId: 'v1PostRatesPolicyScenario', tags: ['v1', 'rates'], summary: 'Policy scenario calculator: explicit meeting steps over observed SOFR fixings with SR3/SR1 predicted-vs-current rows (scenario, never observed)',
+          description: 'Deterministic scenario math over caller-supplied observed SOFR fixings, explicit meeting stepBps inputs, explicit SR3/SR1 windows, and an optional spread override. stepBps is scenario input, never inferred from target-range midpoints unless deriveStepFromMidpoint is true; target bounds are display metadata. Predicted fixings after the last observed fixing are scenario, never observed. Current rates are observed only with explicit source/date; missing data is Unavailable/null. Rates are percent-100; differences are basis points.',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object', additionalProperties: false,
+                  required: ['fixings'],
+                  properties: {
+                    fixings: { type: 'array', minItems: 1, maxItems: 500, items: { type: 'object', additionalProperties: false, required: ['date', 'value'], properties: { date: { type: 'string', format: 'date', description: 'Observed SOFR fixing date (YYYY-MM-DD)' }, value: { type: 'number', minimum: -5, maximum: 30, description: 'Observed SOFR fixing in percent-100' } } } },
+                    meetings: { type: 'array', maxItems: 50, items: { type: 'object', additionalProperties: false, required: ['date'], properties: { date: { type: 'string', format: 'date', description: 'Scenario meeting effective date' }, stepBps: { type: 'number', minimum: -500, maximum: 500, description: 'Explicit scenario step in basis points; never inferred unless deriveStepFromMidpoint' }, targetLower: { type: 'number', minimum: -5, maximum: 30, description: 'Display-only target-range lower bound (percent-100), not observed data' }, targetUpper: { type: 'number', minimum: -5, maximum: 30, description: 'Display-only target-range upper bound (percent-100), not observed data' } } } },
+                    sr3: { type: 'object', additionalProperties: false, required: ['windowStart', 'windowEnd'], properties: { windowStart: { type: 'string', format: 'date' }, windowEnd: { type: 'string', format: 'date' }, currentRate: { type: ['number', 'null'], minimum: -5, maximum: 30, description: 'Observed current rate in percent-100; requires currentSource and currentDate' }, currentSource: { type: 'string' }, currentDate: { type: 'string', format: 'date' } } },
+                    sr1: { type: 'object', additionalProperties: false, required: ['windowStart', 'windowEnd'], properties: { windowStart: { type: 'string', format: 'date' }, windowEnd: { type: 'string', format: 'date' }, currentRate: { type: ['number', 'null'], minimum: -5, maximum: 30, description: 'Observed current rate in percent-100; requires currentSource and currentDate' }, currentSource: { type: 'string' }, currentDate: { type: 'string', format: 'date' } } },
+                    policySpreadBps: { type: ['number', 'null'], minimum: -2000, maximum: 2000, description: 'Optional explicit SOFR/policy spread override in basis points; null when omitted' },
+                    deriveStepFromMidpoint: { type: 'boolean', description: 'When true, missing stepBps is derived from target-range midpoint differences and labelled; default false (never inferred)' },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/policyScenarioResponse' }, 'Validated policy-scenario envelope (scenario vs observed labelled; units percent-100 and basis points; missing is Unavailable/null)'),
+            400: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed request error'),
+            502: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/errorResponse' }, 'Typed provider/coverage error'),
+          },
+        },
+      },
       '/api/v1/crypto/carry/{currency}': { get: { operationId: 'v1GetCryptoCarry', tags: ['v1', 'crypto'], summary: 'Funding, perpetual premium, and dated-future basis', parameters: [currencyParam], responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/cryptoCarryResponse' }, 'Validated carry envelope') } } },
       '/api/v1/crypto/flow/{currency}': { get: { operationId: 'v1GetCryptoFlow', tags: ['v1', 'crypto'], summary: 'Deribit option flow aggregates', parameters: [currencyParam], responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/cryptoFlowResponse' }, 'Validated flow envelope') } } },
       '/api/v1/academy/index': { get: { operationId: 'v1GetAcademyIndex', tags: ['v1', 'academy'], summary: 'Academy catalog index', responses: { 200: jsonOk({ $ref: '#/components/schemas/V1Contracts/$defs/academyIndexResponse' }, 'Validated Academy index envelope') } } },

@@ -6,7 +6,7 @@
 | **Author** | _TBD_ |
 | **Date** | 2026-07-09 |
 | **Status** | Draft (rev 2 — review issues addressed) |
-| **Workspace** | `/home/kalde/trading-terminal-pro` |
+| **Workspace** | repository root |
 | **Related** | `UI_UX_PLAN.md` (Phases A–G shipped), `UPGRADE_PLAN.md` (accuracy/streaming), `README.md` (stale 8-tab IA) |
 
 ---

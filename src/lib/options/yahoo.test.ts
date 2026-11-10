@@ -181,6 +181,64 @@ describe('buildYahooSnapshot', () => {
   });
 });
 
+describe('fetchYahooSnapshot freshness propagation', () => {
+  const REAL_FETCH = global.fetch;
+  afterEach(() => {
+    global.fetch = REAL_FETCH;
+  });
+  it('delayed envelope with fresh timestamp stays delayed and survives cache hit', async () => {
+    invalidateYahooChainCache();
+    const asOf = new Date().toISOString();
+    const futureExpiry = new Date(Date.now() + 45 * 86400000).toISOString().slice(0,10);
+    const quotesPayload = makeBaseQuotes(futureExpiry, 0.22).map(q => ({
+      strike: q.strike, expiry: futureExpiry, right: q.type, bid: q.bid, ask: q.ask, last: q.last, markIv: null, volume: 100, openInterest: 1000,
+    }));
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ schemaVersion: 1, asOf, freshness: 'delayed', data: { symbol: 'SPY', spot: 550, expirations: [futureExpiry], quotes: quotesPayload } }),
+    })) as unknown as typeof fetch;
+    const snap = await fetchYahooSnapshot('SPY-DELAYED', 12, R, Q);
+    expect(snap).not.toBeNull();
+    expect((snap as unknown as { sourceFreshness: string }).sourceFreshness).toBe('delayed');
+    // Null observation time must not substitute fetch time -> but here asOf valid so timestamp finite
+    expect(Number.isFinite(snap!.timestamp)).toBe(true);
+    // Cache hit returns same freshness without recomputing to live
+    global.fetch = vi.fn(() => { throw new Error('should not fetch on cache hit'); }) as unknown as typeof fetch;
+    const cached = await fetchYahooSnapshot('SPY-DELAYED', 12, R, Q);
+    expect(cached).not.toBeNull();
+    expect((cached as unknown as { sourceFreshness: string }).sourceFreshness).toBe('delayed');
+  });
+  it('malformed freshness degrades to unknown not live', async () => {
+    invalidateYahooChainCache();
+    const asOf = new Date().toISOString();
+    const futureExpiry = new Date(Date.now() + 45 * 86400000).toISOString().slice(0,10);
+    const quotesPayload = makeBaseQuotes(futureExpiry, 0.22).map(q => ({
+      strike: q.strike, expiry: futureExpiry, right: q.type, bid: q.bid, ask: q.ask, last: q.last, markIv: null, volume: 100, openInterest: 1000,
+    }));
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ schemaVersion: 1, asOf, freshness: 'bogus', data: { symbol: 'SPY', spot: 550, expirations: [futureExpiry], quotes: quotesPayload } }),
+    })) as unknown as typeof fetch;
+    const snap = await fetchYahooSnapshot('SPY-BOGUS', 12, R, Q);
+    expect((snap as unknown as { sourceFreshness: string }).sourceFreshness).toBe('unknown');
+  });
+  it('unknown observation timestamp is preserved as NaN (not substituted)', async () => {
+    invalidateYahooChainCache();
+    const futureExpiry = new Date(Date.now() + 45 * 86400000).toISOString().slice(0,10);
+    const quotesPayload = makeBaseQuotes(futureExpiry, 0.22).map(q => ({
+      strike: q.strike, expiry: futureExpiry, right: q.type, bid: q.bid, ask: q.ask, last: q.last, markIv: null, volume: 100, openInterest: 1000,
+    }));
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ schemaVersion: 1, freshness: 'delayed', data: { symbol: 'SPY', spot: 550, expirations: [futureExpiry], quotes: quotesPayload } }),
+    })) as unknown as typeof fetch;
+    const snap = await fetchYahooSnapshot('SPY-NOASOF', 12, R, Q);
+    expect(snap).not.toBeNull();
+    expect(Number.isNaN(snap!.timestamp)).toBe(true);
+    expect((snap as unknown as { sourceFreshness: string }).sourceFreshness).toBe('delayed');
+  });
+});
+
 describe('fetchYahooSnapshot bounded load', () => {
   const REAL_FETCH = global.fetch;
   afterEach(() => {

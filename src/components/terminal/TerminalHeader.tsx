@@ -13,6 +13,7 @@ import {
   worstFreshnessKind,
   type FreshnessKind,
 } from '../../lib/data/freshness';
+import { feedMixedLabel } from './feedMixed';
 
 function ageLabel(ms: number): string {
   if (ms < 1000) return 'now';
@@ -101,15 +102,18 @@ export function TerminalHeader({ onOpenShortcuts }: TerminalHeaderProps) {
     provenance.spot?.kind,
     provenance.spot?.asOfMs ?? (lastSpotUpdate > 0 ? lastSpotUpdate : null),
     'spot',
-    { demo: false, down: spotMissing && spotTried },
+    { demo: false, down: spotMissing && spotTried, sourceKind: provenance.spot?.sourceKind },
   );
   const chainKind = kindFromProvenance(
     provenance.chain?.kind,
     provenance.chain?.asOfMs ?? (lastChainUpdate > 0 ? lastChainUpdate : null),
     'chain',
-    { demo: false, down: chainMissing && chainTried },
+    { demo: false, down: chainMissing && chainTried, sourceKind: provenance.chain?.sourceKind },
   );
   const summaryKind = worstFreshnessKind(spotKind, chainKind);
+  // Aggregate must name a split feed: worst-kind chip alone still reads as one
+  // verdict, so spell out Mixed (spot vs chain) instead of implying all-live/all-stale.
+  const mixedLabel = feedMixedLabel(spotKind, chainKind);
   const streamKind: FreshnessKind = streamConnected ? 'live' : 'unknown';
   const now = Date.now();
   const chainAge = lastChainUpdate > 0 ? now - lastChainUpdate : now - lastUpdate;
@@ -265,8 +269,18 @@ export function TerminalHeader({ onOpenShortcuts }: TerminalHeaderProps) {
             title={dataTitle}
             aria-label={`Data freshness: ${summaryKind}`}
           />
+          {mixedLabel && (
+            <span
+              data-testid="feed-mixed"
+              role="status"
+              title={dataTitle}
+              className="rounded border border-warn/40 bg-warn/10 px-1 py-0 text-type-2xs uppercase tracking-wider text-warn"
+            >
+              {mixedLabel}
+            </span>
+          )}
           <span
-            className="hidden text-type-2xs tabular-nums text-muted-foreground/50 md:inline"
+            className="hidden text-type-2xs tabular-nums text-muted-foreground md:inline"
             title={`App build ${APP_VERSION} — if this hash is older than the latest commit, hard-refresh for current code`}
           >
             v{APP_VERSION}

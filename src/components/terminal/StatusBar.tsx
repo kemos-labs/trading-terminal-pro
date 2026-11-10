@@ -71,13 +71,13 @@ export function StatusBar() {
     provenance.spot?.kind,
     provenance.spot?.asOfMs ?? (lastSpotUpdate > 0 ? lastSpotUpdate : null),
     'spot',
-    { demo: false, down: spotMissing && spotTried },
+    { demo: false, down: spotMissing && spotTried, sourceKind: provenance.spot?.sourceKind },
   );
   const chainKind = kindFromProvenance(
     provenance.chain?.kind,
     provenance.chain?.asOfMs ?? (lastChainUpdate > 0 ? lastChainUpdate : null),
     'chain',
-    { demo: false, down: chainMissing && chainTried },
+    { demo: false, down: chainMissing && chainTried, sourceKind: provenance.chain?.sourceKind },
   );
 
   const streamKind: FreshnessKind = streamConnected ? 'live' : 'unknown';

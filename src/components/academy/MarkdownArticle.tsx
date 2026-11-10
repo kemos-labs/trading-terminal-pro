@@ -164,7 +164,13 @@ export function MarkdownArticle({
         i += 1;
       }
       blocks.push(
-        <div key={key++} className="academy-md-table-wrap">
+        <div
+          key={key++}
+          className="academy-md-table-wrap"
+          tabIndex={0}
+          role="region"
+          aria-label={`Scrollable data table${header.length ? `: ${header.slice(0, 6).join(', ')}` : ''}`.slice(0, 140)}
+        >
           <table className="academy-md-table">
             <thead>
               <tr>
